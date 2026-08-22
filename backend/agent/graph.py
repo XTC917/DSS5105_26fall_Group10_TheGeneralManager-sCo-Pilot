@@ -8,12 +8,13 @@ import os
 from typing import Any
 
 from dotenv import load_dotenv
-from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
 from backend.agent.prompts import SYSTEM_PROMPT
+from backend.agent.routing import route_query
 from backend.tools.registry import MVP_TOOLS
 
 load_dotenv()
@@ -59,21 +60,64 @@ def get_agent():
 
 
 def run_agent(message: str, conversation_id: str) -> dict[str, Any]:
+    """Entry point used by /api/chat.
+
+    Unsupported / not-implemented questions are answered here without an LLM
+    call, so no unrelated tool can fire.
+    """
+    decision = route_query(message)
+    if decision.short_circuit:
+        logger.info(
+            "route short-circuit conversation=%s intent=%s",
+            conversation_id,
+            decision.intent,
+        )
+        return {
+            "answer": decision.answer or "",
+            "conversation_id": conversation_id,
+            "tools_used": [],
+            "traces": [],
+            "proposed_actions": [],
+            "limitation": decision.reason,
+            "routing_intent": decision.intent,
+        }
+
     agent = get_agent()
     result = agent.invoke(
         {"messages": [{"role": "user", "content": message}]},
         config={"configurable": {"thread_id": conversation_id}},
     )
-    return parse_agent_result(result, conversation_id)
+    parsed = parse_agent_result(result, conversation_id)
+    parsed["routing_intent"] = decision.intent
+    return parsed
+
+
+def _is_human(msg: Any) -> bool:
+    if isinstance(msg, HumanMessage):
+        return True
+    return getattr(msg, "type", None) == "human"
+
+
+def _latest_turn(messages: list[Any]) -> list[Any]:
+    """Keep messages from the latest user question onward."""
+    last_human = 0
+    for i, msg in enumerate(messages):
+        if _is_human(msg):
+            last_human = i
+    return messages[last_human:]
 
 
 def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str, Any]:
     messages: list[BaseMessage] = result.get("messages") or []
+    # MemorySaver returns the whole thread. The UI must only show tools from
+    # the latest manager question, otherwise a feasibility answer will look
+    # like it also called get_order_status / get_orders_at_risk / trace_order.
+    turn = _latest_turn(messages)
     tools_used: list[str] = []
     traces: list[dict[str, Any]] = []
     limitation = None
 
-    for msg in messages:
+    for msg in turn:
         if isinstance(msg, ToolMessage):
             payload = _parse_json(msg.content)
             if not payload:
@@ -88,12 +132,12 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
                 limitation = error.get("message")
 
     answer = ""
-    for msg in reversed(messages):
+    for msg in reversed(turn):
         if isinstance(msg, AIMessage) and msg.content and not getattr(msg, "tool_calls", None):
             answer = _content_to_text(msg.content)
             break
-    if not answer and messages:
-        answer = _content_to_text(getattr(messages[-1], "content", ""))
+    if not answer and turn:
+        answer = _content_to_text(getattr(turn[-1], "content", ""))
 
     logger.info(
         "agent done conversation=%s tools=%s",
@@ -107,6 +151,7 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
         "traces": traces,
         "proposed_actions": [],
         "limitation": limitation,
+        "routing_intent": "proceed",
     }
 
 

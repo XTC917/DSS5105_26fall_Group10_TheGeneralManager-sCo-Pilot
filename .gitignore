@@ -12,6 +12,8 @@ __pycache__/
 data/factory.db
 logs/
 .env
+evaluation/last_tools_report.json
+evaluation/last_agent_report.json
 
 # Frontend
 frontend/node_modules/

@@ -36,8 +36,55 @@ from backend.services.calculations import (
 from backend.services.database import FactoryDB
 
 
+def _inflected_keys(product_name: str) -> set[str]:
+    """Match keys generated only from a name that already exists in orders.csv.
+
+    Examples from this dataset:
+    Beanie → beanie, beanies
+    Hoodie → hoodie, hoodies
+    Scarf → scarf, scarfs, scarves
+    Polo shirt → polo shirt, shirt, shirts
+    """
+    name = product_name.strip().lower()
+    if not name:
+        return set()
+    last = name.split()[-1]
+    keys = {name, last, f"{last}s"}
+    if last.endswith("y") and len(last) > 1:
+        keys.add(last[:-1] + "ies")
+    if last.endswith("f") and len(last) > 1:
+        keys.add(last[:-1] + "ves")
+    if last.endswith("fe") and len(last) > 2:
+        keys.add(last[:-2] + "ves")
+    if len(name.split()) > 1:
+        keys.add(name + "s")
+    return {k for k in keys if k}
+
+
+def match_known_products(products: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+    """Return orders.csv product rows whose name or simple plural equals the query."""
+    needle = query.strip().lower()
+    if not needle:
+        return []
+    hits: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in products:
+        name = row["product"]
+        if name in seen:
+            continue
+        keys = _inflected_keys(name)
+        if needle == name.lower() or needle in keys:
+            hits.append(row)
+            seen.add(name)
+    return hits
+
+
 def resolve_category(db: FactoryDB, product: str | None, category: str | None) -> dict[str, Any]:
-    """Map a product name to TOPS / ACCESSORIES using orders.csv only."""
+    """Map a product name to TOPS / ACCESSORIES using orders.csv only.
+
+    Informal plurals (beanies, hoodies, scarves) are matched to the singular
+    names in orders.csv. We do not invent products that are not in the file.
+    """
     if category:
         cat = category.strip().upper()
         if cat not in {"TOPS", "ACCESSORIES"}:
@@ -60,34 +107,25 @@ def resolve_category(db: FactoryDB, product: str | None, category: str | None) -
         }
 
     products = db.list_products()
-    exact = [p for p in products if p["product"].lower() == product.strip().lower()]
-    if len(exact) == 1:
-        return {
-            "ok": True,
-            "category": exact[0]["category"],
-            "matched_product": exact[0]["product"],
-        }
-    if len(exact) > 1:
-        cats = {p["category"] for p in exact}
-        if len(cats) == 1:
-            return {"ok": True, "category": next(iter(cats)), "matched_product": exact[0]["product"]}
-
-    contains = [p for p in products if product.strip().lower() in p["product"].lower()]
-    cats = {p["category"] for p in contains}
+    matches = match_known_products(products, product)
+    cats = {p["category"] for p in matches}
     if len(cats) == 1:
+        matched_names = sorted({p["product"] for p in matches})
         return {
             "ok": True,
             "category": next(iter(cats)),
-            "matched_product": contains[0]["product"] if len(contains) == 1 else None,
+            "matched_product": matched_names[0] if len(matched_names) == 1 else None,
+            "matched_products": matched_names,
         }
-    if not contains:
+    if not matches:
         return {
             "ok": False,
             "error": {
                 "code": "UNKNOWN_PRODUCT",
                 "message": (
-                    f"Product '{product}' is not in orders.csv. "
-                    "Pass category='TOPS' or category='ACCESSORIES'."
+                    f"Product '{product}' is not in orders.csv "
+                    "(after singular/plural normalisation). "
+                    "Pass a known product name, or category='TOPS' / 'ACCESSORIES'."
                 ),
                 "known_products": sorted({p["product"] for p in products}),
             },
@@ -96,8 +134,11 @@ def resolve_category(db: FactoryDB, product: str | None, category: str | None) -
         "ok": False,
         "error": {
             "code": "AMBIGUOUS",
-            "message": f"Product '{product}' matches more than one category. Pass category explicitly.",
-            "matches": contains,
+            "message": (
+                f"Product '{product}' matches more than one category. "
+                "Pass category='TOPS' or category='ACCESSORIES'."
+            ),
+            "matches": matches,
         },
     }
 

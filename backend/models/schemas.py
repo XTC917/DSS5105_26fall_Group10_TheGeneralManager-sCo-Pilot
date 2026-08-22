@@ -33,3 +33,4 @@ class ChatResponse(BaseModel):
     traces: list[dict[str, Any]] = Field(default_factory=list)
     proposed_actions: list[dict[str, Any]] = Field(default_factory=list)
     limitation: str | None = None
+    routing_intent: str | None = None

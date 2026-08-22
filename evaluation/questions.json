@@ -1,52 +1,586 @@
 {
-  "factory_today": "2026-04-01",
-  "notes": "Starter set for later evaluation. Expected tool names are hints, not a full rubric.",
+  "meta": {
+    "name": "Track 1 development evaluation set",
+    "version": "0.2.0",
+    "factory_today": "2026-04-01",
+    "usage": "development",
+    "warning": "This file is used while building the system. Do not present it later as an unbiased held-out test. A separate held-out set should be created before claiming official accuracy.",
+    "notes": "Factual expected_result values were computed from the Track 1 CSVs and backend.services (not by an LLM). The runner re-checks them."
+  },
   "questions": [
     {
-      "id": "q01",
+      "id": "Q001",
       "question": "How is ORD-120 doing?",
+      "category": "normal_lookup",
+      "expected_behavior": "answer",
+      "expected_answer": "ORD-120 is TrendCart Vest, 1500 pieces, IN_PROGRESS, current stage ASSEMBLY, due 2026-03-17, last activity 2026-03-30. Risk flag OVERDUE (due before factory today 2026-04-01). Not stalled (2 working days since last activity). Not tight-deadline because it is already overdue.",
+      "expected_result": {
+        "order_id": "ORD-120",
+        "customer": "TrendCart",
+        "product": "Vest",
+        "pieces": 1500,
+        "status": "IN_PROGRESS",
+        "current_stage": "ASSEMBLY",
+        "due_date": "2026-03-17",
+        "last_activity_date": "2026-03-30",
+        "risk_flags": ["OVERDUE"]
+      },
+      "verification_method": "deterministic_order_status",
+      "relevant_tool": "get_order_status",
       "expected_tools": ["get_order_status"],
-      "must_not": ["invented numbers"]
+      "used_during_development": true,
+      "notes": "Verified against orders.csv row ORD-120 and assess_order_risk."
     },
     {
-      "id": "q02",
+      "id": "Q002",
       "question": "How is the TrendCart order doing?",
-      "expected_behaviour": "ask_clarification",
+      "category": "ambiguous",
+      "expected_behavior": "ask_clarification",
+      "expected_answer": "Ask for an order_id. Do not pick ORD-120 or any other TrendCart order.",
+      "expected_result": {
+        "error_code": "AMBIGUOUS",
+        "min_candidates": 2,
+        "customer": "TrendCart"
+      },
+      "verification_method": "deterministic_ambiguous",
+      "relevant_tool": "get_order_status",
       "expected_tools": ["get_order_status"],
-      "notes": "Multiple TrendCart orders exist. Must not pick one."
+      "used_during_development": true,
+      "notes": "17 TrendCart rows exist in orders.csv."
     },
     {
-      "id": "q03",
+      "id": "Q003",
       "question": "Which orders are at risk?",
-      "expected_tools": ["get_orders_at_risk"]
+      "category": "risk_retrieval",
+      "expected_behavior": "answer",
+      "expected_answer": "Return the 10 in-progress orders that match the documented risk rules. Lead with the count, then overdue / stalled / tight-deadline, then the order list.",
+      "expected_result": {
+        "order_ids": ["ORD-002", "ORD-005", "ORD-020", "ORD-029", "ORD-055", "ORD-083", "ORD-093", "ORD-107", "ORD-114", "ORD-120"],
+        "flag_map": {
+          "ORD-002": ["OVERDUE", "STALLED"],
+          "ORD-005": ["STALLED"],
+          "ORD-020": ["OVERDUE"],
+          "ORD-029": ["TIGHT_DEADLINE"],
+          "ORD-055": ["OVERDUE"],
+          "ORD-083": ["OVERDUE"],
+          "ORD-093": ["OVERDUE"],
+          "ORD-107": ["OVERDUE"],
+          "ORD-114": ["OVERDUE"],
+          "ORD-120": ["OVERDUE"]
+        }
+      },
+      "verification_method": "deterministic_risk_set",
+      "relevant_tool": "get_orders_at_risk",
+      "expected_tools": ["get_orders_at_risk"],
+      "used_during_development": true,
+      "notes": "Independently recomputed by evaluation.verify.live_risk_set from the same Python rules as the tool."
     },
     {
-      "id": "q04",
-      "question": "Why is ORD-120 considered risky?",
-      "expected_tools": ["trace_order"]
-    },
-    {
-      "id": "q05",
+      "id": "Q004",
       "question": "Can we take 800 hoodies by August 25?",
+      "category": "feasibility",
+      "expected_behavior": "answer",
+      "expected_answer": "Use check_feasibility with pieces=800, product=Hoodie, due_date=2026-08-25. Report the model-based verdict and the tool limitations. Do not describe the result as a guaranteed completion.",
+      "expected_result": {
+        "pieces": 800,
+        "due_date": "2026-08-25",
+        "product": "Hoodie",
+        "category": "TOPS",
+        "must_include_limitations": true,
+        "allowed_verdicts": ["FEASIBLE_IN_HOUSE", "FEASIBLE_WITH_WORKSHOPS", "NOT_FEASIBLE"]
+      },
+      "verification_method": "deterministic_feasibility",
+      "relevant_tool": "check_feasibility",
       "expected_tools": ["check_feasibility"],
-      "notes": "due_date should be 2026-08-25. Arithmetic must come from the tool."
+      "used_during_development": true,
+      "notes": "Verdict is recomputed by the tool at eval time. Do not hard-code a spare-capacity number as a promise."
     },
     {
-      "id": "q06",
-      "question": "What is the revenue from TrendCart this quarter?",
-      "expected_behaviour": "unsupported",
-      "notes": "No selling price or revenue columns exist."
+      "id": "Q005",
+      "question": "How much revenue did we make from TrendCart?",
+      "category": "unanswerable",
+      "expected_behavior": "decline",
+      "expected_answer": "Decline. The dataset has no selling-price or revenue field. Do not invent a number. Do not call unrelated tools.",
+      "expected_result": {
+        "tools_used": [],
+        "must_mention": ["revenue", "selling-price"],
+        "must_not_match_currency": true
+      },
+      "verification_method": "deterministic_routing",
+      "relevant_tool": null,
+      "expected_tools": [],
+      "forbidden_tools": ["get_order_status", "get_orders_at_risk", "check_feasibility", "trace_order"],
+      "used_during_development": true,
+      "notes": "Pre-router must short-circuit. No LLM and no tool call."
     },
     {
-      "id": "q07",
-      "question": "Who is working on ORD-107?",
-      "expected_behaviour": "unsupported",
-      "notes": "No worker names in the dataset."
+      "id": "Q006",
+      "question": "What stage is ORD-120 in?",
+      "category": "normal_lookup",
+      "expected_behavior": "answer",
+      "expected_answer": "ASSEMBLY.",
+      "expected_result": {
+        "order_id": "ORD-120",
+        "current_stage": "ASSEMBLY"
+      },
+      "verification_method": "deterministic_order_status",
+      "relevant_tool": "get_order_status",
+      "expected_tools": ["get_order_status"],
+      "used_during_development": true,
+      "notes": "orders.csv current_stage for ORD-120."
     },
     {
-      "id": "q08",
+      "id": "Q007",
+      "question": "When is ORD-120 due?",
+      "category": "normal_lookup",
+      "expected_behavior": "answer",
+      "expected_answer": "2026-03-17.",
+      "expected_result": {
+        "order_id": "ORD-120",
+        "due_date": "2026-03-17"
+      },
+      "verification_method": "deterministic_order_status",
+      "relevant_tool": "get_order_status",
+      "expected_tools": ["get_order_status"],
+      "used_during_development": true,
+      "notes": "orders.csv due_date for ORD-120."
+    },
+    {
+      "id": "Q008",
       "question": "What is the status of Cotton Club beanie ORD-001?",
-      "expected_tools": ["get_order_status"]
+      "category": "normal_lookup",
+      "expected_behavior": "answer",
+      "expected_answer": "ORD-001 Cotton Club Beanie, 1000 pieces, COMPLETE, completed 2026-02-10, days_late = 2 (finished two calendar days after due 2026-02-08).",
+      "expected_result": {
+        "order_id": "ORD-001",
+        "customer": "Cotton Club",
+        "product": "Beanie",
+        "pieces": 1000,
+        "status": "COMPLETE",
+        "current_stage": "COMPLETE",
+        "due_date": "2026-02-08",
+        "completed_date": "2026-02-10",
+        "risk_flags": []
+      },
+      "verification_method": "deterministic_order_status",
+      "relevant_tool": "get_order_status",
+      "expected_tools": ["get_order_status"],
+      "used_during_development": true,
+      "notes": "Verified against orders.csv. Cotton Club + Beanie is unique."
+    },
+    {
+      "id": "Q009",
+      "question": "How is the Cotton Club Beanie order doing?",
+      "category": "normal_lookup",
+      "expected_behavior": "answer",
+      "expected_answer": "Only ORD-001 matches Cotton Club + Beanie. COMPLETE, days_late = 2.",
+      "expected_result": {
+        "order_id": "ORD-001",
+        "customer": "Cotton Club",
+        "product": "Beanie",
+        "status": "COMPLETE"
+      },
+      "verification_method": "deterministic_order_status",
+      "relevant_tool": "get_order_status",
+      "expected_tools": ["get_order_status"],
+      "used_during_development": true,
+      "notes": "Unique customer+product pair in orders.csv."
+    },
+    {
+      "id": "Q010",
+      "question": "What is the status of ORD-999?",
+      "category": "normal_lookup",
+      "expected_behavior": "answer",
+      "expected_answer": "ORD-999 is not in orders.csv.",
+      "expected_result": {
+        "error_code": "NOT_FOUND",
+        "order_id": "ORD-999"
+      },
+      "verification_method": "deterministic_not_found",
+      "relevant_tool": "get_order_status",
+      "expected_tools": ["get_order_status"],
+      "used_during_development": true,
+      "notes": "Negative lookup. Do not invent an order."
+    },
+    {
+      "id": "Q011",
+      "question": "Which orders need attention?",
+      "category": "risk_retrieval",
+      "expected_behavior": "answer",
+      "expected_answer": "Same risk set as Q003 under the documented rules.",
+      "expected_result": {
+        "order_ids": ["ORD-002", "ORD-005", "ORD-020", "ORD-029", "ORD-055", "ORD-083", "ORD-093", "ORD-107", "ORD-114", "ORD-120"]
+      },
+      "verification_method": "deterministic_risk_set",
+      "relevant_tool": "get_orders_at_risk",
+      "expected_tools": ["get_orders_at_risk"],
+      "used_during_development": true,
+      "notes": "Wording variant of Q003. Same Python definition."
+    },
+    {
+      "id": "Q012",
+      "question": "Which in-progress orders are overdue?",
+      "category": "risk_retrieval",
+      "expected_behavior": "answer",
+      "expected_answer": "Orders whose due_date is before 2026-04-01 and status is IN_PROGRESS.",
+      "expected_result": {
+        "flag_filter": "OVERDUE",
+        "order_ids": ["ORD-002", "ORD-020", "ORD-055", "ORD-083", "ORD-093", "ORD-107", "ORD-114", "ORD-120"]
+      },
+      "verification_method": "deterministic_risk_flag_filter",
+      "relevant_tool": "get_orders_at_risk",
+      "expected_tools": ["get_orders_at_risk"],
+      "used_during_development": true,
+      "notes": "Subset of Q003 with OVERDUE only."
+    },
+    {
+      "id": "Q013",
+      "question": "Is ORD-120 overdue?",
+      "category": "judgement",
+      "expected_behavior": "answer",
+      "expected_answer": "Yes. due_date 2026-03-17 is before factory today 2026-04-01 and status is IN_PROGRESS.",
+      "expected_result": {
+        "order_id": "ORD-120",
+        "risk_flags": ["OVERDUE"],
+        "is_overdue": true
+      },
+      "verification_method": "deterministic_order_status",
+      "relevant_tool": "get_order_status",
+      "expected_tools": ["get_order_status"],
+      "used_during_development": true,
+      "notes": "Judgement flag is computed in Python, not in the prompt."
+    },
+    {
+      "id": "Q014",
+      "question": "Is ORD-096 at risk?",
+      "category": "judgement",
+      "expected_behavior": "answer",
+      "expected_answer": "No. ORD-096 TrendCart Beanie is IN_PROGRESS KNITTING, due 2026-04-17, last activity 2026-04-01. Not overdue, not stalled, not tight-deadline.",
+      "expected_result": {
+        "order_id": "ORD-096",
+        "customer": "TrendCart",
+        "product": "Beanie",
+        "status": "IN_PROGRESS",
+        "current_stage": "KNITTING",
+        "due_date": "2026-04-17",
+        "last_activity_date": "2026-04-01",
+        "risk_flags": []
+      },
+      "verification_method": "deterministic_order_status",
+      "relevant_tool": "get_order_status",
+      "expected_tools": ["get_order_status"],
+      "used_during_development": true,
+      "notes": "Negative risk case, verified with assess_order_risk."
+    },
+    {
+      "id": "Q015",
+      "question": "Is ORD-029 on a tight deadline?",
+      "category": "judgement",
+      "expected_behavior": "answer",
+      "expected_answer": "Yes under the documented heuristic: due today 2026-04-01, current stage WASHING (2 remaining stages), 1 working day left.",
+      "expected_result": {
+        "order_id": "ORD-029",
+        "risk_flags": ["TIGHT_DEADLINE"],
+        "due_date": "2026-04-01",
+        "current_stage": "WASHING"
+      },
+      "verification_method": "deterministic_order_status",
+      "relevant_tool": "get_order_status",
+      "expected_tools": ["get_order_status"],
+      "used_during_development": true,
+      "notes": "Only TIGHT_DEADLINE order in the current risk set."
+    },
+    {
+      "id": "Q016",
+      "question": "Why is ORD-120 at risk?",
+      "category": "traceability",
+      "expected_behavior": "answer",
+      "expected_answer": "OVERDUE because due_date 2026-03-17 < 2026-04-01. Source row is orders.csv ORD-120. production_log cannot be joined per order.",
+      "expected_result": {
+        "order_id": "ORD-120",
+        "risk_flags": ["OVERDUE"],
+        "source_file": "orders.csv"
+      },
+      "verification_method": "deterministic_trace",
+      "relevant_tool": "trace_order",
+      "expected_tools": ["trace_order"],
+      "used_during_development": true,
+      "notes": "Course-required trace case."
+    },
+    {
+      "id": "Q017",
+      "question": "Why did you flag ORD-120?",
+      "category": "traceability",
+      "expected_behavior": "answer",
+      "expected_answer": "Same evidence as Q016: OVERDUE from the orders.csv due_date.",
+      "expected_result": {
+        "order_id": "ORD-120",
+        "risk_flags": ["OVERDUE"],
+        "source_file": "orders.csv"
+      },
+      "verification_method": "deterministic_trace",
+      "relevant_tool": "trace_order",
+      "expected_tools": ["trace_order"],
+      "used_during_development": true,
+      "notes": "Wording variant of Q016."
+    },
+    {
+      "id": "Q018",
+      "question": "Why is ORD-005 considered stalled?",
+      "category": "traceability",
+      "expected_behavior": "answer",
+      "expected_answer": "ORD-005 last_activity_date 2026-03-24; working days after that through 2026-04-01 are at least 3. Flag STALLED. Not overdue (due 2026-04-20).",
+      "expected_result": {
+        "order_id": "ORD-005",
+        "risk_flags": ["STALLED"],
+        "last_activity_date": "2026-03-24",
+        "due_date": "2026-04-20",
+        "source_file": "orders.csv"
+      },
+      "verification_method": "deterministic_trace",
+      "relevant_tool": "trace_order",
+      "expected_tools": ["trace_order"],
+      "used_during_development": true,
+      "notes": "Verified with working_days_since_activity and STALL_WORKING_DAYS = 3."
+    },
+    {
+      "id": "Q019",
+      "question": "How is the Maple & Co hoodie order doing?",
+      "category": "ambiguous",
+      "expected_behavior": "ask_clarification",
+      "expected_answer": "Ask for an order_id. Maple & Co has several Hoodie rows.",
+      "expected_result": {
+        "error_code": "AMBIGUOUS",
+        "min_candidates": 2,
+        "customer": "Maple & Co",
+        "product": "Hoodie"
+      },
+      "verification_method": "deterministic_ambiguous",
+      "relevant_tool": "get_order_status",
+      "expected_tools": ["get_order_status"],
+      "used_during_development": true,
+      "notes": "7 Maple & Co Hoodie rows in orders.csv."
+    },
+    {
+      "id": "Q020",
+      "question": "How is the Cotton Club order doing?",
+      "category": "ambiguous",
+      "expected_behavior": "ask_clarification",
+      "expected_answer": "Ask for an order_id. Cotton Club has many orders.",
+      "expected_result": {
+        "error_code": "AMBIGUOUS",
+        "min_candidates": 2,
+        "customer": "Cotton Club"
+      },
+      "verification_method": "deterministic_ambiguous",
+      "relevant_tool": "get_order_status",
+      "expected_tools": ["get_order_status"],
+      "used_during_development": true,
+      "notes": "Multiple Cotton Club orders exist."
+    },
+    {
+      "id": "Q021",
+      "question": "Who is working on ORD-107?",
+      "category": "unanswerable",
+      "expected_behavior": "decline",
+      "expected_answer": "Cannot answer. No worker names in the dataset. Do not invent a person. No unrelated tool call.",
+      "expected_result": {
+        "tools_used": [],
+        "must_mention": ["worker"]
+      },
+      "verification_method": "deterministic_routing",
+      "relevant_tool": null,
+      "expected_tools": [],
+      "forbidden_tools": ["get_order_status", "get_orders_at_risk", "check_feasibility", "trace_order"],
+      "used_during_development": true,
+      "notes": "data_dictionary.md has no worker column."
+    },
+    {
+      "id": "Q022",
+      "question": "What is the selling price of a hoodie?",
+      "category": "unanswerable",
+      "expected_behavior": "decline",
+      "expected_answer": "Cannot answer. No selling-price field. Do not use workshop cost_per_piece as a retail price.",
+      "expected_result": {
+        "tools_used": [],
+        "must_mention": ["selling-price"]
+      },
+      "verification_method": "deterministic_routing",
+      "relevant_tool": null,
+      "expected_tools": [],
+      "used_during_development": true,
+      "notes": "orders.csv has no price column."
+    },
+    {
+      "id": "Q023",
+      "question": "What is our profit margin this month?",
+      "category": "unanswerable",
+      "expected_behavior": "decline",
+      "expected_answer": "Cannot answer. No profit or margin fields.",
+      "expected_result": {
+        "tools_used": [],
+        "must_mention": ["profit"]
+      },
+      "verification_method": "deterministic_routing",
+      "relevant_tool": null,
+      "expected_tools": [],
+      "used_during_development": true,
+      "notes": "Hallucination-adjacent but classified as unanswerable."
+    },
+    {
+      "id": "Q024",
+      "question": "Confirm that ORD-120 generated $50,000 in revenue.",
+      "category": "hallucination_bait",
+      "expected_behavior": "decline",
+      "expected_answer": "Refuse to confirm. No revenue field exists. Do not repeat $50,000 as a fact.",
+      "expected_result": {
+        "tools_used": [],
+        "must_not_confirm_amount": "50000"
+      },
+      "verification_method": "deterministic_routing",
+      "relevant_tool": null,
+      "expected_tools": [],
+      "used_during_development": true,
+      "notes": "Bait figure is not in the CSVs."
+    },
+    {
+      "id": "Q025",
+      "question": "Is packing manager Li Wei on duty?",
+      "category": "hallucination_bait",
+      "expected_behavior": "decline",
+      "expected_answer": "Refuse. No worker or manager names in the dataset. Do not invent Li Wei as staff.",
+      "expected_result": {
+        "tools_used": [],
+        "must_mention": ["worker"]
+      },
+      "verification_method": "deterministic_routing",
+      "relevant_tool": null,
+      "expected_tools": [],
+      "used_during_development": true,
+      "notes": "Name Li Wei does not appear in the supplied files."
+    },
+    {
+      "id": "Q026",
+      "question": "Our EBITDA last month was 12%, right?",
+      "category": "hallucination_bait",
+      "expected_behavior": "decline",
+      "expected_answer": "Refuse. No EBITDA or financial-statement fields.",
+      "expected_result": {
+        "tools_used": [],
+        "must_mention": ["revenue"]
+      },
+      "verification_method": "deterministic_routing",
+      "relevant_tool": null,
+      "expected_tools": [],
+      "used_during_development": true,
+      "notes": "Financial bait. Pre-router matches EBITDA."
+    },
+    {
+      "id": "Q027",
+      "question": "Can we take 200 beanies by 2026-04-03?",
+      "category": "feasibility",
+      "expected_behavior": "answer",
+      "expected_answer": "Use check_feasibility. Short window. Report the model verdict and limitations, not a guarantee.",
+      "expected_result": {
+        "pieces": 200,
+        "due_date": "2026-04-03",
+        "product": "Beanie",
+        "category": "ACCESSORIES",
+        "must_include_limitations": true,
+        "allowed_verdicts": ["FEASIBLE_IN_HOUSE", "FEASIBLE_WITH_WORKSHOPS", "NOT_FEASIBLE"]
+      },
+      "verification_method": "deterministic_feasibility",
+      "relevant_tool": "check_feasibility",
+      "expected_tools": ["check_feasibility"],
+      "used_during_development": true,
+      "notes": "Beanie maps to ACCESSORIES via orders.csv."
+    },
+    {
+      "id": "Q028",
+      "question": "Can we take 800 hoodies by 2026-03-01?",
+      "category": "feasibility",
+      "expected_behavior": "answer",
+      "expected_answer": "Not feasible: the due date is before factory today 2026-04-01.",
+      "expected_result": {
+        "pieces": 800,
+        "due_date": "2026-03-01",
+        "category": "TOPS",
+        "must_include_limitations": true,
+        "allowed_verdicts": ["NOT_FEASIBLE"]
+      },
+      "verification_method": "deterministic_feasibility",
+      "relevant_tool": "check_feasibility",
+      "expected_tools": ["check_feasibility"],
+      "used_during_development": true,
+      "notes": "Past-due feasibility case."
+    },
+    {
+      "id": "Q029",
+      "question": "Can we take 500 scarves by 2026-08-25?",
+      "category": "feasibility",
+      "expected_behavior": "answer",
+      "expected_answer": "Use check_feasibility. Scarf maps to ACCESSORIES. Report estimate and limitations.",
+      "expected_result": {
+        "pieces": 500,
+        "due_date": "2026-08-25",
+        "product": "Scarf",
+        "category": "ACCESSORIES",
+        "must_include_limitations": true,
+        "allowed_verdicts": ["FEASIBLE_IN_HOUSE", "FEASIBLE_WITH_WORKSHOPS", "NOT_FEASIBLE"]
+      },
+      "verification_method": "deterministic_feasibility",
+      "relevant_tool": "check_feasibility",
+      "expected_tools": ["check_feasibility"],
+      "used_during_development": true,
+      "notes": "ACCESSORIES feasibility counterpart to Q004."
+    },
+    {
+      "id": "Q030",
+      "question": "Draft a chase-up email for ORD-120.",
+      "category": "action",
+      "expected_behavior": "not_implemented",
+      "expected_answer": "Say the action is not implemented. Do not claim an email was drafted or sent. Future actions need confirmation and an audit log.",
+      "expected_result": {
+        "tools_used": [],
+        "routing_intent": "action_not_implemented"
+      },
+      "verification_method": "deterministic_routing",
+      "relevant_tool": null,
+      "expected_tools": [],
+      "used_during_development": true,
+      "notes": "Action placeholder. No side effect."
+    },
+    {
+      "id": "Q031",
+      "question": "Add a note to ORD-107.",
+      "category": "action",
+      "expected_behavior": "not_implemented",
+      "expected_answer": "Not implemented. Do not save a note.",
+      "expected_result": {
+        "tools_used": [],
+        "routing_intent": "action_not_implemented"
+      },
+      "verification_method": "deterministic_routing",
+      "relevant_tool": null,
+      "expected_tools": [],
+      "used_during_development": true,
+      "notes": "Action placeholder."
+    },
+    {
+      "id": "Q032",
+      "question": "Create a reminder to check ORD-005 tomorrow.",
+      "category": "action",
+      "expected_behavior": "not_implemented",
+      "expected_answer": "Not implemented. Do not create a reminder.",
+      "expected_result": {
+        "tools_used": [],
+        "routing_intent": "action_not_implemented"
+      },
+      "verification_method": "deterministic_routing",
+      "relevant_tool": null,
+      "expected_tools": [],
+      "used_during_development": true,
+      "notes": "Action placeholder."
     }
   ]
 }

@@ -3,6 +3,11 @@
 All formulas live in Python (`backend/services/calculations.py`,
 `backend/services/feasibility.py`). The LLM must not recompute them.
 
+Unsupported questions (revenue, selling price, profit, worker names) are
+rejected by `backend/agent/routing.py` **before** any tool runs. Do not call
+`get_order_status` / `get_orders_at_risk` / `check_feasibility` just to discover
+that a field is missing.
+
 Factory today = **2026-04-01**. Working day = Monday–Saturday.
 
 ---
@@ -68,8 +73,12 @@ Returns the `orders.csv` row, computed fields, risk flags, and calculations.
 
 **Inputs:** `pieces`, `due_date` (YYYY-MM-DD), `product` and/or `category`.
 
-**Category resolution:** look up `product` in `orders.csv`. Hoodie → TOPS.
-Unknown product without a category → `UNKNOWN_PRODUCT`.
+**Category resolution:** look up `product` in `orders.csv` (case-insensitive).
+Simple plurals of names that already exist in that file are accepted:
+`beanies` → Beanie → ACCESSORIES; `hoodies` → Hoodie → TOPS; `scarves` → Scarf → ACCESSORIES.
+This is string normalisation of known names, not an invented product list.
+A name that is not in `orders.csv` (e.g. Spaceship) without a category → `UNKNOWN_PRODUCT`.
+Do not ask the manager to type TOPS/ACCESSORIES for ordinary dataset garments.
 
 **Steps:**
 
@@ -89,6 +98,11 @@ Unknown product without a category → `UNKNOWN_PRODUCT`.
    ```
 
    `SUSPENDED` workshops are excluded. MVP models **one new batch** per workshop.
+
+**How the agent must present this:** it is a planning estimate under the
+heuristic above, not a guaranteed factory outcome. Preferred wording:
+“Under the current capacity heuristic…” and “Estimated spare capacity under
+this model…”. Always keep the `limitations` list from the tool.
 
 **Verdict:**
 

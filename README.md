@@ -13,8 +13,10 @@ Factory date in the dataset: **2026-04-01**. Do not use the computer clock for b
 - `get_orders_at_risk` — overdue / stalled / tight-deadline (formulas in Python)
 - `trace_order` — source row + calculations
 - `check_feasibility` — inspectable capacity estimate for a new order
-- `POST /api/chat` — LangGraph agent that must call those tools
+- `POST /api/chat` — pre-router, then LangGraph agent for in-scope questions
+- Unsupported questions (revenue, workers, …) return a limitation with **no tool call**
 - Minimal manager UI with answer + “Why?” traces
+- `evaluation/` — development evaluation set + deterministic runner
 
 ## What is not built yet
 
@@ -27,7 +29,7 @@ backend/          FastAPI + LangGraph + tools + services
 frontend/         React + Vite + Tailwind
 data/             Track 1 CSVs (source of truth)
 docs/             architecture.md, tool_spec.md
-evaluation/       starter questions
+evaluation/       Track 1 development evaluation set (not a held-out official score)
 tests/            pytest — no LLM key required
 ```
 
@@ -73,7 +75,26 @@ Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` to port
 pytest
 ```
 
-These tests check schemas, date arithmetic, risk flags, and tool JSON. They do not call an LLM.
+These tests check schemas, date arithmetic, risk flags, routing, and tool JSON. They do not call an LLM.
+
+## Evaluation
+
+```powershell
+python -m evaluation.run_evaluation --validate
+python -m evaluation.run_evaluation --mode tools
+```
+
+`evaluation/questions.json` is used during development. Do not treat scores on
+this file as an unbiased held-out evaluation. Scores are reported as two
+dimensions: **data/tool accuracy** and **final-answer quality**. See
+`evaluation/README.md`. A later held-out file can be passed with `--dataset`.
+
+Division of labour:
+
+- **Tools / Python** compute every number (status, risk flags, feasibility).
+- **LLM** only selects an in-scope tool and explains the result.
+- **Unsupported questions** must not fire unrelated tools.
+- **Actions** (later) will require confirmation and an audit log.
 
 ## Try these questions (after the API key is set)
 
