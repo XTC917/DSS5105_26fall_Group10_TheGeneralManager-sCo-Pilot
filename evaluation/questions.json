@@ -1,0 +1,52 @@
+{
+  "factory_today": "2026-04-01",
+  "notes": "Starter set for later evaluation. Expected tool names are hints, not a full rubric.",
+  "questions": [
+    {
+      "id": "q01",
+      "question": "How is ORD-120 doing?",
+      "expected_tools": ["get_order_status"],
+      "must_not": ["invented numbers"]
+    },
+    {
+      "id": "q02",
+      "question": "How is the TrendCart order doing?",
+      "expected_behaviour": "ask_clarification",
+      "expected_tools": ["get_order_status"],
+      "notes": "Multiple TrendCart orders exist. Must not pick one."
+    },
+    {
+      "id": "q03",
+      "question": "Which orders are at risk?",
+      "expected_tools": ["get_orders_at_risk"]
+    },
+    {
+      "id": "q04",
+      "question": "Why is ORD-120 considered risky?",
+      "expected_tools": ["trace_order"]
+    },
+    {
+      "id": "q05",
+      "question": "Can we take 800 hoodies by August 25?",
+      "expected_tools": ["check_feasibility"],
+      "notes": "due_date should be 2026-08-25. Arithmetic must come from the tool."
+    },
+    {
+      "id": "q06",
+      "question": "What is the revenue from TrendCart this quarter?",
+      "expected_behaviour": "unsupported",
+      "notes": "No selling price or revenue columns exist."
+    },
+    {
+      "id": "q07",
+      "question": "Who is working on ORD-107?",
+      "expected_behaviour": "unsupported",
+      "notes": "No worker names in the dataset."
+    },
+    {
+      "id": "q08",
+      "question": "What is the status of Cotton Club beanie ORD-001?",
+      "expected_tools": ["get_order_status"]
+    }
+  ]
+}
