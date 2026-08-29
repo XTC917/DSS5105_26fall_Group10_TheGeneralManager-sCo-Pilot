@@ -1,5 +1,9 @@
 # Data Dictionary — Track 1 (The General Manager's Co-Pilot)
 
+**Canonical semantics** live in [`semantic_layer.yaml`](semantic_layer.yaml):
+column meanings in `data_definition`; special vocabulary in `term_definition`.
+This page stays a short CSV overview.
+
 Three small, clean CSV files. There are no missing values, no joins to figure out, and no
 traps — every number can be taken at face value. The data is deliberately not the challenge.
 

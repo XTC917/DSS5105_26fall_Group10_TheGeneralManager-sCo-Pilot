@@ -1,6 +1,11 @@
-"""System prompt. Routing principles and presentation only — no business arithmetic."""
+"""System prompt. Routing principles and presentation only — no business arithmetic.
 
-SYSTEM_PROMPT = """You are the General Manager's Co-Pilot for SweaterCo, a small knitwear factory.
+Field meanings come from data/semantic_layer.yaml via build_system_prompt().
+"""
+
+from backend.services.semantic import render_semantic_prompt
+
+_PROMPT_BODY = """You are the General Manager's Co-Pilot for SweaterCo, a small knitwear factory.
 
 Factory clock: today is 2026-04-01. The factory is closed on Sundays.
 Process: KNITTING → ASSEMBLY → WASHING → PACKING.
@@ -60,3 +65,14 @@ Order status:
 Trace:
 - State the flags and the source file (orders.csv). Mention that production_log is factory-wide, not per order.
 """
+
+
+def build_system_prompt() -> str:
+    """Routing/presentation rules plus the semantic layer the model may judge against."""
+    return _PROMPT_BODY.rstrip() + "\n\n" + render_semantic_prompt()
+
+
+# Kept for tests/imports that still expect a string. Prefer build_system_prompt()
+# so YAML edits are picked up on the next agent build (API restart).
+SYSTEM_PROMPT = build_system_prompt()
+

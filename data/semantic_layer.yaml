@@ -1,0 +1,201 @@
+# Semantic layer
+#
+# data_definition — every stored table/column, including field descriptions.
+# term_definition — special vocabulary only (not a second copy of each column).
+# Add more terms later; do not duplicate column names here unless they are jargon
+# (e.g. OVERDUE, selling price) that is not itself a CSV column.
+
+version: 1
+
+data_definition:
+  tables:
+    orders:
+      physical_name: orders
+      source: orders.csv
+      grain: One row is one customer order.
+      description: Who ordered what, how many pieces, due when, and current stage.
+      columns:
+        order_id:
+          physical_name: order_id
+          type: string
+          nullable: false
+          allowed_values: null
+          description: Order identifier, ORD-001 … ORD-120.
+        customer:
+          physical_name: customer
+          type: string
+          nullable: false
+          allowed_values: null
+          description: Who ordered it.
+        product:
+          physical_name: product
+          type: string
+          nullable: false
+          allowed_values: null
+          description: What was ordered (e.g. Hoodie, Vest, Beanie).
+        category:
+          physical_name: category
+          type: string
+          nullable: false
+          allowed_values: [TOPS, ACCESSORIES]
+          description: TOPS (sweaters, hoodies, …) or ACCESSORIES (beanies, scarves).
+        pieces:
+          physical_name: pieces
+          type: integer
+          nullable: false
+          allowed_values: null
+          description: How many garments in this order.
+        order_date:
+          physical_name: order_date
+          type: date
+          nullable: false
+          allowed_values: null
+          description: When the order was placed.
+        due_date:
+          physical_name: due_date
+          type: date
+          nullable: false
+          allowed_values: null
+          description: When the order is due.
+        status:
+          physical_name: status
+          type: string
+          nullable: false
+          allowed_values: [COMPLETE, IN_PROGRESS]
+          description: COMPLETE or IN_PROGRESS.
+        current_stage:
+          physical_name: current_stage
+          type: string
+          nullable: false
+          allowed_values: [KNITTING, ASSEMBLY, WASHING, PACKING, COMPLETE]
+          description: KNITTING / ASSEMBLY / WASHING / PACKING, or COMPLETE if finished.
+        last_activity_date:
+          physical_name: last_activity_date
+          type: date
+          nullable: false
+          allowed_values: null
+          description: Last day any work was recorded on this order.
+        completed_date:
+          physical_name: completed_date
+          type: date
+          nullable: true
+          allowed_values: null
+          description: When it finished; blank if still in progress.
+        days_late:
+          physical_name: days_late
+          type: integer
+          nullable: true
+          allowed_values: null
+          description: completed_date minus due_date; negative means early; blank if in progress.
+
+    production_log:
+      physical_name: production_log
+      source: production_log.csv
+      grain: One row is one stage on one calendar day (factory-wide).
+      description: Daily factory output by stage. Not per order; no order_id.
+      columns:
+        date:
+          physical_name: date
+          type: date
+          nullable: false
+          allowed_values: null
+          description: The calendar day.
+        stage:
+          physical_name: stage
+          type: string
+          nullable: false
+          allowed_values: [KNITTING, ASSEMBLY, WASHING, PACKING]
+          description: Which of the four factory stages this daily total belongs to.
+        pieces_completed:
+          physical_name: pieces_completed
+          type: integer
+          nullable: false
+          allowed_values: null
+          description: Garments finished at that stage that day (0 on Sundays).
+
+    workshops:
+      physical_name: workshops
+      source: workshops.csv
+      grain: One row is one outside workshop profile card.
+      description: Subcontract capacity used in feasibility questions.
+      columns:
+        workshop_id:
+          physical_name: workshop_id
+          type: string
+          nullable: false
+          allowed_values: null
+          description: Workshop identifier, W1 … W8.
+        name:
+          physical_name: name
+          type: string
+          nullable: false
+          allowed_values: null
+          description: Memorable workshop name.
+        capacity_pieces_per_day:
+          physical_name: capacity_pieces_per_day
+          type: number
+          nullable: false
+          allowed_values: null
+          description: How much it can process per day; work beyond this queues.
+        pickup_lead_days:
+          physical_name: pickup_lead_days
+          type: number
+          nullable: false
+          allowed_values: null
+          description: Fixed transport overhead per batch.
+        defect_rate:
+          physical_name: defect_rate
+          type: number
+          nullable: false
+          allowed_values: null
+          description: Chance a batch comes back defective and is partly redone.
+        cost_per_piece:
+          physical_name: cost_per_piece
+          type: number
+          nullable: false
+          allowed_values: null
+          description: What the workshop charges us per piece (subcontractor charge).
+        makes:
+          physical_name: makes
+          type: string
+          nullable: false
+          allowed_values: [TOPS, ACCESSORIES, TOPS+ACCESSORIES]
+          description: What it is equipped for.
+        status:
+          physical_name: status
+          type: string
+          nullable: false
+          allowed_values: [ACTIVE, SUSPENDED]
+          description: ACTIVE, or SUSPENDED (failed a quality audit — may not take new work).
+        max_batch_pieces:
+          physical_name: max_batch_pieces
+          type: number
+          nullable: true
+          allowed_values: null
+          description: Per-batch cap for workshops on trial; blank means no cap.
+        current_queue_days:
+          physical_name: current_queue_days
+          type: number
+          nullable: false
+          allowed_values: null
+          description: Days of work it is already holding as of factory today.
+        notes:
+          physical_name: notes
+          type: string
+          nullable: true
+          allowed_values: null
+          description: One-line reputation a human dispatcher would give it.
+
+term_definition:
+  # Special vocabulary only. Copy this shape when adding jargon.
+  terms:
+    factory_today:
+      description: Business clock is 2026-04-01. Do not use the computer date.
+    selling_price:
+      in_dataset: false
+      description: Not a stored field. Do not treat workshops.cost_per_piece as a garment selling price.
+    overdue:
+      in_dataset: false
+      computed_in: backend.services.calculations
+      tool: get_orders_at_risk
+      description: Derived risk flag for in-progress orders. Formula stays in Python.

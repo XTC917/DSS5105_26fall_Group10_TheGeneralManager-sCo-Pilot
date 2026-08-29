@@ -48,6 +48,7 @@ Manager (React UI)
 | Agent | `backend/agent/` | Choose tools, write the reply | Invent numbers or data |
 | Tools | `backend/tools/` | Call services, return JSON + trace | Hide rules in the prompt |
 | Services | `backend/services/` | SQL, date math, risk, feasibility | Call the LLM |
+| Semantic | `data/semantic_layer.yaml` | `data_definition` (columns + descriptions) + `term_definition` (jargon) | Arithmetic, invented columns |
 | Data | `data/` | Source CSVs | — |
 
 ## Dataset clock

@@ -13,7 +13,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
-from backend.agent.prompts import SYSTEM_PROMPT
+from backend.agent.prompts import build_system_prompt
 from backend.agent.routing import route_query
 from backend.tools.registry import MVP_TOOLS
 
@@ -52,7 +52,7 @@ def get_agent():
         _AGENT = create_react_agent(
             model,
             MVP_TOOLS,
-            prompt=SYSTEM_PROMPT,
+            prompt=build_system_prompt(),
             checkpointer=_CHECKPOINTER,
         )
         logger.info("LangGraph agent initialised with %s tools", len(MVP_TOOLS))
