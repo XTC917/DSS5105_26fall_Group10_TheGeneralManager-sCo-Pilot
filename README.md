@@ -27,13 +27,22 @@ Morning briefing, discovery engine, emails / notes / reminders, audit log, `asse
 ```
 backend/          FastAPI + LangGraph + tools + services
 frontend/         React + Vite + Tailwind
-data/             Track 1 CSVs (source of truth)
+data/             Track 1 CSVs + semantic_layer.yaml
 docs/             architecture.md, tool_spec.md
 evaluation/       Track 1 development evaluation set (not a held-out official score)
 tests/            pytest — no LLM key required
 ```
 
 Read `docs/architecture.md` and `docs/tool_spec.md` before changing rules.
+
+## Semantic layer
+
+Field meanings for the agent live in `data/semantic_layer.yaml` (also loaded into the system prompt):
+
+- `data_definition` — every stored table/column, including descriptions
+- `term_definition` — special vocabulary that is **not** a CSV column (e.g. factory today, selling price, OVERDUE)
+
+Do not put formulas in that file. Arithmetic stays in `backend/services/`. After editing the YAML, restart the backend.
 
 ## Prerequisites
 
@@ -107,7 +116,7 @@ Division of labour:
 
 ## Rules for teammates
 
-1. Do not invent columns or business facts that are not in `data/` + `data/data_dictionary.md`.
+1. Do not invent columns or business facts that are not in `data/` + `data/semantic_layer.yaml` (and the short CSV overview in `data/data_dictionary.md`).
 2. Do not put totals, day counts, or capacity math in the prompt — add a Python function.
 3. If a design is not supported by the files, leave a `# TODO` instead of guessing.
 4. Side-effecting actions (later) must never run without an explicit confirmation.
