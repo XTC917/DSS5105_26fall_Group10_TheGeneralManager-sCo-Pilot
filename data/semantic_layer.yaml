@@ -68,7 +68,7 @@ data_definition:
           type: string
           nullable: false
           allowed_values: [KNITTING, ASSEMBLY, WASHING, PACKING, COMPLETE]
-          description: KNITTING / ASSEMBLY / WASHING / PACKING, or COMPLETE if finished.
+          description: four different stages of production, the order is KNITTING → ASSEMBLY → WASHING → PACKING. 
         last_activity_date:
           physical_name: last_activity_date
           type: date
@@ -111,80 +111,117 @@ data_definition:
           type: integer
           nullable: false
           allowed_values: null
-          description: Garments finished at that stage that day (0 on Sundays).
+          description: Garments finished at that stage that day.
 
     workshops:
       physical_name: workshops
       source: workshops.csv
-      grain: One row is one outside workshop profile card.
-      description: Subcontract capacity used in feasibility questions.
+      grain: One row is one outside workshop. Not a log of past jobs.
+      description: >
+        Eight subcontract shops SweaterCo can send extra work to when the
+        factory is full. Used only by check_feasibility (can we take a new
+        order by a date?). There is no record here of which orders were
+        actually sent out.
       columns:
         workshop_id:
           physical_name: workshop_id
           type: string
           nullable: false
           allowed_values: null
-          description: Workshop identifier, W1 … W8.
+          description: Stable id, W1–W8. Use this in traces, not the nickname.
         name:
           physical_name: name
           type: string
           nullable: false
           allowed_values: null
-          description: Memorable workshop name.
+          description: Display name (e.g. QuickStitch). Same workshop as workshop_id.
         capacity_pieces_per_day:
           physical_name: capacity_pieces_per_day
           type: number
           nullable: false
           allowed_values: null
-          description: How much it can process per day; work beyond this queues.
+          description: >
+            How many garments this shop can finish in one working day if it
+            is free (W1=300, W4=70). Feasibility multiplies this by usable
+            days. It is not factory in-house throughput (that comes from
+            production_log).
         pickup_lead_days:
           physical_name: pickup_lead_days
           type: number
           nullable: false
           allowed_values: null
-          description: Fixed transport overhead per batch.
+          description: >
+            Days lost to send work there and get it back (transport), charged
+            once per new batch in the MVP. Example: due in 10 working days
+            and lead=4 means only 6 days are left before subtracting their
+            existing queue. Not the same as current_queue_days.
         defect_rate:
           physical_name: defect_rate
           type: number
           nullable: false
           allowed_values: null
-          description: Chance a batch comes back defective and is partly redone.
+          description: >
+            Fraction of pieces expected to fail and be redone (0.12 = 12%).
+            Feasibility keeps only (1 − defect_rate) of daily capacity.
+            Not a count of past defective batches.
         cost_per_piece:
           physical_name: cost_per_piece
           type: number
           nullable: false
           allowed_values: null
-          description: What the workshop charges us per piece (subcontractor charge).
+          description: >
+            What we pay this shop per garment they make for us. Not what
+            the brand customer pays us. Cannot answer revenue or selling
+            price. MVP feasibility does not use this number in the verdict.
         makes:
           physical_name: makes
           type: string
           nullable: false
           allowed_values: [TOPS, ACCESSORIES, TOPS+ACCESSORIES]
-          description: What it is equipped for.
+          description: >
+            Product families this shop’s machines can make. TOPS = sweaters
+            / hoodies / vests etc.; ACCESSORIES = beanies / scarves;
+            TOPS+ACCESSORIES = both. A hoodie order only uses shops whose
+            makes includes TOPS. Different from orders.category (that is
+            on the customer order, not the shop).
         status:
           physical_name: status
           type: string
           nullable: false
           allowed_values: [ACTIVE, SUSPENDED]
-          description: ACTIVE, or SUSPENDED (failed a quality audit — may not take new work).
+          description: >
+            ACTIVE = allowed to take new work. SUSPENDED = failed a quality
+            audit; check_feasibility ignores it (W7 OldMill). Different
+            meaning from orders.status (COMPLETE / IN_PROGRESS).
         max_batch_pieces:
           physical_name: max_batch_pieces
           type: number
           nullable: true
           allowed_values: null
-          description: Per-batch cap for workshops on trial; blank means no cap.
+          description: >
+            Max garments in one new batch we may send. Blank/null = no cap.
+            Only W8 FreshStart has 300 (trial shop). Feasibility then takes
+            min(estimated output, this cap). Not daily capacity.
         current_queue_days:
           physical_name: current_queue_days
           type: number
           nullable: false
           allowed_values: null
-          description: Days of work it is already holding as of factory today.
+          description: >
+            How many working days of work they already have booked as of
+            factory today (2026-04-01), before they could start our new
+            batch. 0 = idle; 5 = five days of backlog. Subtracted from the
+            due-date window together with pickup_lead_days. Snapshot, not a
+            live queue table.
         notes:
           physical_name: notes
           type: string
           nullable: true
           allowed_values: null
-          description: One-line reputation a human dispatcher would give it.
+          description: >
+            Dispatcher one-liner (fast, cheap, sloppy, …). Qualitative only.
+            Do not treat it as a hidden number or as permission to invent
+            capacity.
 
 term_definition:
   # Special vocabulary only. Copy this shape when adding jargon.
