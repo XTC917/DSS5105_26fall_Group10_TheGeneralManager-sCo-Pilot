@@ -1,0 +1,48 @@
+  current_database  | current_user
+--------------------+---------------
+ factory_copilot_db | factory_agent
+(1 行记录)
+
+ can_connect | can_use_schema | can_create_in_schema
+-------------+----------------+----------------------
+ t           | t              | f
+(1 行记录)
+
+   tablename    | can_select | can_insert | can_update | can_delete | can_truncate
+----------------+------------+------------+------------+------------+--------------
+ orders         | t          | f          | f          | f          | f
+ production_log | t          | f          | f          | f          | f
+ workshops      | t          | f          | f          | f          | f
+(3 行记录)
+
+ readable_order_rows
+---------------------
+                 120
+(1 行记录)
+
+=== Negative test: INSERT must fail ===
+psql:sql/06_readonly_permission_test.sql:92: NOTICE:  TEST PASSED: INSERT was denied
+DO
+=== Negative test: UPDATE must fail ===
+psql:sql/06_readonly_permission_test.sql:113: NOTICE:  TEST PASSED: UPDATE was denied
+DO
+=== Negative test: DELETE must fail ===
+psql:sql/06_readonly_permission_test.sql:133: NOTICE:  TEST PASSED: DELETE was denied
+DO
+=== Negative test: TRUNCATE must fail ===
+psql:sql/06_readonly_permission_test.sql:152: NOTICE:  TEST PASSED: TRUNCATE was denied
+DO
+=== Negative test: CREATE TABLE must fail ===
+psql:sql/06_readonly_permission_test.sql:173: NOTICE:  TEST PASSED: CREATE TABLE was denied
+DO
+=== Negative test: DROP TABLE must fail ===
+psql:sql/06_readonly_permission_test.sql:192: NOTICE:  TEST PASSED: DROP TABLE was denied
+DO
+=== All six permission-denial tests passed ===
+=== Final integrity check ===
+   table_name   | row_count
+----------------+-----------
+ orders         |       120
+ production_log |       360
+ workshops      |         8
+(3 行记录)
