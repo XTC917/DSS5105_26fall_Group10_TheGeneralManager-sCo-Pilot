@@ -1,0 +1,26 @@
+  current_database  | current_user
+--------------------+---------------
+ factory_copilot_db | factory_admin
+(1 行记录)
+
+ row_count | unique_order_count | total_pieces | missing_completed_dates | missing_days_late
+-----------+--------------------+--------------+-------------------------+-------------------
+       120 |                120 |        93500 |                      34 |                34
+(1 行记录)
+
+ row_count | date_stage_pairs | pieces_completed
+-----------+------------------+------------------
+       360 |              360 |           231595
+(1 行记录)
+
+ row_count | distinct_workshop_ids | total_daily_capacity | active_workshops | missing_max_batch
+-----------+-----------------------+----------------------+------------------+-------------------
+         8 |                     8 |                 1600 |                7 |                 7
+(1 行记录)
+
+ schemaname |   tablename    |  tableowner
+------------+----------------+---------------
+ app        | orders         | factory_admin
+ app        | production_log | factory_admin
+ app        | workshops      | factory_admin
+(3 行记录)

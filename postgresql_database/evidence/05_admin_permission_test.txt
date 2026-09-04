@@ -1,0 +1,51 @@
+  current_database  | current_user
+--------------------+---------------
+ factory_copilot_db | factory_admin
+(1 行记录)
+
+ can_connect | can_use_schema | can_create_in_schema
+-------------+----------------+----------------------
+ t           | t              | t
+(1 行记录)
+
+   tablename    | can_select | can_insert | can_update | can_delete | can_truncate
+----------------+------------+------------+------------+------------+--------------
+ orders         | t          | t          | t          | t          | t
+ production_log | t          | t          | t          | t          | t
+ workshops      | t          | t          | t          | t          | t
+(3 行记录)
+
+=== Administrator CRUD test ===
+BEGIN
+CREATE TABLE
+INSERT 0 1
+ probe_id |      note
+----------+----------------
+        1 | original value
+(1 行记录)
+
+UPDATE 1
+ probe_id |     note
+----------+---------------
+        1 | updated value
+(1 行记录)
+
+DELETE 1
+ rows_after_delete
+-------------------
+                 0
+(1 行记录)
+
+INSERT 0 1
+TRUNCATE TABLE
+ rows_after_truncate
+---------------------
+                   0
+(1 行记录)
+
+DROP TABLE
+ROLLBACK
+ probe_table_removed
+---------------------
+ t
+(1 行记录)
