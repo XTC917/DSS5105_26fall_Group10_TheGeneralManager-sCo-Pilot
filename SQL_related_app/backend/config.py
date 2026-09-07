@@ -20,6 +20,8 @@ class Config:
     PG_DATABASE = os.getenv("PGDATABASE", "factory_copilot_db")
     PG_USER = os.getenv("PGUSER", "")
     PG_PASSWORD = os.getenv("PGPASSWORD", "")
+    PG_ADMIN_USER = os.getenv("PG_ADMIN_USER", "")
+    PG_ADMIN_PASSWORD = os.getenv("PG_ADMIN_PASSWORD", "")
     PG_SCHEMA = os.getenv("PGSCHEMA", "app")
     PG_CONNECT_TIMEOUT = int(os.getenv("PGCONNECT_TIMEOUT", "5"))
 

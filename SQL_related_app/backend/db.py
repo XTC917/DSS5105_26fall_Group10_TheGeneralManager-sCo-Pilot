@@ -23,6 +23,18 @@ def get_postgres_connection() -> psycopg.Connection:
     )
 
 
+def get_postgres_admin_connection() -> psycopg.Connection:
+    return psycopg.connect(
+        host=Config.PG_HOST,
+        port=Config.PG_PORT,
+        dbname=Config.PG_DATABASE,
+        user=Config.PG_ADMIN_USER,
+        password=Config.PG_ADMIN_PASSWORD,
+        connect_timeout=Config.PG_CONNECT_TIMEOUT,
+        row_factory=dict_row,
+    )
+
+
 def get_connection() -> sqlite3.Connection:
     Config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(Config.DB_PATH), check_same_thread=False)
