@@ -16,53 +16,99 @@ SELECT
         current_user,
         'app',
         'USAGE'
-    ) AS can_use_schema,
+    ) AS can_use_app_schema,
+
+    has_schema_privilege(
+        current_user,
+        'admin_meta',
+        'USAGE'
+    ) AS can_use_admin_meta_schema,
 
     has_schema_privilege(
         current_user,
         'app',
         'CREATE'
-    ) AS can_create_in_schema;
+    ) AS can_create_in_app_schema,
+
+    has_schema_privilege(
+        current_user,
+        'admin_meta',
+        'CREATE'
+    ) AS can_create_in_admin_meta_schema;
 
 SELECT
-    tablename,
+    n.nspname AS schemaname,
+    c.relname AS tablename,
 
     has_table_privilege(
         current_user,
-        schemaname || '.' || tablename,
+        c.oid,
         'SELECT'
     ) AS can_select,
 
     has_table_privilege(
         current_user,
-        schemaname || '.' || tablename,
+        c.oid,
         'INSERT'
     ) AS can_insert,
 
     has_table_privilege(
         current_user,
-        schemaname || '.' || tablename,
+        c.oid,
         'UPDATE'
     ) AS can_update,
 
     has_table_privilege(
         current_user,
-        schemaname || '.' || tablename,
+        c.oid,
         'DELETE'
     ) AS can_delete,
 
     has_table_privilege(
         current_user,
-        schemaname || '.' || tablename,
+        c.oid,
         'TRUNCATE'
     ) AS can_truncate
-FROM pg_tables
-WHERE schemaname = 'app'
-ORDER BY tablename;
+FROM pg_class AS c
+JOIN pg_namespace AS n ON n.oid = c.relnamespace
+WHERE n.nspname IN ('app', 'admin_meta')
+    AND c.relkind in ('r', 'p')
+ORDER BY n.nspname, c.relname;
 
 SELECT COUNT(*) AS readable_order_rows
 FROM app.orders;
 
+SELECT
+    has_sequence_privilege(
+        current_user,
+        c.oid,
+        'USAGE'
+    ) AS can_use_upload_history_sequence
+FROM pg_class AS c
+JOIN pg_namespace AS n ON n.oid = c.relnamespace
+WHERE n.nspname = 'admin_meta'
+    AND c.relname = 'upload_history_id_seq'
+    AND c.relkind = 'S';
+
+\echo === Negative test: admin_meta data SELECT must fail ===
+
+DO $permission_test$
+BEGIN
+    BEGIN
+        PERFORM 1
+        FROM admin_meta.upload_history
+        LIMIT 1;
+
+        RAISE EXCEPTION
+            'TEST FAILED: admin_meta data SELECT unexpectedly succeeded';
+
+    EXCEPTION
+        WHEN insufficient_privilege THEN
+            RAISE NOTICE
+                'TEST PASSED: admin_meta data SELECT was denied';
+    END;
+END
+$permission_test$;
 
 \echo === Negative test: INSERT must fail ===
 
@@ -192,7 +238,7 @@ END
 $permission_test$;
 
 
-\echo === All six permission-denial tests passed ===
+\echo === All seven permission-denial tests passed ===
 
 
 \echo === Final integrity check ===

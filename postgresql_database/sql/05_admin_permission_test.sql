@@ -15,15 +15,28 @@ SELECT
         current_user,
         'app',
         'USAGE'
-    ) AS can_use_schema,
+    ) AS can_use_app_schema,
+
+    has_schema_privilege(
+        current_user,
+        'admin_meta',
+        'USAGE'
+    ) AS can_use_admin_meta_schema,
 
     has_schema_privilege(
         current_user,
         'app',
         'CREATE'
-    ) AS can_create_in_schema;
+    ) AS can_create_in_app_schema,
+    
+    has_schema_privilege(
+        current_user,
+        'admin_meta',
+        'CREATE'
+    ) AS can_create_in_admin_meta_schema;
 
 SELECT
+    schemaname,
     tablename,
 
     has_table_privilege(
@@ -57,8 +70,15 @@ SELECT
     ) AS can_truncate
 
 FROM pg_tables
-WHERE schemaname = 'app'
-ORDER BY tablename;
+WHERE schemaname IN ('app', 'admin_meta')
+ORDER BY schemaname, tablename;
+
+SELECT
+    has_sequence_privilege(
+        current_user,
+        'admin_meta.upload_history_id_seq',
+        'USAGE'
+    ) AS can_use_upload_history_sequence;
 
 
 \echo === Administrator CRUD test ===

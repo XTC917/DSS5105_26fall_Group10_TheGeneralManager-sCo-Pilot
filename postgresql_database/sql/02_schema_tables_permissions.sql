@@ -27,6 +27,9 @@ FROM PUBLIC;
 CREATE SCHEMA app
 AUTHORIZATION factory_admin;
 
+CREATE SCHEMA admin_meta
+AUTHORIZATION factory_admin;
+
 GRANT USAGE
 ON SCHEMA app
 TO factory_reader;
@@ -90,6 +93,46 @@ CREATE TABLE app.workshops (
     notes text NOT NULL
 );
 
+CREATE TABLE admin_meta.upload_history (
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    file_name text NOT NULL,
+    file_type text NOT NULL CHECK (file_type IN ('csv', 'excel')),
+    total_rows integer NOT NULL DEFAULT 0 CHECK (total_rows >= 0),
+    status text NOT NULL DEFAULT 'pending' CHECK (status IN ('success', 'failed', 'pending', 'processing')),
+    error_message text,
+    uploaded_by text NOT NULL DEFAULT 'admin',
+    created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at timestamptz
+);
+
+CREATE TABLE admin_meta.import_details (
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    upload_id bigint NOT NULL REFERENCES admin_meta.upload_history(id) ON DELETE CASCADE,
+    file_name text NOT NULL,
+    table_name text NOT NULL CHECK (table_name IN ('orders', 'production_log', 'workshops')),
+    total_rows integer NOT NULL DEFAULT 0 CHECK (total_rows >= 0),
+    success_rows integer NOT NULL DEFAULT 0 CHECK (success_rows >= 0),
+    failed_rows integer NOT NULL DEFAULT 0 CHECK (failed_rows >= 0),
+    status text NOT NULL DEFAULT 'pending' CHECK (status IN ('success', 'failed', 'pending')),
+    error_message text,
+    created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at timestamptz,
+
+    CHECK (success_rows + failed_rows = total_rows)
+);
+
+CREATE TABLE admin_meta.data_sources (
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    source_name text NOT NULL,
+    table_name text NOT NULL UNIQUE CHECK (table_name IN ('orders', 'production_log', 'workshops')),
+    original_file text,
+    description text,
+    row_count integer NOT NULL DEFAULT 0 CHECK (row_count >= 0),
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 REVOKE ALL
 ON ALL TABLES IN SCHEMA app
 FROM PUBLIC;
@@ -103,5 +146,23 @@ GRANT SELECT ON TABLES TO factory_reader;
 
 ALTER DEFAULT PRIVILEGES IN SCHEMA app
 REVOKE ALL ON TABLES FROM PUBLIC;
+
+REVOKE ALL
+ON SCHEMA admin_meta
+FROM PUBLIC, factory_reader, factory_user, factory_agent;
+
+REVOKE ALL
+ON ALL TABLES IN SCHEMA admin_meta
+FROM PUBLIC, factory_reader, factory_user, factory_agent;
+
+REVOKE ALL
+ON ALL SEQUENCES IN SCHEMA admin_meta
+FROM PUBLIC, factory_reader, factory_user, factory_agent;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA admin_meta
+REVOKE ALL ON TABLES FROM PUBLIC;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA admin_meta
+REVOKE ALL ON SEQUENCES FROM PUBLIC;
 
 COMMIT;
