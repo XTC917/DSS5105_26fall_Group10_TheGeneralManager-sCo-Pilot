@@ -2,12 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import Config
-from db import get_connection
+from db import get_postgres_connection
 from routers import datasource, query, upload
 
 app = FastAPI(
     title="Factory Data Management System",
-    description="CSV/Excel upload into a SQLite database for the three Track 1 tables",
+    description="CSV/Excel upload into SQLite with experimental PostgreSQL connectivity",
     version="1.1.0",
 )
 
@@ -45,14 +45,29 @@ async def root():
 @app.get("/health")
 async def health_check():
     try:
-        conn = get_connection()
+        conn = get_postgres_connection()
         try:
-            conn.execute("SELECT 1").fetchone()
+            row = conn.execute(
+                """
+                SELECT
+                    current_database() AS database_name,
+                    current_user AS login_role
+                """
+            ).fetchone()
         finally:
             conn.close()
-        return {"status": "healthy", "database": str(Config.DB_PATH.name)}
+        return {
+            "status": "healthy",
+            "backend": "postgresql",
+            "database": row["database_name"],
+            "role": row["login_role"],
+        }
     except Exception as exc:
-        return {"status": "unhealthy", "error": str(exc)}
+        return {
+            "status": "unhealthy",
+            "backend": "postgresql",
+            "error": str(exc),
+        }
 
 
 if __name__ == "__main__":

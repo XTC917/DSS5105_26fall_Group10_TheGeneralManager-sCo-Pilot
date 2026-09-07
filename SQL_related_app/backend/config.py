@@ -4,9 +4,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
-
 BACKEND_DIR = Path(__file__).resolve().parent
+load_dotenv(BACKEND_DIR / ".env")
+
 _IDENT_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
@@ -14,6 +14,14 @@ class Config:
     DB_PATH = Path(os.getenv("DB_PATH", BACKEND_DIR / "data" / "factory_data.db"))
     if not DB_PATH.is_absolute():
         DB_PATH = BACKEND_DIR / DB_PATH
+
+    PG_HOST = os.getenv("PGHOST", "localhost")
+    PG_PORT = int(os.getenv("PGPORT", "5432"))
+    PG_DATABASE = os.getenv("PGDATABASE", "factory_copilot_db")
+    PG_USER = os.getenv("PGUSER", "")
+    PG_PASSWORD = os.getenv("PGPASSWORD", "")
+    PG_SCHEMA = os.getenv("PGSCHEMA", "app")
+    PG_CONNECT_TIMEOUT = int(os.getenv("PGCONNECT_TIMEOUT", "5"))
 
     UPLOAD_DIR = BACKEND_DIR / "uploads"
     MAX_FILE_SIZE = 100 * 1024 * 1024
