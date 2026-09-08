@@ -10,6 +10,7 @@ function newConversationId() {
 export default function Home() {
   const [health, setHealth] = useState(null);
   const [healthError, setHealthError] = useState("");
+  const [boardTick, setBoardTick] = useState(0);
   const conversationId = useMemo(newConversationId, []);
 
   useEffect(() => {
@@ -44,8 +45,12 @@ export default function Home() {
       </header>
 
       <main className="mx-auto grid max-w-6xl gap-5 px-5 py-5 lg:grid-cols-[260px_1fr]">
-        <Sidebar />
-        <ChatPanel conversationId={conversationId} llmReady={Boolean(health?.llm_configured)} />
+        <Sidebar refreshToken={boardTick} />
+        <ChatPanel
+          conversationId={conversationId}
+          llmReady={Boolean(health?.llm_configured)}
+          onBoardChanged={() => setBoardTick((n) => n + 1)}
+        />
       </main>
     </div>
   );

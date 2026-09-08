@@ -13,6 +13,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / "data"
 DB_PATH = DATA_DIR / "factory.db"
 LOG_DIR = PROJECT_ROOT / "logs"
+# Local notes/reminders/audit. Survives CSV reload of factory.db.
+STATE_DB_PATH = DATA_DIR / "copilot_state.db"
 
 # Dataset clock — do not replace this with date.today().
 FACTORY_TODAY = date(2026, 4, 1)
@@ -31,3 +33,7 @@ STALL_WORKING_DAYS = 3
 # Feasibility: use this many trailing working days of production_log to
 # estimate typical factory throughput (median pieces/day per stage).
 THROUGHPUT_LOOKBACK_WORKING_DAYS = 30
+
+# Morning briefing: flag a stage if last working day's output is below this
+# fraction of the lookback median. Inspectable; not hidden in a prompt.
+PRODUCTION_DROP_RATIO = 0.70

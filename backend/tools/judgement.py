@@ -23,11 +23,18 @@ class CheckFeasibilityInput(BaseModel):
     )
     product: Optional[str] = Field(
         default=None,
-        description="Product name such as Hoodie. Used to map to TOPS or ACCESSORIES via orders.csv.",
+        description=(
+            "Garment name from the question, singular or plural is fine "
+            "(Hoodie, hoodies, Beanie, beanies, Scarf, scarves). "
+            "Mapped to TOPS/ACCESSORIES from orders.csv in Python."
+        ),
     )
     category: Optional[str] = Field(
         default=None,
-        description="TOPS or ACCESSORIES. Use this if the product is not in orders.csv.",
+        description=(
+            "TOPS or ACCESSORIES. Only if the product is not a known garment "
+            "in orders.csv. Do not ask the manager to type this for hoodie/beanie/scarf."
+        ),
     )
 
 
@@ -44,7 +51,12 @@ def check_feasibility(
     capacity yourself. The result includes a verdict, spare factory capacity,
     workshop overflow, and a limitations list — quote the limitations when relevant.
 
-    Use for questions like "Can we take 800 hoodies by August 25?".
+    Use for questions like "Can we take 800 hoodies by August 25?" or
+    "Can we take 200 beanies by 2026-04-03?". Pass the product word as spoken;
+    the tool maps beanies→Beanie→ACCESSORIES and hoodies→Hoodie→TOPS.
+    If the product is truly unknown, the tool returns UNKNOWN_PRODUCT — then
+    retry with category, and do not tell the manager to type ACCESSORIES unless
+    that retry is also required.
     """
     try:
         db = get_db()

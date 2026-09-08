@@ -150,8 +150,10 @@ class FactoryDB:
         order_id: str | None = None,
         customer: str | None = None,
         product: str | None = None,
+        products: list[str] | None = None,
         status: str | None = None,
         category: str | None = None,
+        current_stage: str | None = None,
     ) -> list[dict[str, Any]]:
         clauses: list[str] = []
         params: list[Any] = []
@@ -161,15 +163,24 @@ class FactoryDB:
         if customer:
             clauses.append("LOWER(customer) = LOWER(?)")
             params.append(customer.strip())
-        if product:
-            clauses.append("LOWER(product) = LOWER(?)")
-            params.append(product.strip())
+        names: list[str] = []
+        for raw in list(products or []) + ([product] if product else []):
+            name = raw.strip()
+            if name and name not in names:
+                names.append(name)
+        if names:
+            placeholders = ", ".join("?" for _ in names)
+            clauses.append(f"LOWER(product) IN ({placeholders})")
+            params.extend(name.lower() for name in names)
         if status:
             clauses.append("status = ?")
             params.append(status)
         if category:
             clauses.append("category = ?")
             params.append(category)
+        if current_stage:
+            clauses.append("current_stage = ?")
+            params.append(current_stage)
         where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
         return self._fetch(
             f"SELECT * FROM orders{where} ORDER BY order_id",
@@ -230,10 +241,17 @@ def _is_nan(value: Any) -> bool:
 _DB: FactoryDB | None = None
 
 
-def init_db(db_path: Path | None = None, data_dir: Path | None = None) -> FactoryDB:
+def init_db(
+    db_path: Path | None = None,
+    data_dir: Path | None = None,
+    state_db_path: Path | None = None,
+) -> FactoryDB:
     global _DB
     _DB = FactoryDB(db_path=db_path, data_dir=data_dir)
     _DB.initialize()
+    from backend.services.audit import init_state_db
+
+    init_state_db(state_db_path)
     return _DB
 
 
