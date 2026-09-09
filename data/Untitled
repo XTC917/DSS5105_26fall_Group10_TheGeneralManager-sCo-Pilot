@@ -1,4 +1,0 @@
-cd "D:\2026NUS\Courses\DSS5105 Data Science Project for Practice\CapstoneProject"
-& "d:/2026NUS/Courses/DSS5105 Data Science Project for Practice/CapstoneProject/.venv/Scripts/Activate.ps1"
-# 8000 一定要 Ctrl+C 重启，旧进程还是 ChatOpenAI
-python -m uvicorn backend.main:app --reload --port 8000
