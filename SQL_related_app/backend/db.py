@@ -9,7 +9,7 @@ import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
 
-from config import Config, assert_allowed_table, quote_table
+from config import Config, assert_upload_table, quote_table
 
 def get_postgres_connection() -> psycopg.Connection:
     return psycopg.connect(
@@ -44,13 +44,13 @@ def get_connection() -> sqlite3.Connection:
 
 
 def get_postgres_table_count(table_name: str) -> int:
-    allowed_table = assert_allowed_table(table_name)
+    upload_table = assert_upload_table(table_name)
 
     query = sql.SQL(
         "SELECT COUNT(*) AS cnt FROM {}.{}"
         ).format(
             sql.Identifier(Config.PG_SCHEMA),
-            sql.Identifier(allowed_table),
+            sql.Identifier(upload_table),
         )
     conn = get_postgres_connection()
     try:
@@ -61,7 +61,7 @@ def get_postgres_table_count(table_name: str) -> int:
 
 
 def postgres_table_exists(table_name: str) -> bool:
-    allowed_table = assert_allowed_table(table_name)
+    upload_table = assert_upload_table(table_name)
     conn = get_postgres_admin_connection()
     try:
         row = conn.execute(
@@ -74,7 +74,7 @@ def postgres_table_exists(table_name: str) -> bool:
                     AND table_type = 'BASE TABLE'
             ) AS table_exists
             """,
-            (Config.PG_SCHEMA, allowed_table),
+            (Config.PG_SCHEMA, upload_table),
         ).fetchone()
         return bool(row["table_exists"])
     finally:

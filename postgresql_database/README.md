@@ -1,28 +1,47 @@
-# Factory Copilot Database
+# Factory Copilot PostgreSQL Database
 
 ## Overview
 
-This directory contains a reproducible local PostgreSQL prototype for the Factory Copilot project. It creates the database roles, schema, tables and permissions; imports the current CSV data snapshot; and verifies both administrator and read-only access.
+This directory contains the reproducible local PostgreSQL database for the Factory Copilot project. The SQL files create project roles, schemas, tables, constraints and permissions; import the three supplied datasets; and test data integrity and access control.
 
-The three CSV files are current-stage learning and acceptance-test data. They are not permanent production files and may later be replaced, updated or supplemented with additional tables.
+The database is currently local rather than cloud-hosted. The experimental `SQL_related_app` backend has been connected to it and tested, but the main LangGraph application has not yet been formally switched to this PostgreSQL source.
 
-The database has been built and validated locally. It has not yet been deployed as a shared team database or connected to the project backend.
+## Database design
 
-## Basic information
-
-- Database management system: PostgreSQL
-- SQL dialect: PostgreSQL
 - Database: `factory_copilot_db`
-- Schema: `app`
-- PostgreSQL system administrator: `postgres`
+- Business schema: `app`
+- Administration schema: `admin_meta`
 - Project administrator: `factory_admin`
-- Ordinary login user: `factory_user`
-- Shared read-only permission role: `factory_reader`
-- AI Agent login user: `factory_agent`
+- Shared read-only permission role: `factory_reader` (`NOLOGIN`)
+- Ordinary read-only login: `factory_user`
+- AI Agent read-only login: `factory_agent`
 
-`factory_reader` is a `NOLOGIN` role. It stores shared read-only permissions. Both `factory_user` and `factory_agent` are login roles that inherit these permissions.
+`factory_user` and `factory_agent` inherit the permissions stored by `factory_reader`. Role attributes such as `LOGIN`, `CREATEDB` and `CREATEROLE` are defined separately for each login role.
 
-## Project structure
+### Business tables
+
+| Table | Purpose |
+|---|---|
+| `app.orders` | Current complete orders dataset |
+| `app.production_log` | Current complete production dataset |
+| `app.workshops` | Current workshop capabilities, one row per workshop-category pair |
+| `app.snapshot` | Prior `IN_PROGRESS` order-stage observations captured before `orders` replacement |
+
+`app.snapshot` is append-only in the current design. Its composite primary key prevents the same order, stage and activity date from being stored twice.
+
+The source `workshops.csv` retains its original format. During import, `TOPS+ACCESSORIES` is split into separate `TOPS` and `ACCESSORIES` rows. Therefore the supplied eight source rows become eleven database rows representing eight physical workshops.
+
+### Administration tables
+
+The `admin_meta` schema contains:
+
+- `upload_history`: one record per upload attempt;
+- `import_details`: per-table outcome for an upload;
+- `data_sources`: the latest registered state and row count of each uploadable table.
+
+Only `factory_admin` can access this schema. The two read-only login roles cannot inspect upload metadata.
+
+## Directory structure
 
 ```text
 postgresql_database/
@@ -33,11 +52,6 @@ postgresql_database/
 |-- docs/
 |   |-- database_guide.md
 |   `-- field_mapping.md
-|-- evidence/
-|   |-- 04_validate.txt
-|   |-- 05_admin_permission_test.txt
-|   |-- 06_readonly_permission_test.txt
-|   `-- README.md
 |-- sql/
 |   |-- 01_roles_and_database.sql
 |   |-- 02_schema_tables_permissions.sql
@@ -48,370 +62,206 @@ postgresql_database/
 `-- README.md
 ```
 
-## Prerequisites and command-line setup
+Validation output files are intentionally not stored in the repository. The SQL scripts are the reproducible tests; run them locally whenever current evidence is needed.
 
-These instructions use Windows PowerShell. Install PostgreSQL with the following components:
+## Prerequisites
 
-- PostgreSQL Database Server
-- PostgreSQL command-line tools, including `psql`
+- PostgreSQL server and command-line tools, including `psql`;
+- a local PostgreSQL system administrator account, normally `postgres`;
+- PostgreSQL `bin` on the Windows PATH;
+- the three supplied CSV files under `data/`.
 
-During installation:
-
-- keep or record the PostgreSQL port; this project uses the default port `5432`;
-- create a local password for the PostgreSQL administrator `postgres`;
-- do not record any database password in this repository.
-
-Add the PostgreSQL `bin` directory to the Windows PATH environment variable. A typical path is:
-
-```text
-C:\Program Files\PostgreSQL\{version}\bin
-```
-
-The actual installation path may be different.
-
-To add the directory to PATH on Windows:
-
-1. Search for `Edit environment variables`.
-2. Open `Environment Variables`.
-3. Select `Path` under user variables.
-4. Select `Edit`, then `New`.
-5. Add the PostgreSQL `bin` directory.
-6. Save the changes and reopen PowerShell.
-
-Verify the command-line client:
+Verify the client and server:
 
 ```powershell
 psql --version
+pg_isready -h localhost -p 5432
 ```
 
-Verify that the local PostgreSQL server is running:
+Do not store PostgreSQL passwords in this repository.
 
-```powershell
-psql -X -h localhost -p 5432 -U postgres -d postgres -W
-```
+## Reproduce the database
 
-Password characters are not displayed while typing. A successful connection shows a prompt similar to:
-
-```text
-postgres=#
-```
-
-Exit `psql` with:
-
-```text
-\q
-```
-
-## Reproduce the database on another computer
-
-After cloning the team repository, open PowerShell and change the working directory to the PostgreSQL prototype directory:
+Open PowerShell and move to this directory:
 
 ```powershell
 Set-Location "C:\path\to\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\postgresql_database"
 ```
 
-Replace the example path with the actual folder location. Run all commands below from this directory, not from the team repository root, because `03_import.sql` uses relative paths such as `data/orders.csv`.
+Run the commands from `postgresql_database`, because `03_import.sql` uses relative paths such as `data/orders.csv`.
 
-### 1. Create the roles and database
+### 1. Create roles and the database
 
-Run `01_roles_and_database.sql` once on a fresh setup as the PostgreSQL system administrator `postgres`:
+Run once as the PostgreSQL system administrator:
 
 ```powershell
 psql -X -h localhost -p 5432 -U postgres -d postgres -W -f "sql/01_roles_and_database.sql"
 ```
 
-The script creates:
+The script creates `factory_reader`, `factory_admin`, `factory_user`, `factory_agent`, grants the shared reader role to the two read-only logins, asks for three local login passwords, and creates `factory_copilot_db` owned by `factory_admin`.
 
-- `factory_admin`: project database administrator;
-- `factory_reader`: shared read-only role without login access;
-- `factory_user`: ordinary login user that inherits `factory_reader`;
-- `factory_agent`: AI Agent login user that inherits `factory_reader`;
-- `factory_copilot_db`: project database owned by `factory_admin`.
+This is an initial-setup script. Do not rerun it after the roles and database exist.
 
-The script asks you to create local passwords for `factory_admin`, `factory_user` and `factory_agent`. Do not store or share these passwords in the repository.
+### 2. Create schemas, tables and permissions
 
-A successful setup should contain these key messages:
-
-```text
-CREATE ROLE
-CREATE ROLE
-CREATE ROLE
-CREATE ROLE
-GRANT ROLE
-CREATE DATABASE
-```
-
-Password prompts for the three login roles are expected.
-
-### 2. Create the schema, tables and permissions
-
-Run `02_schema_tables_permissions.sql` once as `factory_admin`:
+Run once as the project administrator:
 
 ```powershell
 psql -X -h localhost -p 5432 -U factory_admin -d factory_copilot_db -W -f "sql/02_schema_tables_permissions.sql"
 ```
 
-This script creates the `app` schema, the three project tables, their constraints and the administrator/read-only permission structure.
+The script creates the four `app` tables, three `admin_meta` tables, database constraints, identity sequences, current permissions and default permissions for future `app` tables.
 
-A successful setup should confirm:
+Expected output includes `BEGIN`, two `CREATE SCHEMA` messages, seven `CREATE TABLE` messages, permission statements, and `COMMIT`.
 
-```text
-current_database = factory_copilot_db
-current_user     = factory_admin
-BEGIN
-CREATE SCHEMA
-CREATE TABLE
-CREATE TABLE
-CREATE TABLE
-COMMIT
-```
+This is also an initial-construction script. Do not rerun it against an already constructed database.
 
-Messages for `GRANT`, `REVOKE` and `ALTER DEFAULT PRIVILEGES` are also expected.
+### 3. Import current data
 
-### 3. Import the CSV data
-
-Run `03_import.sql` as `factory_admin` from the PostgreSQL prototype directory:
+Run as `factory_admin`:
 
 ```powershell
 psql -X -h localhost -p 5432 -U factory_admin -d factory_copilot_db -W -f "sql/03_import.sql"
 ```
 
-The script replaces the current database snapshot with the three CSV files in `data/`. It does not append the CSV rows to the existing snapshot. If any import fails, the transaction is rolled back and the previous complete snapshot is preserved.
+The import runs as one transaction:
 
-A successful import should contain:
+1. copy outgoing `IN_PROGRESS` order states into `app.snapshot`;
+2. clear the three current business tables;
+3. import 120 orders and 360 production rows;
+4. read eight workshop source rows through a temporary table;
+5. split combined workshop categories and insert eleven workshop-category rows;
+6. update the three `admin_meta.data_sources` records.
 
-```text
-current_database = factory_copilot_db
-current_user     = factory_admin
-BEGIN
-TRUNCATE TABLE
-COPY 120
-COPY 360
-COPY 8
-COMMIT
-```
+If any step fails, PostgreSQL rolls back the current-table replacement and the snapshot additions together.
 
-### 4. Validate the imported database
+The number of rows inserted into `snapshot` varies. It is normally zero on a fresh database, may increase after a new orders dataset replaces an existing one, and remains unchanged when all outgoing states are already present.
 
-Run `04_validate.sql` as `factory_admin`:
+### 4. Validate data and metadata
 
 ```powershell
 psql -X -h localhost -p 5432 -U factory_admin -d factory_copilot_db -W -f "sql/04_validate.sql"
 ```
 
-The database name should be `factory_copilot_db`, and the current user should be `factory_admin`.
+For the supplied current data, the key results are:
 
-Expected `orders` results:
+| Check | Expected result |
+|---|---:|
+| Orders rows | 120 |
+| Unique order IDs | 120 |
+| Total order pieces | 93,500 |
+| Missing completed dates | 34 |
+| Missing days late | 34 |
+| Production rows/date-stage pairs | 360 |
+| Production pieces completed | 231,595 |
+| Workshop-category rows | 11 |
+| Distinct physical workshops | 8 |
+| Physical daily capacity | 1,600 |
+| Active physical workshops | 7 |
+| Physical workshops missing maximum batch | 7 |
 
-```text
-row_count               = 120
-unique_order_count      = 120
-total_pieces            = 93500
-missing_completed_dates = 34
-missing_days_late       = 34
-```
+`snapshot_rows` is not fixed because history grows across order replacements. `snapshot_rows` and `unique_snapshot_states` should match.
 
-Expected `production_log` results:
+The workshop consistency query should return zero rows. All three `data_sources.row_count` values should match their corresponding current business tables.
 
-```text
-row_count        = 360
-date_stage_pairs = 360
-pieces_completed = 231595
-```
-
-Expected `workshops` results:
-
-```text
-row_count             = 8
-distinct_workshop_ids = 8
-total_daily_capacity  = 1600
-active_workshops      = 7
-missing_max_batch     = 7
-```
-
-Expected ownership:
+The script now performs active assertions. A successful run ends with:
 
 ```text
-schemaname | tablename      | tableowner
------------+----------------+--------------
-app        | orders         | factory_admin
-app        | production_log | factory_admin
-app        | workshops      | factory_admin
+VALIDATION PASSED: metadata counts and workshop profiles are consistent
 ```
 
-Step 4 passes when all values match and all three tables are owned by `factory_admin`.
+A metadata mismatch or inconsistent workshop profile raises an exception and returns a non-zero `psql` exit code.
 
 ### 5. Test administrator permissions
-
-Run `05_admin_permission_test.sql` as `factory_admin`:
 
 ```powershell
 psql -X -h localhost -p 5432 -U factory_admin -d factory_copilot_db -W -f "sql/05_admin_permission_test.sql"
 ```
 
-Expected identity and schema permissions:
+Expected behaviour:
 
-```text
-current_database     = factory_copilot_db
-current_user         = factory_admin
-can_connect          = t
-can_use_schema       = t
-can_create_in_schema = t
-```
+- `factory_admin` can connect and use/create in both schemas;
+- it can select, insert, update, delete and truncate all project tables;
+- it can use the `admin_meta` identity sequence;
+- a disposable table successfully passes create, read, update, delete, truncate and drop tests;
+- the entire probe transaction is rolled back, and `probe_table_removed` is `t`.
 
-All three tables should return `t` for every tested permission:
-
-```text
-tablename      | select | insert | update | delete | truncate
----------------+--------+--------+--------+--------+---------
-orders         | t      | t      | t      | t      | t
-production_log | t      | t      | t      | t      | t
-workshops      | t      | t      | t      | t      | t
-```
-
-The CRUD test should contain these successful results:
-
-```text
-CREATE TABLE
-INSERT 0 1
-probe_id = 1, note = original value
-UPDATE 1
-probe_id = 1, note = updated value
-DELETE 1
-rows_after_delete = 0
-INSERT 0 1
-TRUNCATE TABLE
-rows_after_truncate = 0
-DROP TABLE
-ROLLBACK
-probe_table_removed = t
-```
-
-`ROLLBACK` is expected. The test uses a disposable probe table and does not change the three project tables. Step 5 passes when all administrator operations succeed and `probe_table_removed` is `t`.
+The test does not persist its probe table or modify the four business tables.
 
 ### 6. Test read-only permissions
 
-Run `06_readonly_permission_test.sql` as `factory_agent`:
+Run with either inherited read-only login. The Agent example is:
 
 ```powershell
 psql -X -h localhost -p 5432 -U factory_agent -d factory_copilot_db -W -f "sql/06_readonly_permission_test.sql"
 ```
 
-Expected identity and schema permissions:
+Expected behaviour:
+
+- connection and `app` schema usage succeed;
+- `admin_meta` schema usage and sequence usage are denied;
+- `SELECT` succeeds for all four `app` tables;
+- all write/create/drop permissions are false;
+- explicit negative tests report that metadata SELECT, INSERT, UPDATE, DELETE, TRUNCATE, CREATE TABLE and DROP TABLE were denied;
+- the final table counts remain unchanged.
+
+A correct run includes:
 
 ```text
-current_database     = factory_copilot_db
-current_user         = factory_agent
-can_connect          = t
-can_use_schema       = t
-can_create_in_schema = f
-```
-
-All three tables should be readable but not writable:
-
-```text
-tablename      | select | insert | update | delete | truncate
----------------+--------+--------+--------+--------+---------
-orders         | t      | f      | f      | f      | f
-production_log | t      | f      | f      | f      | f
-workshops      | t      | f      | f      | f      | f
-```
-
-The positive read test should return:
-
-```text
-readable_order_rows = 120
-```
-
-The six dangerous operations are tested with explicit PostgreSQL exception handling. Expected `insufficient_privilege` errors are caught and reported as successful negative-test results.
-
-A correct run should contain:
-
-```text
+TEST PASSED: admin_meta data SELECT was denied
 TEST PASSED: INSERT was denied
 TEST PASSED: UPDATE was denied
 TEST PASSED: DELETE was denied
 TEST PASSED: TRUNCATE was denied
 TEST PASSED: CREATE TABLE was denied
 TEST PASSED: DROP TABLE was denied
-=== All six permission-denial tests passed ===
+=== All seven permission-denial tests passed ===
 ```
 
-If any dangerous operation unexpectedly succeeds, the script raises an error such as:
+The final counts should show 120 `orders`, 360 `production_log` rows, eleven `workshops` rows, and the current variable number of `snapshot` rows.
 
-```text
-TEST FAILED: INSERT unexpectedly succeeded
-```
-Because `ON_ERROR_STOP` remains enabled, an unexpected success or any unrelated SQL error stops the script and produces a non-zero exit status.
+## Safe reruns
 
-The final integrity check should return:
+- `01_roles_and_database.sql`: initial setup only;
+- `02_schema_tables_permissions.sql`: initial construction only;
+- `03_import.sql`: may be rerun to replace current data and preserve outgoing in-progress order states;
+- `04_validate.sql`: safe to rerun;
+- `05_admin_permission_test.sql`: safe to rerun because its changes are rolled back;
+- `06_readonly_permission_test.sql`: safe to rerun because denied operations cannot persist.
 
-```text
-table_name     | row_count
----------------+----------
-orders         | 120
-production_log | 360
-workshops      | 8
-```
+Do not delete a database, schema, table or role merely to resolve an `already exists` message. First confirm the current database, user and intended environment.
 
-The final integrity query confirms that the permission tests left no persistent changes. The unchanged row counts are safety evidence, but do not by themselves prove that the write operations were denied. The explicit six `TEST PASSED` messages are the behavioural permission evidence.
+## Connect the administration app
 
-Step 6 passes only when:
+After completing Steps 1–3, configure and run the local FastAPI/React administration app using [`../SQL_related_app/README.md`](../SQL_related_app/README.md).
 
-1. the connected user is `factory_agent`;
-2. `SELECT` succeeds on all three tables;
-3. the declared write permissions are all `f`;
-4. all six explicit `TEST PASSED` messages appear;
-5. no `TEST FAILED` or unexpected `ERROR` appears;
-6. the final row counts match the validation results.
+The active backend uses:
 
+- `factory_agent` for read-only schema and SQL access;
+- `factory_admin` for uploads and administration.
 
-## Rerunning the SQL files
+The backend can import CSV, XLSX and XLS files. The SQL bootstrap script itself uses `psql` `\copy` and therefore imports the tracked CSV seed files.
 
-- `01_roles_and_database.sql`: initial setup only; do not rerun it when the roles or database already exist.
-- `02_schema_tables_permissions.sql`: initial construction only; do not rerun it when the `app` schema and tables already exist.
-- `03_import.sql`: may be rerun to replace the current database snapshot with the CSV files in `data/`.
-- `04_validate.sql`: safe to rerun.
-- `05_admin_permission_test.sql`: safe to rerun.
-- `06_readonly_permission_test.sql`: safe to rerun.
+## Documentation
 
-Do not delete existing roles, databases, schemas or tables only to resolve an `already exists` error without first confirming that the correct environment is being used.
+- [`docs/field_mapping.md`](docs/field_mapping.md): source-to-database field mapping and data audit;
+- [`docs/database_guide.md`](docs/database_guide.md): database concepts, roles, permissions and usage guidance.
 
-## Documentation and acceptance evidence
-
-The current field mapping is available in [docs/field_mapping.md](docs/field_mapping.md).
-
-The database connection guide, table and field descriptions, common query examples, role boundaries and security notes are available in [docs/database_guide.md](docs/database_guide.md).
-
-The acceptance evidence index and verified command outputs are available in [evidence/README.md](evidence/README.md).
-
-The commands in Steps 4-6 display validation results without rewriting the tracked evidence files. To regenerate the three evidence files as reviewable UTF-8 text, follow the PowerShell instructions in [evidence/README.md](evidence/README.md#regenerating-the-evidence).
-
-Additional database documentation should be stored in `docs/`. Acceptance outputs and supporting materials should be stored in `evidence/`. The teammate responsible for documentation and evidence can organise these files and add an evidence index.
-
-The final materials should cover:
-
-- field and PostgreSQL data-type mappings;
-- table and field descriptions;
-- role attributes and permission boundaries;
-- database and import validation results;
-- administrator permission results;
-- Agent read-only permission results.
-
-Do not include passwords in documentation, terminal output, screenshots or evidence files.
+These documents should describe the current SQL files. They must not contain passwords or private environment values.
 
 ## Troubleshooting
 
 - `psql is not recognized`: add the PostgreSQL `bin` directory to PATH and reopen PowerShell.
-- `password authentication failed`: confirm the login role and enter the corresponding locally configured password.
-- `data/orders.csv: No such file or directory`: run the import command from the PostgreSQL prototype directory.
-- `role already exists` or `database already exists`: Step 1 has already been run; do not delete existing objects without confirming the target environment.
-- Red underlines in a graphical SQL editor do not necessarily indicate invalid SQL when the file contains `psql` backslash commands.
+- `localhost:5432 - no response`: start the PostgreSQL service and verify it with `pg_isready`.
+- `password authentication failed`: confirm the selected login role and its locally configured password.
+- `data/orders.csv: No such file or directory`: run `03_import.sql` from `postgresql_database`.
+- `role already exists` or `database already exists`: Step 1 has already been run; do not delete objects without checking the environment.
+- Red underlines in a graphical SQL editor do not prove the file is invalid; `psql` backslash commands such as `\copy`, `\set` and `\echo` are not ordinary server-side SQL.
 
-## Security notes
+## Security and scope
 
-- Never commit passwords or `.env` files.
-- Do not send database passwords in screenshots or chat messages.
-- Use `factory_admin` only for database maintenance.
+- Never commit `.env` files or passwords.
+- Use `factory_admin` only for maintenance and trusted administration endpoints.
 - Use `factory_agent` for AI read-only access.
-- The current database is a local prototype, not a shared production server.
+- The current deployment is local and is not a shared production server.
+- The route name `/api/admin` does not itself authenticate a human administrator; application authentication remains a team integration decision.

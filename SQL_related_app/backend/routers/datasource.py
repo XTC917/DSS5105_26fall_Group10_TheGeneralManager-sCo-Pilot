@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 
-from config import Config, assert_allowed_table
+from config import Config, assert_upload_table
 from db import get_postgres_admin_connection
 from psycopg import sql
 
@@ -61,7 +61,7 @@ async def delete_datasource(
                 raise HTTPException(404, "Data source not found")
             table_name = row["table_name"]
             try:
-                table_name = assert_allowed_table(table_name)
+                table_name = assert_upload_table(table_name)
             except ValueError as exc:
                 raise HTTPException(400, str(exc)) from exc
 
@@ -113,7 +113,7 @@ async def get_datasource_data(
             raise HTTPException(404, "Data source not found")
         table_name = row["table_name"]
         try:
-            assert_allowed_table(table_name)
+            assert_upload_table(table_name)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         qualified_table = sql.Identifier(Config.PG_SCHEMA, table_name)

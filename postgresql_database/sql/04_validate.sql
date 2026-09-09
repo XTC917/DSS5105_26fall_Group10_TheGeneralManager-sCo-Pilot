@@ -104,3 +104,69 @@ FROM admin_meta.data_sources
 JOIN actual_counts
     USING (table_name)
 ORDER BY data_sources.table_name;
+
+DO $$
+DECLARE
+    metadata_mismatches integer;
+    inconsistent_workshops integer;
+BEGIN
+   WITH actual_counts AS (
+        SELECT 'orders' AS table_name, COUNT(*) AS actual_row_count
+        FROM app.orders
+
+        UNION ALL
+
+        SELECT 'production_log', COUNT(*)
+        FROM app.production_log
+
+        UNION ALL
+
+        SELECT 'workshops', COUNT(*)
+        FROM app.workshops
+    )
+    SELECT COUNT(*)
+    INTO metadata_mismatches
+    FROM actual_counts
+    LEFT JOIN admin_meta.data_sources
+        USING (table_name)
+    WHERE data_sources.table_name IS NULL
+       OR data_sources.row_count
+            IS DISTINCT FROM actual_counts.actual_row_count;
+
+    IF metadata_mismatches > 0 THEN
+        RAISE EXCEPTION
+            'Validation failed: % data source row counts do not match',
+            metadata_mismatches;
+    END IF;
+
+    SELECT COUNT(*)
+    INTO inconsistent_workshops
+    FROM (
+        SELECT workshop_id
+        FROM app.workshops
+        GROUP BY workshop_id
+        HAVING COUNT(
+            DISTINCT (
+                name,
+                capacity_pieces_per_day,
+                pickup_lead_days,
+                defect_rate,
+                cost_per_piece,
+                status,
+                max_batch_pieces,
+                current_queue_days,
+                notes
+            )
+        ) > 1
+    ) AS inconsistent;
+
+    IF inconsistent_workshops > 0 THEN
+        RAISE EXCEPTION
+            'Validation failed: % workshops have inconsistent shared attributes',
+            inconsistent_workshops;
+    END IF;
+
+    RAISE NOTICE
+        'VALIDATION PASSED: metadata counts and workshop profiles are consistent';
+END
+$$;

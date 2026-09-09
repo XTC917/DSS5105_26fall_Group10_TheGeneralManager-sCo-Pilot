@@ -30,7 +30,8 @@ class Config:
     ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
     BATCH_SIZE = 1000
 
-    ALLOWED_TABLES = ("orders", "production_log", "workshops")
+    UPLOAD_TABLES = ("orders", "production_log", "workshops")
+    QUERY_CONTEXT_TABLES = UPLOAD_TABLES + ("snapshot",)
 
     FILE_TABLE_MAPPING = {
         "orders.csv": "orders",
@@ -54,6 +55,16 @@ class Config:
             "original_file": "workshops.csv",
             "description": "External workshop capacity and cost information",
         },
+    }
+
+    QUERY_CONTEXT_DESCRIPTIONS = {
+        "orders": "Current customer order information",
+        "production_log": "Current daily production output by stage",
+        "workshops": "Current workshop capacity and category information",
+        "snapshot": (
+            "Historical IN_PROGRESS order stages captured before "
+            "the current orders table is replaced"
+        ),
     }
 
     TABLE_SCHEMAS = {
@@ -122,15 +133,15 @@ class Config:
     }
 
 
-def assert_allowed_table(table_name: str) -> str:
-    if not table_name or table_name not in Config.ALLOWED_TABLES:
-        allowed = ", ".join(Config.ALLOWED_TABLES)
+def assert_upload_table(table_name: str) -> str:
+    if not table_name or table_name not in Config.UPLOAD_TABLES:
+        allowed = ", ".join(Config.UPLOAD_TABLES)
         raise ValueError(f"table_name must be one of: {allowed}")
     return table_name
 
 
 def get_database_columns(table_name: str) -> list[str]:
-    table_name = assert_allowed_table(table_name)
+    table_name = assert_upload_table(table_name)
     schema = Config.TABLE_SCHEMAS[table_name]
     mapping = schema.get("column_mapping", {})
 
@@ -144,11 +155,11 @@ def quote_ident(name: str) -> str:
 
 
 def quote_table(table_name: str) -> str:
-    return quote_ident(assert_allowed_table(table_name))
+    return quote_ident(assert_upload_table(table_name))
 
 
 def quote_column(table_name: str, column: str) -> str:
-    schema = Config.TABLE_SCHEMAS[assert_allowed_table(table_name)]
+    schema = Config.TABLE_SCHEMAS[assert_upload_table(table_name)]
     if column not in schema["columns"]:
         raise ValueError(f"Unknown column {column} for table {table_name}")
     return quote_ident(column)

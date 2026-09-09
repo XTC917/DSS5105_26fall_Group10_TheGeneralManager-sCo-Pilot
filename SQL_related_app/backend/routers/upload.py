@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 
-from config import Config, assert_allowed_table
+from config import Config, assert_upload_table
 from db import get_postgres_admin_connection
 from file_importer import FileImporter
 
@@ -64,7 +64,7 @@ async def import_file(
 ):
     original_name = file.filename or "upload.csv"
     try:
-        table_name = assert_allowed_table(table_name)
+        table_name = assert_upload_table(table_name)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 

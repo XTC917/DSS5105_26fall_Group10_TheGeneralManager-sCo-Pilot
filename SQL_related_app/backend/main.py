@@ -7,8 +7,11 @@ from routers import datasource, query, upload
 
 app = FastAPI(
     title="Factory Data Management System",
-    description="CSV/Excel upload into SQLite with experimental PostgreSQL connectivity",
-    version="1.1.0",
+    description=(
+        "CSV/Excel administration and read-only SQL access "
+        "for the PostgreSQL factory database"
+    ),
+    version="1.2.0",
 )
 
 app.add_middleware(
@@ -29,16 +32,16 @@ app.include_router(datasource.router)
 app.include_router(query.router)
 
 Config.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-Config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 @app.get("/")
 async def root():
     return {
-        "message": "Factory Data Management System API",
-        "version": "1.1.0",
+        "message": "Factory PostgreSQL Data Management API",
+        "version": "1.2.0",
         "docs": "/docs",
-        "tables": list(Config.ALLOWED_TABLES),
+        "upload_tables": list(Config.UPLOAD_TABLES),
+        "query_context_tables": list(Config.QUERY_CONTEXT_TABLES),
     }
 
 

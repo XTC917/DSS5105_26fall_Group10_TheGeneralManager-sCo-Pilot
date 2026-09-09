@@ -172,7 +172,7 @@ Run the scripts from the repository root in this order:
 5. `sql/05_admin_permission_test.sql` — verify administrator permissions with a disposable probe table.
 6. `sql/06_readonly_permission_test.sql` — verify Agent reads succeed and dangerous operations fail.
 
-The acceptance outputs generated for the current prototype are indexed in [../evidence/README.md](../evidence/README.md).
+Validation outputs are not stored in the repository. Run `sql/04_validate.sql`, `sql/05_admin_permission_test.sql`, and `sql/06_readonly_permission_test.sql` locally whenever current acceptance results are needed.
 
 ## 7. Security and operational notes
 

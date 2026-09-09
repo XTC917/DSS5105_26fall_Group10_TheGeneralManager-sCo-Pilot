@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from psycopg import sql
 
-from config import Config, assert_allowed_table, get_database_columns
+from config import Config, assert_upload_table, get_database_columns
 from db import get_postgres_admin_connection, get_postgres_table_count, postgres_table_exists
 
 class FileImporter:
@@ -69,7 +69,7 @@ class FileImporter:
     ) -> Tuple[int, int, Optional[str]]:
         total_rows = 0
         try:
-            table_name = assert_allowed_table(table_name)
+            table_name = assert_upload_table(table_name)
             if if_exists not in {"replace", "append"}:
                 return 0, 0, "if_exists must be 'replace' or 'append'"
             if not postgres_table_exists(table_name):
@@ -156,11 +156,59 @@ class FileImporter:
             raise ValueError(
                 f"Required columns contain missing or invalid values: {details}"
             )
-
+        if table_name == "workshops":
+            df = df.assign(
+                makes=df["makes"].astype(str).str.split("+", regex=False)
+            )
+            df = df.explode("makes", ignore_index=True)
+            df["makes"] = df["makes"].str.strip()
+            allowed_makes = {"TOPS", "ACCESSORIES"}
+            invalid_makes = sorted(set(df["makes"]) - allowed_makes)
+            if invalid_makes:
+                raise ValueError(
+                    "Invalid workshop makes values after splitting: "
+                  + ", ".join(invalid_makes)
+                )
+            duplicate_keys = df.duplicated(subset=["workshop_id", "makes"], keep=False,)
+            if duplicate_keys.any():
+                duplicate_values = (
+                    df.loc[duplicate_keys, ["workshop_id", "makes"],]
+                    .astype(str)
+                    .agg(" + ".join, axis=1)
+                    .drop_duplicates()
+                    .tolist()
+                )
+                raise ValueError(
+                    "Duplicate workshop category keys: "
+                    + ", ".join(duplicate_values)
+                )
+            shared_columns = [
+                "name",
+                "capacity_pieces_per_day",
+                "pickup_lead_days",
+                "defect_rate",
+                "cost_per_piece",
+                "status",
+                "max_batch_pieces",
+                "current_queue_days",
+                "notes",
+            ]
+            shared_profile_counts = (
+                df.groupby("workshop_id", dropna=False)[shared_columns]
+                .nunique(dropna=False)
+            )
+            inconsistent_workshops = (
+                shared_profile_counts.index[shared_profile_counts.gt(1).any(axis=1)].astype(str).tolist()
+            )
+            if inconsistent_workshops:
+                raise ValueError(
+                    "Inconsistent shared workshop attributes: "
+                    + ", ".join(inconsistent_workshops)
+                )
         return df
 
     def _map_database_columns(self, df: pd.DataFrame, table_name: str) -> pd.DataFrame:
-        table_name = assert_allowed_table(table_name)
+        table_name = assert_upload_table(table_name)
         schema = Config.TABLE_SCHEMAS[table_name]
         mapping = schema.get("column_mapping", {})
         mapped_df = df.rename(columns=mapping)
@@ -168,7 +216,7 @@ class FileImporter:
         return mapped_df[database_columns]
 
     def _write_rows(self, df: pd.DataFrame, table_name: str, if_exists: str) -> int:
-        table_name = assert_allowed_table(table_name)
+        table_name = assert_upload_table(table_name)
         database_df = self._map_database_columns(df, table_name)
         columns = list(database_df.columns)
 
@@ -200,9 +248,28 @@ class FileImporter:
         try:
             with conn.transaction():
                 if if_exists == "replace":
+                    if table_name == "orders":
+                        archive_orders_query = sql.SQL(
+                            """
+                            INSERT INTO {} (order_id, current_stage, last_activity_date)
+                            SELECT order_id, current_stage, last_activity_date
+                            FROM {}
+                            WHERE status = %s
+                            ON CONFLICT (order_id, current_stage, last_activity_date)
+                            DO NOTHING
+                            """
+                        ).format(
+                            sql.Identifier(Config.PG_SCHEMA, "snapshot"),
+                            sql.Identifier(Config.PG_SCHEMA, "orders"),
+                        )
+                        conn.execute(
+                            archive_orders_query,
+                            ("IN_PROGRESS",),
+                        )
                     conn.execute(delete_query)
                 with conn.cursor() as cursor:
-                    cursor.executemany(insert_query, cleaned)
+                    for row in cleaned:
+                        cursor.execute(insert_query, row)
                 count_query = sql.SQL(
                     "SELECT COUNT(*) AS cnt FROM {}"
                 ).format(qualified_table)
@@ -287,7 +354,7 @@ class FileImporter:
         success_rows: int,
         error_message: Optional[str] = None,
     ) -> None:
-        table_name = assert_allowed_table(table_name)
+        table_name = assert_upload_table(table_name)
         if total_rows < 0:
             raise ValueError("total_rows cannot be negative")
         if success_rows < 0 or total_rows < success_rows:
@@ -328,7 +395,7 @@ class FileImporter:
         original_file: str,
         description: Optional[str] = None,
     ) -> None:
-        table_name = assert_allowed_table(table_name)
+        table_name = assert_upload_table(table_name)
         meta = Config.DATA_SOURCES[table_name]
         count = get_postgres_table_count(table_name)
         conn = get_postgres_admin_connection()

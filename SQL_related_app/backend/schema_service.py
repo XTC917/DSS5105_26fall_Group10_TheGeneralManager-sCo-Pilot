@@ -14,13 +14,10 @@ class SchemaService:
         parts = ["Database tables available for query:", ""]
         conn = get_postgres_connection()
         try:
-            for table_name in Config.ALLOWED_TABLES:
+            for table_name in Config.QUERY_CONTEXT_TABLES:
                 parts.append(f"## Table: {table_name}")
-
-
-                description = Config.DATA_SOURCES[table_name]["description"]
+                description = Config.QUERY_CONTEXT_DESCRIPTIONS[table_name]
                 parts.append(f"Description: {description}")
-
 
                 columns = conn.execute(
                     """
@@ -100,6 +97,10 @@ class SchemaService:
                 "- Production stages: KNITTING -> ASSEMBLY -> WASHING -> PACKING",
                 "- days_late = completed_date - due_date (negative means early, NULL means not completed)",
                 "- Only ACTIVE workshops can take new orders",
+                "- workshops stores one row per workshop-category capability",
+                "- Count physical workshops with COUNT(DISTINCT workshop_id)",
+                "- snapshot stores prior IN_PROGRESS order stage observations",
+                "- Combine snapshot with current IN_PROGRESS orders to query order stage history",
                 "- Current date is 2026-04-01",
             ]
         )
