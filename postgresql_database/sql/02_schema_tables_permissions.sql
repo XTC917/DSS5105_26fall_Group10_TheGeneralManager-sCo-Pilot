@@ -80,17 +80,27 @@ CREATE TABLE app.production_log(
 );
 
 CREATE TABLE app.workshops (
-    workshop_id text NOT NULL PRIMARY KEY,
-    name text NOT NULL UNIQUE,
+    workshop_id text NOT NULL,
+    name text NOT NULL,
     capacity_pieces_per_day integer NOT NULL CHECK (capacity_pieces_per_day > 0),
     pickup_lead_days integer NOT NULL CHECK (pickup_lead_days >= 0),
     defect_rate numeric(5,4) NOT NULL CHECK (defect_rate >= 0 AND defect_rate <= 1),
     cost_per_piece numeric(10,2) NOT NULL CHECK (cost_per_piece >= 0),
-    makes text NOT NULL CHECK (makes IN ('TOPS', 'ACCESSORIES', 'TOPS+ACCESSORIES')),
+    makes text NOT NULL CHECK (makes IN ('TOPS', 'ACCESSORIES')),
     status text NOT NULL CHECK (status IN ('ACTIVE', 'SUSPENDED')),
     max_batch_pieces integer CHECK (max_batch_pieces IS NULL OR max_batch_pieces > 0),
     current_queue_days numeric(6,2) NOT NULL CHECK (current_queue_days >= 0),
-    notes text NOT NULL
+    notes text NOT NULL,
+    PRIMARY KEY (workshop_id, makes),
+    UNIQUE (name, makes)
+);
+
+CREATE TABLE app.snapshot (
+    order_id text NOT NULL,
+    current_stage text NOT NULL CHECK (current_stage IN ('KNITTING', 'ASSEMBLY', 'WASHING', 'PACKING')),
+    last_activity_date date NOT NULL,
+
+    PRIMARY KEY (order_id, current_stage, last_activity_date)
 );
 
 CREATE TABLE admin_meta.upload_history (

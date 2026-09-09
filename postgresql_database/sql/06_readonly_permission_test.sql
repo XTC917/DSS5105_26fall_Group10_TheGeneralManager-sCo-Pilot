@@ -253,6 +253,11 @@ FROM app.production_log
 
 UNION ALL
 
+SELECT 'snapshot', COUNT(*)
+FROM app.snapshot
+
+UNION ALL
+
 SELECT 'workshops', COUNT(*)
 FROM app.workshops
 

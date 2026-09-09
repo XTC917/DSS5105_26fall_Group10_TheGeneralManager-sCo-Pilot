@@ -14,18 +14,57 @@ SELECT
 FROM app.orders;
 
 SELECT
+    COUNT(*) AS snapshot_rows,
+    COUNT(DISTINCT (order_id, current_stage, last_activity_date)) AS unique_snapshot_states
+FROM app.snapshot;
+
+SELECT
     COUNT(*) AS row_count,
     COUNT(DISTINCT (production_date, stage)) AS date_stage_pairs,
     SUM(pieces_completed) AS pieces_completed
 FROM app.production_log;
 
+WITH physical_workshops AS (
+    SELECT
+        workshop_id,
+        MAX(capacity_pieces_per_day) AS capacity_pieces_per_day,
+        BOOL_OR(status = 'ACTIVE') AS is_active,
+        MAX(max_batch_pieces) AS max_batch_pieces
+    FROM app.workshops
+    GROUP BY workshop_id
+)
 SELECT
-    COUNT(*) AS row_count,
-    COUNT(DISTINCT workshop_id) AS distinct_workshop_ids,
+    (SELECT COUNT(*) FROM app.workshops) AS row_count,
+    COUNT(*) AS distinct_workshop_ids,
     SUM(capacity_pieces_per_day) AS total_daily_capacity,
-    COUNT(*) FILTER (WHERE status = 'ACTIVE') AS active_workshops,
+    COUNT(*) FILTER (WHERE is_active) AS active_workshops,
     COUNT(*) FILTER (WHERE max_batch_pieces IS NULL) AS missing_max_batch
-FROM app.workshops;
+FROM physical_workshops;
+
+WITH workshop_consistency AS (
+    SELECT
+        workshop_id,
+        COUNT(*) AS category_rows,
+        COUNT(
+            DISTINCT (
+                name,
+                capacity_pieces_per_day,
+                pickup_lead_days,
+                defect_rate,
+                cost_per_piece,
+                status,
+                max_batch_pieces,
+                current_queue_days,
+                notes
+            )
+        ) AS shared_profile_versions
+    FROM app.workshops
+    GROUP BY workshop_id
+)
+SELECT workshop_id, category_rows, shared_profile_versions
+FROM workshop_consistency
+WHERE shared_profile_versions > 1
+ORDER BY workshop_id;
 
 SELECT
     schemaname,
