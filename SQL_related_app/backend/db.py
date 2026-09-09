@@ -60,6 +60,27 @@ def get_postgres_table_count(table_name: str) -> int:
         conn.close()
 
 
+def postgres_table_exists(table_name: str) -> bool:
+    allowed_table = assert_allowed_table(table_name)
+    conn = get_postgres_admin_connection()
+    try:
+        row = conn.execute(
+            """
+            SELECT EXISTS(
+                SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_schema = %s
+                    AND table_name = %s
+                    AND table_type = 'BASE TABLE'
+            ) AS table_exists
+            """,
+            (Config.PG_SCHEMA, allowed_table),
+        ).fetchone()
+        return bool(row["table_exists"])
+    finally:
+        conn.close()
+
+
 def execute_query(sql: str, params: Sequence[Any] = ()) -> List[Dict[str, Any]]:
     conn = get_connection()
     try:

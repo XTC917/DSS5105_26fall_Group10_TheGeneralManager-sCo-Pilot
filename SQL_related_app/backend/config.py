@@ -81,6 +81,7 @@ class Config:
             "int_columns": ["pieces", "days_late"],
             "float_columns": [],
             "nullable_columns": ["completed_date", "days_late"],
+            "column_mapping": {},
         },
         "production_log": {
             "columns": ["date", "stage", "pieces_completed"],
@@ -88,6 +89,7 @@ class Config:
             "int_columns": ["pieces_completed"],
             "float_columns": [],
             "nullable_columns": [],
+            "column_mapping": {"date": "production_date",},
         },
         "workshops": {
             "columns": [
@@ -114,7 +116,8 @@ class Config:
                 "cost_per_piece",
                 "current_queue_days",
             ],
-            "nullable_columns": ["max_batch_pieces", "notes"],
+            "nullable_columns": ["max_batch_pieces"],
+            "column_mapping": {},
         },
     }
 
@@ -124,6 +127,14 @@ def assert_allowed_table(table_name: str) -> str:
         allowed = ", ".join(Config.ALLOWED_TABLES)
         raise ValueError(f"table_name must be one of: {allowed}")
     return table_name
+
+
+def get_database_columns(table_name: str) -> list[str]:
+    table_name = assert_allowed_table(table_name)
+    schema = Config.TABLE_SCHEMAS[table_name]
+    mapping = schema.get("column_mapping", {})
+
+    return [mapping.get(column, column) for column in schema["columns"]]
 
 
 def quote_ident(name: str) -> str:
