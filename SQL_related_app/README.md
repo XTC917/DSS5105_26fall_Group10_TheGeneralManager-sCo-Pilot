@@ -43,7 +43,7 @@ npm install
 npm run dev
 ```
 
-界面 http://localhost:3000，接口文档 http://127.0.0.1:8000/docs。
+界面 http://localhost:3000，接口文档 http://127.0.0.1:8001/docs。
 
 数据库文件在 `backend/data/factory_data.db`，不进 git。
 

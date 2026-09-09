@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Sidebar from "../components/Sidebar.jsx";
 import ChatPanel from "../components/ChatPanel.jsx";
+import DataManagement from "./DataManagement.jsx";
 import { fetchHealth } from "../services/api.js";
 
 function newConversationId() {
@@ -11,6 +12,7 @@ export default function Home() {
   const [health, setHealth] = useState(null);
   const [healthError, setHealthError] = useState("");
   const [boardTick, setBoardTick] = useState(0);
+  const [activeView, setActiveView] = useState("copilot");
   const conversationId = useMemo(newConversationId, []);
 
   useEffect(() => {
@@ -36,7 +38,7 @@ export default function Home() {
               {!healthError && health && (
                 <span>
                   API {health.ok ? "ready" : "down"}
-                  {health.llm_configured ? "" : " · set OPENAI_API_KEY for chat"}
+                  {health.llm_configured ? "" : " · set GOOGLE_API_KEY (gemini) or OPENAI_API_KEY for chat"}
                 </span>
               )}
             </p>
@@ -45,12 +47,42 @@ export default function Home() {
       </header>
 
       <main className="mx-auto grid max-w-6xl gap-5 px-5 py-5 lg:grid-cols-[260px_1fr]">
-        <Sidebar refreshToken={boardTick} />
-        <ChatPanel
-          conversationId={conversationId}
-          llmReady={Boolean(health?.llm_configured)}
-          onBoardChanged={() => setBoardTick((n) => n + 1)}
-        />
+        <div className="space-y-3">
+          <nav className="rounded-lg border border-ink/10 bg-white p-2 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setActiveView("copilot")}
+              className={`block w-full rounded-md px-3 py-2 text-left text-sm font-medium ${
+                activeView === "copilot"
+                  ? "bg-ink text-paper"
+                  : "text-ink/70 hover:bg-paper"
+              }`}
+            >
+              GM Co-Pilot
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView("data")}
+              className={`mt-1 block w-full rounded-md px-3 py-2 text-left text-sm font-medium ${
+                activeView === "data"
+                  ? "bg-ink text-paper"
+                  : "text-ink/70 hover:bg-paper"
+              }`}
+            >
+              Data Management
+            </button>
+          </nav>
+          {activeView === "copilot" && <Sidebar refreshToken={boardTick} />}
+        </div>
+        {activeView === "copilot" ? (
+          <ChatPanel
+            conversationId={conversationId}
+            llmReady={Boolean(health?.llm_configured)}
+            onBoardChanged={() => setBoardTick((n) => n + 1)}
+          />
+        ) : (
+          <DataManagement />
+        )}
       </main>
     </div>
   );

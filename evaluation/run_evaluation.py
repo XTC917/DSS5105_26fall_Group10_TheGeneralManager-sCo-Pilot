@@ -125,7 +125,7 @@ def _run_tools(questions: list[dict[str, Any]], usage: str) -> int:
 
 def _run_agent(questions: list[dict[str, Any]], usage: str) -> int:
     if not llm_is_configured():
-        print("OPENAI_API_KEY is not set. Agent mode skipped. Tools mode still works.")
+        print("LLM key is not set (GOOGLE_API_KEY for gemini, OPENAI_API_KEY for GPT). Agent mode skipped. Tools mode still works.")
         return 3
 
     report = empty_report()

@@ -28,6 +28,11 @@ from backend.services.calculations import parse_iso_date
 from backend.services.confirm_actions import ConfirmError, confirm_proposed_action, decline_proposed_action
 from backend.services.database import get_db, init_db
 from backend.services.discovery import DEFAULT_LIMIT, MAX_LIMIT, discover_factory_issues
+from backend.routers.data_admin import (
+    datasource_router,
+    query_router,
+    upload_router,
+)
 from backend.services.watches import evaluate_and_list
 from backend.tools.registry import MVP_TOOLS
 
@@ -60,6 +65,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Data Management (shares data/factory.db with the Co-Pilot tools).
+app.include_router(upload_router)
+app.include_router(datasource_router)
+app.include_router(query_router)
+
 
 @app.get("/api/health")
 def health() -> dict:
@@ -77,8 +87,10 @@ def chat(request: ChatRequest) -> ChatResponse:
         raise HTTPException(
             status_code=503,
             detail=(
-                "OPENAI_API_KEY is not set. Tools still work (run pytest). "
-                "Copy .env.example to .env to enable the agent."
+                "LLM key is not set. For Gemini set GOOGLE_API_KEY "
+                "(LLM_PROVIDER=gemini); for GPT set OPENAI_API_KEY. "
+                "Tools still work (run pytest). Copy .env.example to .env "
+                "to enable the agent."
             ),
         )
     try:

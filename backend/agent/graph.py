@@ -9,7 +9,6 @@ from typing import Any
 
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
-from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
@@ -23,12 +22,68 @@ logger = logging.getLogger(__name__)
 _AGENT = None
 _CHECKPOINTER = MemorySaver()
 
+# ---------------------------------------------------------------------------
+# LLM provider switch.
+#
+#   Development (Gemini, default when GOOGLE_API_KEY is set):
+#       LLM_PROVIDER=gemini
+#       LLM_MODEL=gemini-3.6-flash        (current API default; use the exact
+#                                        name shown in AI Studio if it changes)
+#       GOOGLE_API_KEY=AIza...           (from https://aistudio.google.com/app/apikey)
+#
+#   Switch back to GPT (OpenAI-compatible):
+#       LLM_PROVIDER=openai
+#       LLM_MODEL=gpt-4o-mini            (or gpt-5.x once your key supports it)
+#       OPENAI_API_KEY=sk-...
+#       OPENAI_BASE_URL=                 (leave empty for api.openai.com)
+# ---------------------------------------------------------------------------
+
+
+def _get_provider() -> str:
+    provider = os.getenv("LLM_PROVIDER", "").strip().lower()
+    if provider in ("gemini", "google"):
+        return "gemini"
+    if provider == "openai":
+        return "openai"
+    # Auto-detect: prefer gemini when a Google key exists.
+    if os.getenv("GOOGLE_API_KEY"):
+        return "gemini"
+    return "openai"
+
+
+def active_provider() -> str:
+    return _get_provider()
+
+
+def active_model() -> str:
+    if _get_provider() == "gemini":
+        return os.getenv("LLM_MODEL", "gemini-3.6-flash")
+    return os.getenv("LLM_MODEL", "gpt-4o-mini")
+
 
 def llm_is_configured() -> bool:
+    if _get_provider() == "gemini":
+        return bool(os.getenv("GOOGLE_API_KEY"))
     return bool(os.getenv("OPENAI_API_KEY"))
 
 
-def build_model() -> ChatOpenAI:
+def build_model():
+    """Native provider client.
+
+    Gemini goes through langchain-google-genai (NOT the OpenAI-compat layer),
+    which is what preserves thought signatures for tool calls on thinking
+    models. OpenAI stays on langchain-openai.
+    """
+    if _get_provider() == "gemini":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        return ChatGoogleGenerativeAI(
+            model=os.getenv("LLM_MODEL", "gemini-3.6-flash"),
+            temperature=0,
+            google_api_key=os.getenv("GOOGLE_API_KEY"),
+        )
+    from langchain_openai import ChatOpenAI
+
     kwargs: dict[str, Any] = {
         "model": os.getenv("LLM_MODEL", "gpt-4o-mini"),
         "temperature": 0,
@@ -40,12 +95,13 @@ def build_model() -> ChatOpenAI:
 
 
 def get_agent():
-    """Build the agent once. Requires OPENAI_API_KEY (OpenAI-compatible)."""
+    """Build the agent once. Provider selected by LLM_PROVIDER / keys."""
     global _AGENT
     if _AGENT is None:
         if not llm_is_configured():
             raise RuntimeError(
-                "OPENAI_API_KEY is not set. Copy .env.example to .env. "
+                "LLM key is not set. For Gemini set GOOGLE_API_KEY; "
+                "for GPT set OPENAI_API_KEY. Copy .env.example to .env. "
                 "Tools can still be tested with pytest without a key."
             )
         model = build_model()
@@ -55,7 +111,12 @@ def get_agent():
             prompt=SYSTEM_PROMPT,
             checkpointer=_CHECKPOINTER,
         )
-        logger.info("LangGraph agent initialised with %s tools", len(MVP_TOOLS))
+        logger.info(
+            "LangGraph agent initialised with %s tools provider=%s model=%s",
+            len(MVP_TOOLS),
+            _get_provider(),
+            active_model(),
+        )
     return _AGENT
 
 

@@ -1,8 +1,9 @@
-"""SQLite data access. CSV files are the source of truth; the DB is a query cache.
+"""SQLite data access.
 
-We use SQLite (stdlib) rather than DuckDB because the three files are small,
-clean, and need only simple filters. Teammates can inspect data/factory.db
-with any SQLite viewer.
+CSVs are seed data for first-time init only. After that the shared
+data/factory.db is the source of truth, so restarting the backend must
+NOT delete Data Management imports. Use reseed_from_csv() explicitly
+for manual recovery.
 """
 
 from __future__ import annotations
@@ -61,8 +62,146 @@ class FactoryDB:
         conn.row_factory = sqlite3.Row
         return conn
 
-    def initialize(self) -> None:
-        """Load the three CSVs into SQLite. Safe to call on every startup."""
+    def initialize(self, force: bool = False) -> str:
+        """Prepare the shared factory.db without destroying admin imports.
+
+        - Missing file or missing business tables: seed from the CSVs,
+          then create admin metadata tables.
+        - force=True: explicit reseed (used by tests / manual recovery).
+        - Otherwise: keep the existing DB untouched; only ensure the admin
+          metadata tables and indexes exist.
+
+        Returns "seeded" | "reused" | "reseeded".
+        """
+        if force or not self._has_business_tables():
+            self._seed_from_csv()
+            self.ensure_admin_tables()
+            return "reseeded" if force else "seeded"
+        self.ensure_admin_tables()
+        return "reused"
+
+    def _has_business_tables(self) -> bool:
+        if not self.db_path.exists():
+            return False
+        expected: dict[str, set[str]] = {
+            "orders": set(_ORDERS_COLUMNS),
+            "production_log": set(_PRODUCTION_COLUMNS),
+            "workshops": set(_WORKSHOP_COLUMNS),
+        }
+        try:
+            with self.connect() as conn:
+                names = {
+                    row["name"]
+                    for row in conn.execute(
+                        "SELECT name FROM sqlite_master WHERE type = 'table'"
+                    ).fetchall()
+                }
+                for table, cols in expected.items():
+                    if table not in names:
+                        return False
+                    pragma = conn.execute(f"PRAGMA table_info({table})").fetchall()
+                    existing = {row["name"] for row in pragma}
+                    if not cols.issubset(existing):
+                        return False
+        except Exception:
+            return False
+        return True
+
+    def ensure_admin_tables(self) -> None:
+        """Create Data Management metadata tables if missing (idempotent)."""
+        from backend.services.data_admin import DATA_SOURCES_META
+
+        with self.connect() as conn:
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS upload_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    file_name TEXT NOT NULL,
+                    file_type TEXT,
+                    total_rows INTEGER DEFAULT 0,
+                    status TEXT DEFAULT 'pending',
+                    error_message TEXT,
+                    uploaded_by TEXT DEFAULT 'admin',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS import_details (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    upload_id INTEGER NOT NULL,
+                    file_name TEXT NOT NULL,
+                    table_name TEXT NOT NULL,
+                    total_rows INTEGER DEFAULT 0,
+                    success_rows INTEGER DEFAULT 0,
+                    failed_rows INTEGER DEFAULT 0,
+                    status TEXT DEFAULT 'pending',
+                    error_message TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TEXT,
+                    FOREIGN KEY (upload_id) REFERENCES upload_history(id)
+                        ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS data_sources (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_name TEXT NOT NULL,
+                    table_name TEXT UNIQUE NOT NULL,
+                    original_file TEXT,
+                    description TEXT,
+                    row_count INTEGER DEFAULT 0,
+                    is_active INTEGER DEFAULT 1,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_orders_customer
+                    ON orders(customer);
+                CREATE INDEX IF NOT EXISTS idx_orders_status
+                    ON orders(status);
+                CREATE INDEX IF NOT EXISTS idx_prod_stage
+                    ON production_log(stage);
+                """
+            )
+            for table, meta in DATA_SOURCES_META.items():
+                count_row = conn.execute(
+                    f"SELECT COUNT(*) AS cnt FROM {table}"
+                ).fetchone()
+                row_count = int(count_row["cnt"]) if count_row else 0
+                conn.execute(
+                    """
+                    INSERT INTO data_sources
+                        (source_name, table_name, original_file, description,
+                         row_count, is_active, updated_at)
+                    VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+                    ON CONFLICT(table_name) DO NOTHING
+                    """,
+                    (
+                        meta["source_name"],
+                        table,
+                        meta["original_file"],
+                        meta["description"],
+                        row_count,
+                    ),
+                )
+                # Backfill the count for fresh seeds (row_count 0/NULL only);
+                # never overwrite a count that an import already set.
+                conn.execute(
+                    """
+                    UPDATE data_sources
+                    SET row_count = ?, is_active = 1,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE table_name = ?
+                      AND (row_count IS NULL OR row_count = 0)
+                    """,
+                    (row_count, table),
+                )
+            conn.commit()
+
+    def reseed_from_csv(self) -> None:
+        """Explicit recovery path: delete factory.db and rebuild from CSVs."""
+        self.initialize(force=True)
+
+    def _seed_from_csv(self) -> None:
         orders = pd.read_csv(self.data_dir / "orders.csv")
         production = pd.read_csv(self.data_dir / "production_log.csv")
         workshops = pd.read_csv(self.data_dir / "workshops.csv")
