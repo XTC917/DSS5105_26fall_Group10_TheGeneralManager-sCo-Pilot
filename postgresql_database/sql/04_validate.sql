@@ -14,8 +14,22 @@ SELECT
 FROM app.orders;
 
 SELECT
+    COUNT(*) AS current_order_states_missing_from_snapshot
+FROM app.orders AS orders
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM app.snapshot AS snapshot
+    WHERE snapshot.order_id = orders.order_id
+      AND snapshot.status = orders.status
+      AND snapshot.stage = orders.current_stage
+      AND snapshot.date = orders.last_activity_date
+);
+
+SELECT
     COUNT(*) AS snapshot_rows,
-    COUNT(DISTINCT (order_id, current_stage, last_activity_date)) AS unique_snapshot_states
+    COUNT(DISTINCT (order_id, status, stage, date)) AS unique_snapshot_states,
+    COUNT(*) FILTER (WHERE status = 'IN_PROGRESS') AS in_progress_states,
+    COUNT(*) FILTER (WHERE status = 'COMPLETE') AS complete_states
 FROM app.snapshot;
 
 SELECT
@@ -109,6 +123,7 @@ DO $$
 DECLARE
     metadata_mismatches integer;
     inconsistent_workshops integer;
+    current_states_missing integer;
 BEGIN
    WITH actual_counts AS (
         SELECT 'orders' AS table_name, COUNT(*) AS actual_row_count
@@ -166,7 +181,24 @@ BEGIN
             inconsistent_workshops;
     END IF;
 
+    SELECT COUNT(*)
+    INTO current_states_missing
+    FROM app.orders AS orders
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM app.snapshot AS snapshot
+        WHERE snapshot.order_id = orders.order_id
+          AND snapshot.status = orders.status
+          AND snapshot.stage = orders.current_stage
+          AND snapshot.date = orders.last_activity_date
+    );
+
+    IF current_states_missing > 0 THEN
+        RAISE EXCEPTION
+            'Validation failed: % current order states are missing from snapshot',
+            current_states_missing;
+    END IF;
     RAISE NOTICE
-        'VALIDATION PASSED: metadata counts and workshop profiles are consistent';
+        'VALIDATION PASSED: metadata counts, workshop profiles, and snapshot states are consistent';
 END
 $$;

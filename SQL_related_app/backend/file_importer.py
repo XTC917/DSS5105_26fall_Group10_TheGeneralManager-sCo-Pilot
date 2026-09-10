@@ -248,28 +248,23 @@ class FileImporter:
         try:
             with conn.transaction():
                 if if_exists == "replace":
-                    if table_name == "orders":
-                        archive_orders_query = sql.SQL(
-                            """
-                            INSERT INTO {} (order_id, current_stage, last_activity_date)
-                            SELECT order_id, current_stage, last_activity_date
-                            FROM {}
-                            WHERE status = %s
-                            ON CONFLICT (order_id, current_stage, last_activity_date)
-                            DO NOTHING
-                            """
-                        ).format(
-                            sql.Identifier(Config.PG_SCHEMA, "snapshot"),
-                            sql.Identifier(Config.PG_SCHEMA, "orders"),
-                        )
-                        conn.execute(
-                            archive_orders_query,
-                            ("IN_PROGRESS",),
-                        )
                     conn.execute(delete_query)
                 with conn.cursor() as cursor:
                     for row in cleaned:
                         cursor.execute(insert_query, row)
+                if table_name == "orders":
+                    update_snapshot_query = sql.SQL(
+                        """
+                        INSERT INTO {} (order_id, status, stage, date)
+                        SELECT order_id, status, current_stage, last_activity_date
+                        FROM {}
+                        ON CONFLICT (order_id, status, stage, date) DO NOTHING
+                        """
+                    ).format(
+                        sql.Identifier(Config.PG_SCHEMA, "snapshot"),
+                        sql.Identifier(Config.PG_SCHEMA, "orders"),
+                    )
+                    conn.execute(update_snapshot_query)
                 count_query = sql.SQL(
                     "SELECT COUNT(*) AS cnt FROM {}"
                 ).format(qualified_table)
@@ -277,9 +272,7 @@ class FileImporter:
                 update_row = conn.execute(
                     """
                     UPDATE admin_meta.data_sources
-                    SET row_count = %s,
-                        updated_at = CURRENT_TIMESTAMP,
-                        is_active = TRUE
+                    SET row_count = %s, updated_at = CURRENT_TIMESTAMP, is_active = TRUE
                     WHERE table_name = %s
                     RETURNING id
                     """,

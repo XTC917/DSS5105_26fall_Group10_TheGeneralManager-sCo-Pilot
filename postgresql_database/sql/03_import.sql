@@ -1,5 +1,7 @@
--- Preserve outgoing in-progress order states, then replace the three current business tables.
--- If any step fails, the transaction preserves both the previous current data and snapshot history.
+-- Reset the database to the reproducible baseline dataset.
+-- This script clears and reloads the current business tables and initial snapshot.
+-- Use the application upload API for normal daily updates.
+-- If any step fails, the transaction rolls back all changes.
 
 \set ON_ERROR_STOP on
 
@@ -9,17 +11,12 @@ SELECT
 
 BEGIN;
 
-INSERT INTO app.snapshot (order_id, current_stage, last_activity_date)
-SELECT order_id, current_stage, last_activity_date
-FROM app.orders
-WHERE status = 'IN_PROGRESS'
-ON CONFLICT DO NOTHING;
-
-TRUNCATE TABLE app.orders, app.production_log, app.workshops;
+TRUNCATE TABLE app.orders, app.production_log, app.workshops, app.snapshot;
 
 
 \copy app.orders (order_id, customer, product, category, pieces, order_date, due_date, status, current_stage, last_activity_date, completed_date, days_late) FROM 'data/orders.csv' WITH (FORMAT CSV, HEADER true, NULL '', ENCODING 'UTF8')
 \copy app.production_log (production_date, stage, pieces_completed) FROM 'data/production_log.csv' WITH (FORMAT CSV, HEADER true, NULL '', ENCODING 'UTF8')
+\copy app.snapshot (order_id, status, stage, date) FROM 'data/altogether_summary.csv' WITH (FORMAT CSV, HEADER true, NULL '', ENCODING 'UTF8')
 
 CREATE TEMP TABLE workshops_import
 (LIKE app.workshops)

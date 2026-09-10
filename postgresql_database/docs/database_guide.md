@@ -45,7 +45,7 @@ One row represents one customer order. The table supports order tracking, due-da
 | `order_date` | `date` | No | Date the order was placed |
 | `due_date` | `date` | No | Promised delivery date; cannot precede `order_date` |
 | `status` | `text` | No | `IN_PROGRESS` or `COMPLETE` |
-| `current_stage` | `text` | No | `KNITTING`, `ASSEMBLY`, `WASHING`, `PACKING` or `COMPLETE` |
+| `current_stage` | `text` | No | `ORDERED`, `KNITTING`, `ASSEMBLY`, `WASHING`, `PACKING` or `COMPLETE` |
 | `last_activity_date` | `date` | No | Most recent production activity date |
 | `completed_date` | `date` | Yes | Completion date; null while an order is in progress |
 | `days_late` | `integer` | Yes | `completed_date - due_date`; a negative value means early completion |
@@ -66,23 +66,46 @@ Sunday rows must have zero completed pieces.
 
 ### 3.3 `app.workshops`
 
-One row represents one candidate workshop. The table supports comparisons of capacity, lead time, quality, cost and current workload. Its primary key is `workshop_id`, and `name` is also unique.
+One row represents one workshop-category capability.
+The composite primary key is (`workshop_id`, `makes`),
+and (`name`, `makes`) is unique.
 
 | Field | Type | Nullable | Description |
 |---|---|---|---|
-| `workshop_id` | `text` | No | Unique workshop identifier |
-| `name` | `text` | No | Unique workshop name |
+| `workshop_id` | `text` | No | Workshop identifier |
+| `name` | `text` | No | Workshop name |
 | `capacity_pieces_per_day` | `integer` | No | Maximum daily capacity |
 | `pickup_lead_days` | `integer` | No | Pickup or transport lead time in days |
 | `defect_rate` | `numeric(5,4)` | No | Expected defect rate between 0 and 1 |
 | `cost_per_piece` | `numeric(10,2)` | No | Processing cost per piece |
-| `makes` | `text` | No | `TOPS`, `ACCESSORIES` or `TOPS+ACCESSORIES` |
+| `makes` | `text` | No | `TOPS` or `ACCESSORIES`; a source value of `TOPS+ACCESSORIES` is split into two database rows during import |
 | `status` | `text` | No | `ACTIVE` or `SUSPENDED` |
 | `max_batch_pieces` | `integer` | Yes | Optional maximum batch size |
 | `current_queue_days` | `numeric(6,2)` | No | Current waiting time in days |
 | `notes` | `text` | No | Operational notes about the workshop |
 
 For source-file names, sample values, nullability and constraints, see [field_mapping.md](field_mapping.md).
+
+When a physical workshop supports both categories, its workshop-level attributes are repeated in two capability rows. Count physical workshops with `COUNT(DISTINCT workshop_id)` and aggregate capacity once per `workshop_id` to avoid double counting.
+
+### 3.4 `app.snapshot`
+
+One row represents one distinct order state observed on an activity date. The reproducible baseline is loaded from `data/altogether_summary.csv`; after initialisation, the upload API accepts only the three current business tables, and the backend extends `app.snapshot` automatically after a successful `orders` import.
+
+| Field | Type | Nullable | Description |
+|---|---|---|---|
+| `order_id` | `text` | No | Identifier of the observed order |
+| `status` | `text` | No | Observed status: `IN_PROGRESS` or `COMPLETE` |
+| `stage` | `text` | No | Observed stage: `ORDERED`, `KNITTING`, `ASSEMBLY`, `WASHING`, `PACKING` or `COMPLETE` |
+| `date` | `date` | No | Activity date associated with the observed state; derived from `orders.last_activity_date` during later uploads |
+
+The composite primary key is (`order_id`, `status`, `stage`, `date`). It preserves different states for the same order while preventing an identical four-field state from being recorded twice. The consistency constraint permits an `IN_PROGRESS` row only with a non-complete stage, and a `COMPLETE` row only with stage `COMPLETE`.
+
+`snapshot.order_id` is a logical reference to an order but is intentionally not a foreign key to the mutable current `orders` table. This allows historical states to remain after an order no longer appears in a later current-data upload.
+
+For a normal `orders` replacement, the backend first replaces the current rows and then selects their (`order_id`, `status`, `current_stage`, `last_activity_date`) values into `snapshot` as (`order_id`, `status`, `stage`, `date`). Both actions run in the same PostgreSQL transaction. If validation or insertion fails, neither the replacement nor its new snapshot states persist. The snapshot table is append-only during normal application use and has no automatic seven-day deletion rule.
+
+The baseline script `03_import.sql` is intentionally different: it truncates `snapshot` and reloads the tracked 223-row initial seed. It should therefore be used for initialisation or deliberate reset, not as the daily update mechanism.
 
 ## 4. Common queries
 
@@ -97,10 +120,12 @@ UNION ALL
 SELECT 'production_log', COUNT(*) FROM app.production_log
 UNION ALL
 SELECT 'workshops', COUNT(*) FROM app.workshops
+UNION ALL
+SELECT 'snapshot', COUNT(*) FROM app.snapshot
 ORDER BY table_name;
 ```
 
-Expected counts for the current snapshot are 120, 360 and 8 respectively.
+Expected current-table counts are 120 `orders`, 360 `production_log` rows and 11 workshop-category rows. Immediately after the baseline import, `app.snapshot` contains 223 distinct states: 137 `IN_PROGRESS` and 86 `COMPLETE`. Its row count may grow after later successful `orders` uploads.
 
 ### List orders still in progress
 
@@ -110,6 +135,15 @@ FROM app.orders
 WHERE status = 'IN_PROGRESS'
 ORDER BY due_date, order_id;
 ```
+### List observed order-state history
+
+```sql
+SELECT order_id, status, stage, date
+FROM app.snapshot
+ORDER BY order_id, date, stage, status;
+```
+
+The current states from every successful `orders` upload are already inserted into `app.snapshot` in the same transaction, so a separate `UNION` with `app.orders` is not required for complete observed-state history.
 
 ### List completed orders delivered late
 
@@ -159,20 +193,20 @@ The design follows least privilege:
 - public access to the project tables is revoked.
 - future tables created by `factory_admin` in `app` automatically grant `SELECT` to `factory_reader` and no table access to `PUBLIC`.
 
-Use `factory_admin` only for database setup and maintenance. Applications and the AI Agent must not connect as the administrator.
+Use `factory_admin` only for database setup and trusted administration operations. Read-only application queries and the AI Agent must use `factory_user` or `factory_agent`, not the administrator connection.
 
 ## 6. Validation and acceptance procedure
 
-Run the scripts from the repository root in this order:
+Run the scripts from the `postgresql_database` directory in this order:
 
 1. `sql/01_roles_and_database.sql` — initial setup only.
 2. `sql/02_schema_tables_permissions.sql` — initial construction only.
-3. `sql/03_import.sql` — import or replace the CSV snapshot.
+3. `sql/03_import.sql` — reset and import the tracked current-table baseline and initial snapshot seed.
 4. `sql/04_validate.sql` — validate counts, totals, uniqueness and ownership.
 5. `sql/05_admin_permission_test.sql` — verify administrator permissions with a disposable probe table.
 6. `sql/06_readonly_permission_test.sql` — verify Agent reads succeed and dangerous operations fail.
 
-Validation outputs are not stored in the repository. Run `sql/04_validate.sql`, `sql/05_admin_permission_test.sql`, and `sql/06_readonly_permission_test.sql` locally whenever current acceptance results are needed.
+The latest reviewed local outputs are stored under `evidence/`. Run `sql/04_validate.sql`, `sql/05_admin_permission_test.sql`, and `sql/06_readonly_permission_test.sql` again and replace those outputs whenever the schema, data or permissions change.
 
 ## 7. Security and operational notes
 

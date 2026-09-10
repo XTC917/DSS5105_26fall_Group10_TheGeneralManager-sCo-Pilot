@@ -47,14 +47,14 @@ CREATE TABLE app.orders (
     order_date date NOT NULL,
     due_date date NOT NULL CHECK (due_date >= order_date),
     status text NOT NULL CHECK (status IN ('IN_PROGRESS', 'COMPLETE')),
-    current_stage text NOT NULL CHECK (current_stage IN ('KNITTING', 'ASSEMBLY', 'WASHING', 'PACKING', 'COMPLETE')),
+    current_stage text NOT NULL CHECK (current_stage IN ('ORDERED', 'KNITTING', 'ASSEMBLY', 'WASHING', 'PACKING', 'COMPLETE')),
     last_activity_date date NOT NULL CHECK (last_activity_date >= order_date),
     completed_date date,
     days_late integer,
 
     CONSTRAINT orders_state_consistency CHECK (
         (status = 'IN_PROGRESS'
-        AND current_stage IN ('KNITTING', 'ASSEMBLY', 'WASHING', 'PACKING')
+        AND current_stage IN ('ORDERED', 'KNITTING', 'ASSEMBLY', 'WASHING', 'PACKING')
         AND completed_date IS NULL
         AND days_late IS NULL)
         OR
@@ -97,10 +97,16 @@ CREATE TABLE app.workshops (
 
 CREATE TABLE app.snapshot (
     order_id text NOT NULL,
-    current_stage text NOT NULL CHECK (current_stage IN ('KNITTING', 'ASSEMBLY', 'WASHING', 'PACKING')),
-    last_activity_date date NOT NULL,
-
-    PRIMARY KEY (order_id, current_stage, last_activity_date)
+    status text NOT NULL CHECK (status IN ('IN_PROGRESS', 'COMPLETE')),
+    stage text NOT NULL CHECK (stage IN ('ORDERED', 'KNITTING', 'ASSEMBLY', 'WASHING', 'PACKING', 'COMPLETE')),
+    date date NOT NULL,
+    CONSTRAINT snapshot_state_consistency CHECK (
+        (
+            status = 'IN_PROGRESS'
+            AND stage IN ('ORDERED', 'KNITTING', 'ASSEMBLY', 'WASHING', 'PACKING')
+        ) OR (status = 'COMPLETE' AND stage = 'COMPLETE')
+    ),
+    PRIMARY KEY (order_id, status, stage, date)
 );
 
 CREATE TABLE admin_meta.upload_history (

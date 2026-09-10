@@ -99,8 +99,11 @@ class SchemaService:
                 "- Only ACTIVE workshops can take new orders",
                 "- workshops stores one row per workshop-category capability",
                 "- Count physical workshops with COUNT(DISTINCT workshop_id)",
-                "- snapshot stores prior IN_PROGRESS order stage observations",
-                "- Combine snapshot with current IN_PROGRESS orders to query order stage history",
+                "- snapshot stores distinct order states from the initial seed and successful orders uploads",
+                "- snapshot maps orders.current_stage to stage and orders.last_activity_date to date",
+                "- A successful orders import appends its current states to snapshot in the same transaction",
+                "- Duplicate (order_id, status, stage, date) states are ignored",
+                "- Query snapshot directly for complete observed order-state history; no UNION with orders is required",
                 "- Current date is 2026-04-01",
             ]
         )

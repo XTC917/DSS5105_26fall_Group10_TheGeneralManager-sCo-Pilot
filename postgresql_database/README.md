@@ -2,7 +2,7 @@
 
 ## Overview
 
-This directory contains the reproducible local PostgreSQL database for the Factory Copilot project. The SQL files create project roles, schemas, tables, constraints and permissions; import the three supplied datasets; and test data integrity and access control.
+This directory contains the reproducible local PostgreSQL database for the Factory Copilot project. The SQL files create project roles, schemas, tables, constraints and permissions; import the three current business datasets and the initial order-state history; and test data integrity and access control.
 
 The database is currently local rather than cloud-hosted. The experimental `SQL_related_app` backend has been connected to it and tested, but the main LangGraph application has not yet been formally switched to this PostgreSQL source.
 
@@ -25,9 +25,9 @@ The database is currently local rather than cloud-hosted. The experimental `SQL_
 | `app.orders` | Current complete orders dataset |
 | `app.production_log` | Current complete production dataset |
 | `app.workshops` | Current workshop capabilities, one row per workshop-category pair |
-| `app.snapshot` | Prior `IN_PROGRESS` order-stage observations captured before `orders` replacement |
+| `app.snapshot` | Distinct order states observed across the initial seed and subsequent successful `orders` uploads |
 
-`app.snapshot` is append-only in the current design. Its composite primary key prevents the same order, stage and activity date from being stored twice.
+`app.snapshot` is append-only during normal application uploads. Its composite primary key (`order_id`, `status`, `stage`, `date`) prevents the same state observation from being stored twice. It contains both in-progress and complete states; it is not a copy of only the outgoing orders table.
 
 The source `workshops.csv` retains its original format. During import, `TOPS+ACCESSORIES` is split into separate `TOPS` and `ACCESSORIES` rows. Therefore the supplied eight source rows become eleven database rows representing eight physical workshops.
 
@@ -46,12 +46,18 @@ Only `factory_admin` can access this schema. The two read-only login roles canno
 ```text
 postgresql_database/
 |-- data/
+|   |-- altogether_summary.csv
 |   |-- orders.csv
 |   |-- production_log.csv
 |   `-- workshops.csv
 |-- docs/
 |   |-- database_guide.md
 |   `-- field_mapping.md
+|-- evidence/
+|   |-- 04_validate.txt
+|   |-- 05_admin_permission_test.txt
+|   |-- 06_readonly_permission_test.txt
+|   `-- README.md
 |-- sql/
 |   |-- 01_roles_and_database.sql
 |   |-- 02_schema_tables_permissions.sql
@@ -62,14 +68,14 @@ postgresql_database/
 `-- README.md
 ```
 
-Validation output files are intentionally not stored in the repository. The SQL scripts are the reproducible tests; run them locally whenever current evidence is needed.
+The `evidence` directory stores the latest reviewed local outputs from scripts 04–06. The SQL scripts remain the source of the tests; regenerate the evidence whenever the schema, data or permissions change.
 
 ## Prerequisites
 
 - PostgreSQL server and command-line tools, including `psql`;
 - a local PostgreSQL system administrator account, normally `postgres`;
 - PostgreSQL `bin` on the Windows PATH;
-- the three supplied CSV files under `data/`.
+- the three supplied current-data CSV files and `altogether_summary.csv` under `data/`.
 
 Verify the client and server:
 
@@ -116,7 +122,7 @@ Expected output includes `BEGIN`, two `CREATE SCHEMA` messages, seven `CREATE TA
 
 This is also an initial-construction script. Do not rerun it against an already constructed database.
 
-### 3. Import current data
+### 3. Reset and import the reproducible baseline
 
 Run as `factory_admin`:
 
@@ -124,18 +130,18 @@ Run as `factory_admin`:
 psql -X -h localhost -p 5432 -U factory_admin -d factory_copilot_db -W -f "sql/03_import.sql"
 ```
 
-The import runs as one transaction:
+The baseline import runs as one transaction:
 
-1. copy outgoing `IN_PROGRESS` order states into `app.snapshot`;
-2. clear the three current business tables;
-3. import 120 orders and 360 production rows;
+1. clear the three current business tables and `app.snapshot`;
+2. import 120 current orders and 360 production rows;
+3. import 223 initial order-state rows from `data/altogether_summary.csv`;
 4. read eight workshop source rows through a temporary table;
 5. split combined workshop categories and insert eleven workshop-category rows;
 6. update the three `admin_meta.data_sources` records.
 
-If any step fails, PostgreSQL rolls back the current-table replacement and the snapshot additions together.
+If any step fails, PostgreSQL rolls back the entire baseline reset and import.
 
-The number of rows inserted into `snapshot` varies. It is normally zero on a fresh database, may increase after a new orders dataset replaces an existing one, and remains unchanged when all outgoing states are already present.
+This script is for initialisation and reproducible reset, not normal daily updates. Rerunning it deletes any order-state history accumulated after the baseline and restores the tracked 223-row seed. Use the application upload API for daily replacement of `orders`, `production_log`, or `workshops`.
 
 ### 4. Validate data and metadata
 
@@ -152,6 +158,11 @@ For the supplied current data, the key results are:
 | Total order pieces | 93,500 |
 | Missing completed dates | 34 |
 | Missing days late | 34 |
+| Initial snapshot rows | 223 |
+| Unique snapshot states | 223 |
+| Snapshot `IN_PROGRESS` states | 137 |
+| Snapshot `COMPLETE` states | 86 |
+| Current order states missing from snapshot | 0 |
 | Production rows/date-stage pairs | 360 |
 | Production pieces completed | 231,595 |
 | Workshop-category rows | 11 |
@@ -160,17 +171,17 @@ For the supplied current data, the key results are:
 | Active physical workshops | 7 |
 | Physical workshops missing maximum batch | 7 |
 
-`snapshot_rows` is not fixed because history grows across order replacements. `snapshot_rows` and `unique_snapshot_states` should match.
+Immediately after the baseline import, `snapshot_rows` and `unique_snapshot_states` should both be 223. During normal operation, the count may grow as new distinct order states are observed, but these two values must remain equal.
 
 The workshop consistency query should return zero rows. All three `data_sources.row_count` values should match their corresponding current business tables.
 
-The script now performs active assertions. A successful run ends with:
+The script actively asserts metadata row counts, workshop-profile consistency, and coverage of every current order state in `snapshot`. The other summary totals are reported for comparison with the expected baseline values above. A successful run ends with:
 
 ```text
-VALIDATION PASSED: metadata counts and workshop profiles are consistent
+VALIDATION PASSED: metadata counts, workshop profiles, and snapshot states are consistent
 ```
 
-A metadata mismatch or inconsistent workshop profile raises an exception and returns a non-zero `psql` exit code.
+A metadata mismatch, inconsistent workshop profile, or missing current order state raises an exception and returns a non-zero `psql` exit code.
 
 ### 5. Test administrator permissions
 
@@ -218,13 +229,13 @@ TEST PASSED: DROP TABLE was denied
 === All seven permission-denial tests passed ===
 ```
 
-The final counts should show 120 `orders`, 360 `production_log` rows, eleven `workshops` rows, and the current variable number of `snapshot` rows.
+Immediately after the baseline import, the final counts should show 120 `orders`, 360 `production_log` rows, eleven `workshops` rows, and 223 `snapshot` rows. The snapshot count may be higher after later successful `orders` uploads.
 
 ## Safe reruns
 
 - `01_roles_and_database.sql`: initial setup only;
 - `02_schema_tables_permissions.sql`: initial construction only;
-- `03_import.sql`: may be rerun to replace current data and preserve outgoing in-progress order states;
+- `03_import.sql`: technically rerunnable, but destructive to post-baseline snapshot history; it resets all four `app` tables to the tracked baseline files;
 - `04_validate.sql`: safe to rerun;
 - `05_admin_permission_test.sql`: safe to rerun because its changes are rolled back;
 - `06_readonly_permission_test.sql`: safe to rerun because denied operations cannot persist.
@@ -240,7 +251,7 @@ The active backend uses:
 - `factory_agent` for read-only schema and SQL access;
 - `factory_admin` for uploads and administration.
 
-The backend can import CSV, XLSX and XLS files. The SQL bootstrap script itself uses `psql` `\copy` and therefore imports the tracked CSV seed files.
+The backend can import CSV, XLSX and XLS files for the three current business tables. The SQL bootstrap script itself uses `psql` `\copy` to import the four tracked CSV baseline files, including the initial snapshot seed.
 
 ## Documentation
 

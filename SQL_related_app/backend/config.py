@@ -11,10 +11,6 @@ _IDENT_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 class Config:
-    DB_PATH = Path(os.getenv("DB_PATH", BACKEND_DIR / "data" / "factory_data.db"))
-    if not DB_PATH.is_absolute():
-        DB_PATH = BACKEND_DIR / DB_PATH
-
     PG_HOST = os.getenv("PGHOST", "localhost")
     PG_PORT = int(os.getenv("PGPORT", "5432"))
     PG_DATABASE = os.getenv("PGDATABASE", "factory_copilot_db")
@@ -62,8 +58,8 @@ class Config:
         "production_log": "Current daily production output by stage",
         "workshops": "Current workshop capacity and category information",
         "snapshot": (
-            "Historical IN_PROGRESS order stages captured before "
-            "the current orders table is replaced"
+            "Accumulated distinct order states from the initial seed "
+            "and subsequent successful orders uploads"
         ),
     }
 

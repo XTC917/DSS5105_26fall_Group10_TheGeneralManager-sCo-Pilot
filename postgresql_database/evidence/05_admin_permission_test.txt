@@ -1,0 +1,60 @@
+﻿  current_database  | current_user
+--------------------+---------------
+ factory_copilot_db | factory_admin
+(1 row)
+
+ can_connect | can_use_app_schema | can_use_admin_meta_schema | can_create_in_app_schema | can_create_in_admin_meta_schema
+-------------+--------------------+---------------------------+--------------------------+---------------------------------
+ t           | t                  | t                         | t                        | t
+(1 row)
+
+ schemaname |   tablename    | can_select | can_insert | can_update | can_delete | can_truncate
+------------+----------------+------------+------------+------------+------------+--------------
+ admin_meta | data_sources   | t          | t          | t          | t          | t
+ admin_meta | import_details | t          | t          | t          | t          | t
+ admin_meta | upload_history | t          | t          | t          | t          | t
+ app        | orders         | t          | t          | t          | t          | t
+ app        | production_log | t          | t          | t          | t          | t
+ app        | snapshot       | t          | t          | t          | t          | t
+ app        | workshops      | t          | t          | t          | t          | t
+(7 rows)
+
+ can_use_upload_history_sequence
+---------------------------------
+ t
+(1 row)
+
+=== Administrator CRUD test ===
+BEGIN
+CREATE TABLE
+INSERT 0 1
+ probe_id |      note
+----------+----------------
+        1 | original value
+(1 row)
+
+UPDATE 1
+ probe_id |     note
+----------+---------------
+        1 | updated value
+(1 row)
+
+DELETE 1
+ rows_after_delete
+-------------------
+                 0
+(1 row)
+
+INSERT 0 1
+TRUNCATE TABLE
+ rows_after_truncate
+---------------------
+                   0
+(1 row)
+
+DROP TABLE
+ROLLBACK
+ probe_table_removed
+---------------------
+ t
+(1 row)

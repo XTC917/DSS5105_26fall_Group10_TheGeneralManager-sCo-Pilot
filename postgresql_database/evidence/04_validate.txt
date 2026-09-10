@@ -1,0 +1,54 @@
+﻿  current_database  | current_user
+--------------------+---------------
+ factory_copilot_db | factory_admin
+(1 row)
+
+ row_count | unique_order_count | total_pieces | missing_completed_dates | missing_days_late
+-----------+--------------------+--------------+-------------------------+-------------------
+       120 |                120 |        93500 |                      34 |                34
+(1 row)
+
+ current_order_states_missing_from_snapshot
+--------------------------------------------
+                                          0
+(1 row)
+
+ snapshot_rows | unique_snapshot_states | in_progress_states | complete_states
+---------------+------------------------+--------------------+-----------------
+           223 |                    223 |                137 |              86
+(1 row)
+
+ row_count | date_stage_pairs | pieces_completed
+-----------+------------------+------------------
+       360 |              360 |           231595
+(1 row)
+
+ row_count | distinct_workshop_ids | total_daily_capacity | active_workshops | missing_max_batch
+-----------+-----------------------+----------------------+------------------+-------------------
+        11 |                     8 |                 1600 |                7 |                 7
+(1 row)
+
+ workshop_id | category_rows | shared_profile_versions
+-------------+---------------+-------------------------
+(0 rows)
+
+ schemaname |   tablename    |  tableowner
+------------+----------------+---------------
+ admin_meta | data_sources   | factory_admin
+ admin_meta | import_details | factory_admin
+ admin_meta | upload_history | factory_admin
+ app        | orders         | factory_admin
+ app        | production_log | factory_admin
+ app        | snapshot       | factory_admin
+ app        | workshops      | factory_admin
+(7 rows)
+
+   table_name   | recorded_row_count | actual_row_count | row_count_matches
+----------------+--------------------+------------------+-------------------
+ orders         |                120 |              120 | t
+ production_log |                360 |              360 | t
+ workshops      |                 11 |               11 | t
+(3 rows)
+
+psql:sql/04_validate.sql:204: NOTICE:  VALIDATION PASSED: metadata counts, workshop profiles, and snapshot states are consistent
+DO
