@@ -2,23 +2,24 @@
 
 **Canonical semantics** live in [`semantic_layer.yaml`](semantic_layer.yaml):
 column meanings in `data_definition`; special vocabulary in `term_definition`.
-This page stays a short CSV overview.
+This page stays a short table overview.
 
-Three small, clean CSV files. There are no missing values, no joins to figure out, and no
+Four stored tables. There are no missing values, no joins to figure out, and no
 traps — every number can be taken at face value. The data is deliberately not the challenge.
 
-"Today" in the dataset is **2026-04-01**; the files cover the 90 days before it. The factory
+"Today" in the dataset is **2026-04-01**; the tables cover the 90 days before it. The factory
 is closed on Sundays. Before production begins, an order is in the **ORDERED** state.
 It then moves through four production stages:
 **KNITTING → ASSEMBLY → WASHING → PACKING**, followed by **COMPLETE**.
 
-| File | Rows | One row is |
+| Table | Rows | One row is |
 |---|---|---|
-| `orders.csv` | 120 | One customer order |
-| `production_log.csv` | 360 | One stage on one day |
-| `workshops.csv` | 8 | One outside workshop's profile card |
+| `orders` | 120 | One customer order |
+| `production_log` | 360 | One stage on one day |
+| `workshops` | 8 | One outside workshop's profile card |
+| `order_daily_snapshot` | 223 | One order entering one stage |
 
-## `orders.csv`
+## `orders`
 
 | Column | Meaning |
 |---|---|
@@ -29,11 +30,11 @@ It then moves through four production stages:
 | `order_date`, `due_date` | When it was placed and when it is due |
 | `status` | `COMPLETE` or `IN_PROGRESS` |
 | `current_stage` | `ORDERED` / `KNITTING` / `ASSEMBLY` / `WASHING` / `PACKING` / `COMPLETE` |
-| `last_activity_date` | The last day any work was recorded on this order |
+| `last_activity_date` | Date the order entered its current stage; for ORDERED, the order date |
 | `completed_date` | When it finished (blank if still in progress) |
 | `days_late` | `completed_date − due_date`; negative means early; blank if in progress |
 
-## `production_log.csv`
+## `production_log`
 
 Factory-wide daily output — the table behind *"how much did assembly get through yesterday,
 and is that normal?"*
@@ -44,7 +45,7 @@ and is that normal?"*
 | `stage` | One of the four stages |
 | `pieces_completed` | Garments finished at that stage that day (0 on Sundays) |
 
-## `workshops.csv`
+## `workshops`
 
 The eight outside workshops the factory can rent capacity from when it is full. For
 Track 1 this is the table behind feasibility questions — *"can we take 800 hoodies by the
@@ -62,3 +63,15 @@ Track 1 this is the table behind feasibility questions — *"can we take 800 hoo
 | `max_batch_pieces` | Per-batch cap (workshops on trial); blank means no cap |
 | `current_queue_days` | Days of work it is already holding "today" |
 | `notes` | The one-line reputation a human dispatcher would give it |
+
+## `order_daily_snapshot`
+
+Derived event log used to reconstruct an order's stage on a past day. Not factory output.
+Lookup for day D: for that `order_id`, take the latest row whose `date` is still `≤ D`.
+
+| Column | Meaning |
+|---|---|
+| `order_id` | `ORD-001` … |
+| `status` | `IN_PROGRESS` until finished; `COMPLETE` only on the completion event |
+| `stage` | Stage this event entered: `ORDERED` / `KNITTING` / `ASSEMBLY` / `WASHING` / `PACKING` / `COMPLETE` |
+| `date` | Date the order entered that stage (`ORDERED` = order date; `COMPLETE` = completed date) |

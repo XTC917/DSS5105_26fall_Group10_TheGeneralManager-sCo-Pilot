@@ -3,68 +3,60 @@
 # data_definition — every stored table/column, including field descriptions.
 # term_definition — special vocabulary only (not a second copy of each column).
 # Add more terms later; do not duplicate column names here unless they are jargon
-# (e.g. OVERDUE, selling price) that is not itself a CSV column.
+# (e.g. OVERDUE, selling price) that is not itself a stored column.
+# Table and column keys are the logical names used in the database.
+# Keep each table self-contained: do not point at another table's columns
+# (progressive disclosure may load one table at a time).
 
 version: 1
 
 data_definition:
   tables:
     orders:
-      physical_name: orders
-      source: orders.csv
       grain: One row is one customer order.
       description: Who ordered what, how many pieces, due when, and current stage.
       columns:
         order_id:
-          physical_name: order_id
           type: string
           nullable: false
           allowed_values: null
           description: Order identifier, ORD-001 … ORD-120.
         customer:
-          physical_name: customer
           type: string
           nullable: false
           allowed_values: null
           description: Who ordered it.
         product:
-          physical_name: product
           type: string
           nullable: false
           allowed_values: null
           description: What was ordered (e.g. Hoodie, Vest, Beanie).
         category:
-          physical_name: category
           type: string
           nullable: false
           allowed_values: [TOPS, ACCESSORIES]
           description: TOPS (sweaters, hoodies, …) or ACCESSORIES (beanies, scarves).
         pieces:
-          physical_name: pieces
           type: integer
           nullable: false
           allowed_values: null
           description: How many garments in this order.
         order_date:
-          physical_name: order_date
           type: date
           nullable: false
           allowed_values: null
           description: When the order was placed.
         due_date:
-          physical_name: due_date
           type: date
           nullable: false
           allowed_values: null
           description: When the order is due.
         status:
-          physical_name: status
           type: string
           nullable: false
           allowed_values: [COMPLETE, IN_PROGRESS]
           description: COMPLETE or IN_PROGRESS.
         current_stage:
-          physical_name: current_stage
           type: string
           nullable: false
           allowed_values: [ORDERED, KNITTING, ASSEMBLY, WASHING, PACKING, COMPLETE]
@@ -72,54 +64,42 @@ data_definition:
                        has been placed but has not started knitting. Production proceeds
                        through KNITTING → ASSEMBLY → WASHING → PACKING, followed by COMPLETE.
         last_activity_date:
-          physical_name: last_activity_date
           type: date
           nullable: false
           allowed_values: null
-          description: Last activity date in the source orders data. In generated historical
-                       snapshots, this field is interpreted as the date the order entered its
-                       current stage. For ORDERED rows, it is the order date.
+          description: Date the order entered its current stage. For ORDERED rows, it is the order date.
         completed_date:
-          physical_name: completed_date
           type: date
           nullable: true
           allowed_values: null
           description: When it finished; blank if still in progress.
         days_late:
-          physical_name: days_late
           type: integer
           nullable: true
           allowed_values: null
           description: completed_date minus due_date; negative means early; blank if in progress.
 
     production_log:
-      physical_name: production_log
-      source: production_log.csv
       grain: One row is one stage on one calendar day (factory-wide).
-      description: Daily factory output by stage. Not per order; no order_id.
+      description: Daily factory output by stage. Factory-wide totals, not attributed to a single order.
       columns:
         date:
-          physical_name: date
           type: date
           nullable: false
           allowed_values: null
           description: The calendar day.
         stage:
-          physical_name: stage
           type: string
           nullable: false
           allowed_values: [KNITTING, ASSEMBLY, WASHING, PACKING]
           description: Which of the four factory stages this daily total belongs to.
         pieces_completed:
-          physical_name: pieces_completed
           type: integer
           nullable: false
           allowed_values: null
           description: Garments finished at that stage that day.
 
     workshops:
-      physical_name: workshops
-      source: workshops.csv
       grain: One row is one outside workshop. Not a log of past jobs.
       description: >
         Eight subcontract shops SweaterCo can send extra work to when the
@@ -128,29 +108,24 @@ data_definition:
         actually sent out.
       columns:
         workshop_id:
-          physical_name: workshop_id
           type: string
           nullable: false
           allowed_values: null
           description: Stable id, W1–W8. Use this in traces, not the nickname.
         name:
-          physical_name: name
           type: string
           nullable: false
           allowed_values: null
           description: Display name (e.g. QuickStitch). Same workshop as workshop_id.
         capacity_pieces_per_day:
-          physical_name: capacity_pieces_per_day
           type: number
           nullable: false
           allowed_values: null
           description: >
             How many garments this shop can finish in one working day if it
             is free (W1=300, W4=70). Feasibility multiplies this by usable
-            days. It is not factory in-house throughput (that comes from
-            production_log).
+            days. It is not the factory's own in-house throughput.
         pickup_lead_days:
-          physical_name: pickup_lead_days
           type: number
           nullable: false
           allowed_values: null
@@ -160,7 +135,6 @@ data_definition:
             and lead=4 means only 6 days are left before subtracting their
             existing queue. Not the same as current_queue_days.
         defect_rate:
-          physical_name: defect_rate
           type: number
           nullable: false
           allowed_values: null
@@ -169,7 +143,6 @@ data_definition:
             Feasibility keeps only (1 − defect_rate) of daily capacity.
             Not a count of past defective batches.
         cost_per_piece:
-          physical_name: cost_per_piece
           type: number
           nullable: false
           allowed_values: null
@@ -178,27 +151,22 @@ data_definition:
             the brand customer pays us. Cannot answer revenue or selling
             price. MVP feasibility does not use this number in the verdict.
         makes:
-          physical_name: makes
           type: string
           nullable: false
           allowed_values: [TOPS, ACCESSORIES, TOPS+ACCESSORIES]
           description: >
             Product families this shop’s machines can make. TOPS = sweaters
             / hoodies / vests etc.; ACCESSORIES = beanies / scarves;
-            TOPS+ACCESSORIES = both. A hoodie order only uses shops whose
-            makes includes TOPS. Different from orders.category (that is
-            on the customer order, not the shop).
+            TOPS+ACCESSORIES = both. A hoodie job only uses shops whose
+            makes includes TOPS. This is shop equipment, not a customer-order label.
         status:
-          physical_name: status
           type: string
           nullable: false
           allowed_values: [ACTIVE, SUSPENDED]
           description: >
             ACTIVE = allowed to take new work. SUSPENDED = failed a quality
-            audit; check_feasibility ignores it (W7 OldMill). Different
-            meaning from orders.status (COMPLETE / IN_PROGRESS).
+            audit; check_feasibility ignores it (W7 OldMill).
         max_batch_pieces:
-          physical_name: max_batch_pieces
           type: number
           nullable: true
           allowed_values: null
@@ -207,7 +175,6 @@ data_definition:
             Only W8 FreshStart has 300 (trial shop). Feasibility then takes
             min(estimated output, this cap). Not daily capacity.
         current_queue_days:
-          physical_name: current_queue_days
           type: number
           nullable: false
           allowed_values: null
@@ -218,7 +185,6 @@ data_definition:
             due-date window together with pickup_lead_days. Snapshot, not a
             live queue table.
         notes:
-          physical_name: notes
           type: string
           nullable: true
           allowed_values: null
@@ -227,6 +193,42 @@ data_definition:
             Do not treat it as a hidden number or as permission to invent
             capacity.
 
+    order_daily_snapshot:
+      grain: One row is one order entering one lifecycle stage (an event, not a daily snapshot).
+      description: >
+        Derived stage-event table for historical as-of reconstruction.
+        One order may have several rows as it moves ORDERED → KNITTING →
+        ASSEMBLY → WASHING → PACKING → COMPLETE. To read the order on
+        calendar day D, take that order_id's latest row whose date is still ≤ D.
+      columns:
+        order_id:
+          type: string
+          nullable: false
+          allowed_values: null
+          description: Order identifier, ORD-001 … ORD-120.
+        status:
+          type: string
+          nullable: false
+          allowed_values: [COMPLETE, IN_PROGRESS]
+          description: >
+            Order status at this event. IN_PROGRESS until the order finishes;
+            COMPLETE only on the completion event.
+        stage:
+          type: string
+          nullable: false
+          allowed_values: [ORDERED, KNITTING, ASSEMBLY, WASHING, PACKING, COMPLETE]
+          description: >
+            Lifecycle stage this event entered. ORDERED = placed but not yet
+            knitting. Then KNITTING → ASSEMBLY → WASHING → PACKING, then COMPLETE.
+        date:
+          type: date
+          nullable: false
+          allowed_values: null
+          description: >
+            Date the order entered this stage. For ORDERED, this is the order
+            date. For COMPLETE, this is the completed date. For production
+            stages, this is the reconstructed stage-start date.
+
 term_definition:
   # Special vocabulary only. Copy this shape when adding jargon.
   terms:
@@ -234,7 +236,7 @@ term_definition:
       description: Business clock is 2026-04-01. Do not use the computer date.
     selling_price:
       in_dataset: false
-      description: Not a stored field. Do not treat workshops.cost_per_piece as a garment selling price.
+      description: Not a stored field. What we pay an outside shop per garment is not a selling price.
     overdue:
       in_dataset: false
       computed_in: backend.services.calculations
