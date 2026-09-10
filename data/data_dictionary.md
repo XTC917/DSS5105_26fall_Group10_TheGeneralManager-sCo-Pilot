@@ -8,8 +8,9 @@ Three small, clean CSV files. There are no missing values, no joins to figure ou
 traps — every number can be taken at face value. The data is deliberately not the challenge.
 
 "Today" in the dataset is **2026-04-01**; the files cover the 90 days before it. The factory
-is closed on Sundays. Garments move through four stages:
-**KNITTING → ASSEMBLY → WASHING → PACKING**.
+is closed on Sundays. Before production begins, an order is in the **ORDERED** state.
+It then moves through four production stages:
+**KNITTING → ASSEMBLY → WASHING → PACKING**, followed by **COMPLETE**.
 
 | File | Rows | One row is |
 |---|---|---|
@@ -27,7 +28,7 @@ is closed on Sundays. Garments move through four stages:
 | `pieces` | How many garments |
 | `order_date`, `due_date` | When it was placed and when it is due |
 | `status` | `COMPLETE` or `IN_PROGRESS` |
-| `current_stage` | `KNITTING` / `ASSEMBLY` / `WASHING` / `PACKING` / `COMPLETE` |
+| `current_stage` | `ORDERED` / `KNITTING` / `ASSEMBLY` / `WASHING` / `PACKING` / `COMPLETE` |
 | `last_activity_date` | The last day any work was recorded on this order |
 | `completed_date` | When it finished (blank if still in progress) |
 | `days_late` | `completed_date − due_date`; negative means early; blank if in progress |

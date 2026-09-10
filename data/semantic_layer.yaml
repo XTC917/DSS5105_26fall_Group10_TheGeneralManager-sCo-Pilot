@@ -67,14 +67,18 @@ data_definition:
           physical_name: current_stage
           type: string
           nullable: false
-          allowed_values: [KNITTING, ASSEMBLY, WASHING, PACKING, COMPLETE]
-          description: four different stages of production, the order is KNITTING → ASSEMBLY → WASHING → PACKING. 
+          allowed_values: [ORDERED, KNITTING, ASSEMBLY, WASHING, PACKING, COMPLETE]
+          description: Current lifecycle stage of the order. ORDERED means the order
+                       has been placed but has not started knitting. Production proceeds
+                       through KNITTING → ASSEMBLY → WASHING → PACKING, followed by COMPLETE.
         last_activity_date:
           physical_name: last_activity_date
           type: date
           nullable: false
           allowed_values: null
-          description: Last day any work was recorded on this order.
+          description: Last activity date in the source orders data. In generated historical
+                       snapshots, this field is interpreted as the date the order entered its
+                       current stage. For ORDERED rows, it is the order date.
         completed_date:
           physical_name: completed_date
           type: date
