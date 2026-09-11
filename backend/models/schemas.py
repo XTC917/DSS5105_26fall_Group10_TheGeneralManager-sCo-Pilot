@@ -26,6 +26,21 @@ class ToolTrace(BaseModel):
     basis: str | None = None
 
 
+class ConfirmActionRequest(BaseModel):
+    action: dict[str, Any] = Field(..., description="proposed_action object from a chat turn")
+
+
+class ConfirmActionResponse(BaseModel):
+    ok: bool
+    type: str | None = None
+    tool: str | None = None
+    summary: str | None = None
+    data: dict[str, Any] = Field(default_factory=dict)
+    error: dict[str, Any] | None = None
+    trace: dict[str, Any] | None = None
+    declined: bool | None = None
+
+
 class ChatResponse(BaseModel):
     answer: str
     conversation_id: str

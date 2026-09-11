@@ -1,7 +1,7 @@
 {
   "meta": {
     "name": "Track 1 development evaluation set",
-    "version": "0.2.0",
+    "version": "0.4.0",
     "factory_today": "2026-04-01",
     "usage": "development",
     "warning": "This file is used while building the system. Do not present it later as an unbiased held-out test. A separate held-out set should be created before claiming official accuracy.",
@@ -538,49 +538,290 @@
       "id": "Q030",
       "question": "Draft a chase-up email for ORD-120.",
       "category": "action",
-      "expected_behavior": "not_implemented",
-      "expected_answer": "Say the action is not implemented. Do not claim an email was drafted or sent. Future actions need confirmation and an audit log.",
+      "expected_behavior": "answer",
+      "expected_answer": "Prepare a draft from ORD-120 fields. Say clearly that the email was not sent (no SMTP).",
       "expected_result": {
-        "tools_used": [],
-        "routing_intent": "action_not_implemented"
+        "tool": "draft_chase_email",
+        "invoke": {"order_id": "ORD-120"},
+        "sent": false,
+        "order_id": "ORD-120"
       },
-      "verification_method": "deterministic_routing",
-      "relevant_tool": null,
-      "expected_tools": [],
+      "verification_method": "deterministic_action",
+      "relevant_tool": "draft_chase_email",
+      "expected_tools": ["draft_chase_email"],
       "used_during_development": true,
-      "notes": "Action placeholder. No side effect."
+      "notes": "Development question. Local draft only; nothing is emailed."
     },
     {
       "id": "Q031",
       "question": "Add a note to ORD-107.",
       "category": "action",
-      "expected_behavior": "not_implemented",
-      "expected_answer": "Not implemented. Do not save a note.",
+      "expected_behavior": "answer",
+      "expected_answer": "Propose the note. Do not save it until the manager confirms. Do not claim it was emailed.",
       "expected_result": {
-        "tools_used": [],
-        "routing_intent": "action_not_implemented"
+        "tool": "add_order_note",
+        "invoke": {"order_id": "ORD-107", "note": "Follow up on packing", "confirmed": false},
+        "saved": false,
+        "order_id": "ORD-107"
       },
-      "verification_method": "deterministic_routing",
-      "relevant_tool": null,
-      "expected_tools": [],
+      "verification_method": "deterministic_action",
+      "relevant_tool": "add_order_note",
+      "expected_tools": ["add_order_note"],
       "used_during_development": true,
-      "notes": "Action placeholder."
+      "notes": "Development question. Default is propose-only."
     },
     {
       "id": "Q032",
       "question": "Create a reminder to check ORD-005 tomorrow.",
       "category": "action",
-      "expected_behavior": "not_implemented",
-      "expected_answer": "Not implemented. Do not create a reminder.",
+      "expected_behavior": "answer",
+      "expected_answer": "Propose a local reminder for factory tomorrow 2026-04-02. Do not claim a notification was sent.",
+      "expected_result": {
+        "tool": "create_reminder",
+        "invoke": {
+          "order_id": "ORD-005",
+          "remind_on": "2026-04-02",
+          "message": "Check stall status",
+          "confirmed": false
+        },
+        "saved": false,
+        "order_id": "ORD-005",
+        "remind_on": "2026-04-02"
+      },
+      "verification_method": "deterministic_action",
+      "relevant_tool": "create_reminder",
+      "expected_tools": ["create_reminder"],
+      "used_during_development": true,
+      "notes": "Development question. Factory tomorrow is 2026-04-02. No push notification."
+    },
+    {
+      "id": "Q033",
+      "question": "Give me this morning's briefing.",
+      "category": "briefing",
+      "expected_behavior": "answer",
+      "expected_answer": "Summarize structured briefing facts: at-risk orders (same 10 as get_orders_at_risk), WIP by stage, last working day output, any stage drop vs the 30-day median, suspended workshops. Do not invent revenue or workers.",
+      "expected_result": {
+        "factory_today": "2026-04-01",
+        "at_risk_count": 10,
+        "order_ids": ["ORD-002", "ORD-005", "ORD-020", "ORD-029", "ORD-055", "ORD-083", "ORD-093", "ORD-107", "ORD-114", "ORD-120"],
+        "suspended_workshop_id": "W7"
+      },
+      "verification_method": "deterministic_briefing",
+      "relevant_tool": "get_morning_briefing",
+      "expected_tools": ["get_morning_briefing"],
+      "used_during_development": true,
+      "notes": "Development question. Risk set reused from get_orders_at_risk."
+    },
+    {
+      "id": "Q034",
+      "question": "List the TrendCart orders.",
+      "category": "discovery",
+      "expected_behavior": "answer",
+      "expected_answer": "Return all 17 TrendCart orders. Do not silently pick ORD-120.",
+      "expected_result": {
+        "customer": "TrendCart",
+        "count": 17,
+        "min_count": 2,
+        "must_include_ids": ["ORD-120"]
+      },
+      "verification_method": "deterministic_find_orders",
+      "relevant_tool": "find_orders",
+      "expected_tools": ["find_orders"],
+      "used_during_development": true,
+      "notes": "Development question. Distinct from Q002 which asks how 'the' TrendCart order is doing."
+    },
+    {
+      "id": "Q035",
+      "question": "Which orders are currently in ASSEMBLY?",
+      "category": "discovery",
+      "expected_behavior": "answer",
+      "expected_answer": "List the 10 orders whose current_stage is ASSEMBLY.",
+      "expected_result": {
+        "current_stage": "ASSEMBLY",
+        "count": 10
+      },
+      "verification_method": "deterministic_find_orders",
+      "relevant_tool": "find_orders",
+      "expected_tools": ["find_orders"],
+      "used_during_development": true,
+      "notes": "Development question. Stage filter on orders.csv."
+    },
+    {
+      "id": "Q036",
+      "question": "Find the hoodie orders.",
+      "category": "discovery",
+      "expected_behavior": "answer",
+      "expected_answer": "hoodies maps to Hoodie in orders.csv. Return all 26 Hoodie rows.",
+      "expected_result": {
+        "product": "hoodies",
+        "matched_product": "Hoodie",
+        "count": 26
+      },
+      "verification_method": "deterministic_find_orders",
+      "relevant_tool": "find_orders",
+      "expected_tools": ["find_orders"],
+      "used_during_development": true,
+      "notes": "Development question. Plural mapping of a name already in orders.csv."
+    },
+    {
+      "id": "Q037",
+      "question": "Find orders for NoSuchBuyer.",
+      "category": "discovery",
+      "expected_behavior": "answer",
+      "expected_answer": "No matching rows. Do not invent a customer.",
+      "expected_result": {
+        "customer": "NoSuchBuyer",
+        "count": 0
+      },
+      "verification_method": "deterministic_find_orders",
+      "relevant_tool": "find_orders",
+      "expected_tools": ["find_orders"],
+      "used_during_development": true,
+      "notes": "Development question. Empty-result lookup."
+    },
+    {
+      "id": "Q038",
+      "question": "What should I be concerned about right now?",
+      "category": "discovery",
+      "expected_behavior": "answer",
+      "expected_answer": "Call discover_factory_issues. Copy the ranked top 5: overdue orders first (ORD-107, ORD-120, ORD-083, ORD-114, ORD-002). Do not rerank. Do not invent issues.",
+      "expected_result": {
+        "limit": 5,
+        "returned_count": 5,
+        "total_found": 11,
+        "issue_ids": [
+          "order:ORD-107",
+          "order:ORD-120",
+          "order:ORD-083",
+          "order:ORD-114",
+          "order:ORD-002"
+        ],
+        "must_include_order_ids": ["ORD-107", "ORD-120"],
+        "must_include_issue_types": ["ORDER_OVERDUE"],
+        "counts_by_type": {
+          "ORDER_OVERDUE": 8,
+          "ORDER_STALLED": 1,
+          "ORDER_TIGHT_DUE": 1,
+          "STAGE_BELOW_BASELINE": 1
+        }
+      },
+      "verification_method": "deterministic_ranked_discovery",
+      "relevant_tool": "discover_factory_issues",
+      "expected_tools": ["discover_factory_issues"],
+      "used_during_development": true,
+      "notes": "Development question. Ranked discovery V1; Python sorts, LLM must not rerank."
+    },
+    {
+      "id": "Q039",
+      "question": "What are the biggest issues in the factory?",
+      "category": "discovery",
+      "expected_behavior": "answer",
+      "expected_answer": "Same ranked discovery as Q038. Top 5 by Python priority.",
+      "expected_result": {
+        "limit": 5,
+        "returned_count": 5,
+        "total_found": 11,
+        "issue_ids": [
+          "order:ORD-107",
+          "order:ORD-120",
+          "order:ORD-083",
+          "order:ORD-114",
+          "order:ORD-002"
+        ]
+      },
+      "verification_method": "deterministic_ranked_discovery",
+      "relevant_tool": "discover_factory_issues",
+      "expected_tools": ["discover_factory_issues"],
+      "used_during_development": true,
+      "notes": "Development question. Ranked discovery V1."
+    },
+    {
+      "id": "Q040",
+      "question": "What should the GM pay attention to today?",
+      "category": "discovery",
+      "expected_behavior": "answer",
+      "expected_answer": "discover_factory_issues, not get_morning_briefing. Copy tool numbers.",
+      "expected_result": {
+        "limit": 5,
+        "returned_count": 5,
+        "total_found": 11
+      },
+      "verification_method": "deterministic_ranked_discovery",
+      "relevant_tool": "discover_factory_issues",
+      "expected_tools": ["discover_factory_issues"],
+      "used_during_development": true,
+      "notes": "Development question. Distinct from Q033 morning briefing."
+    },
+    {
+      "id": "Q041",
+      "question": "Find the top 5 factory issues.",
+      "category": "discovery",
+      "expected_behavior": "answer",
+      "expected_answer": "discover_factory_issues with limit 5. Five issues, overdue first.",
+      "expected_result": {
+        "limit": 5,
+        "returned_count": 5,
+        "total_found": 11,
+        "issue_ids": [
+          "order:ORD-107",
+          "order:ORD-120",
+          "order:ORD-083",
+          "order:ORD-114",
+          "order:ORD-002"
+        ]
+      },
+      "verification_method": "deterministic_ranked_discovery",
+      "relevant_tool": "discover_factory_issues",
+      "expected_tools": ["discover_factory_issues"],
+      "used_during_development": true,
+      "notes": "Development question. Explicit top-5 request."
+    },
+    {
+      "id": "Q042",
+      "question": "Are there any production stages performing below baseline?",
+      "category": "discovery",
+      "expected_behavior": "answer",
+      "expected_answer": "Yes: ASSEMBLY last working day 455 vs 30-day median 758 (ratio 0.6, threshold 0.70). production_log is factory-wide, not per order.",
+      "expected_result": {
+        "limit": 20,
+        "must_include_issue_types": ["STAGE_BELOW_BASELINE"],
+        "must_include_stage": "ASSEMBLY",
+        "counts_by_type": {
+          "ORDER_OVERDUE": 8,
+          "ORDER_STALLED": 1,
+          "ORDER_TIGHT_DUE": 1,
+          "STAGE_BELOW_BASELINE": 1
+        }
+      },
+      "verification_method": "deterministic_ranked_discovery",
+      "relevant_tool": "discover_factory_issues",
+      "expected_tools": ["discover_factory_issues"],
+      "used_during_development": true,
+      "notes": "Development question. Stage rule reused from morning briefing. Default top-5 is all overdue, so this gold uses limit=20."
+    },
+    {
+      "id": "Q043",
+      "question": "What is the revenue from TrendCart?",
+      "category": "unanswerable",
+      "expected_behavior": "decline",
+      "expected_answer": "Decline. No revenue field. Do not call discover_factory_issues or any other tool.",
       "expected_result": {
         "tools_used": [],
-        "routing_intent": "action_not_implemented"
+        "must_mention": ["revenue", "selling-price"],
+        "must_not_match_currency": true
       },
       "verification_method": "deterministic_routing",
       "relevant_tool": null,
       "expected_tools": [],
+      "forbidden_tools": [
+        "discover_factory_issues",
+        "find_orders",
+        "get_order_status",
+        "get_orders_at_risk",
+        "check_feasibility"
+      ],
       "used_during_development": true,
-      "notes": "Action placeholder."
+      "notes": "Development question. Discovery must not be a fallback for unsupported fields."
     }
   ]
 }

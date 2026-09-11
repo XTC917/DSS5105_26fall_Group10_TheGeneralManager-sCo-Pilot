@@ -1,0 +1,61 @@
+﻿  current_database  | current_user
+--------------------+---------------
+ factory_copilot_db | factory_agent
+(1 row)
+
+ can_connect | can_use_app_schema | can_use_admin_meta_schema | can_create_in_app_schema | can_create_in_admin_meta_schema
+-------------+--------------------+---------------------------+--------------------------+---------------------------------
+ t           | t                  | f                         | f                        | f
+(1 row)
+
+ schemaname |   tablename    | can_select | can_insert | can_update | can_delete | can_truncate
+------------+----------------+------------+------------+------------+------------+--------------
+ admin_meta | data_sources   | f          | f          | f          | f          | f
+ admin_meta | import_details | f          | f          | f          | f          | f
+ admin_meta | upload_history | f          | f          | f          | f          | f
+ app        | orders         | t          | f          | f          | f          | f
+ app        | production_log | t          | f          | f          | f          | f
+ app        | snapshot       | t          | f          | f          | f          | f
+ app        | workshops      | t          | f          | f          | f          | f
+(7 rows)
+
+ readable_order_rows
+---------------------
+                 120
+(1 row)
+
+ can_use_upload_history_sequence
+---------------------------------
+ f
+(1 row)
+
+=== Negative test: admin_meta data SELECT must fail ===
+psql:sql/06_readonly_permission_test.sql:111: NOTICE:  TEST PASSED: admin_meta data SELECT was denied
+DO
+=== Negative test: INSERT must fail ===
+psql:sql/06_readonly_permission_test.sql:138: NOTICE:  TEST PASSED: INSERT was denied
+DO
+=== Negative test: UPDATE must fail ===
+psql:sql/06_readonly_permission_test.sql:159: NOTICE:  TEST PASSED: UPDATE was denied
+DO
+=== Negative test: DELETE must fail ===
+psql:sql/06_readonly_permission_test.sql:179: NOTICE:  TEST PASSED: DELETE was denied
+DO
+=== Negative test: TRUNCATE must fail ===
+psql:sql/06_readonly_permission_test.sql:198: NOTICE:  TEST PASSED: TRUNCATE was denied
+DO
+=== Negative test: CREATE TABLE must fail ===
+psql:sql/06_readonly_permission_test.sql:219: NOTICE:  TEST PASSED: CREATE TABLE was denied
+DO
+=== Negative test: DROP TABLE must fail ===
+psql:sql/06_readonly_permission_test.sql:238: NOTICE:  TEST PASSED: DROP TABLE was denied
+DO
+=== All seven permission-denial tests passed ===
+=== Final integrity check ===
+   table_name   | row_count
+----------------+-----------
+ orders         |       120
+ production_log |       360
+ snapshot       |       223
+ workshops      |        11
+(4 rows)

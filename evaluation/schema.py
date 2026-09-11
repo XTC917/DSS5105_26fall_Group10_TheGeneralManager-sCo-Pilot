@@ -23,6 +23,8 @@ CATEGORIES = {
     "hallucination_bait",
     "feasibility",
     "action",
+    "briefing",
+    "discovery",
 }
 
 BEHAVIORS = {

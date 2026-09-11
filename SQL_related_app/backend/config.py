@@ -1,0 +1,161 @@
+import os
+import re
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+BACKEND_DIR = Path(__file__).resolve().parent
+load_dotenv(BACKEND_DIR / ".env")
+
+_IDENT_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+class Config:
+    PG_HOST = os.getenv("PGHOST", "localhost")
+    PG_PORT = int(os.getenv("PGPORT", "5432"))
+    PG_DATABASE = os.getenv("PGDATABASE", "factory_copilot_db")
+    PG_USER = os.getenv("PGUSER", "")
+    PG_PASSWORD = os.getenv("PGPASSWORD", "")
+    PG_ADMIN_USER = os.getenv("PG_ADMIN_USER", "")
+    PG_ADMIN_PASSWORD = os.getenv("PG_ADMIN_PASSWORD", "")
+    PG_SCHEMA = os.getenv("PGSCHEMA", "app")
+    PG_CONNECT_TIMEOUT = int(os.getenv("PGCONNECT_TIMEOUT", "5"))
+
+    UPLOAD_DIR = BACKEND_DIR / "uploads"
+    MAX_FILE_SIZE = 100 * 1024 * 1024
+    ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
+    BATCH_SIZE = 1000
+
+    UPLOAD_TABLES = ("orders", "production_log", "workshops")
+    QUERY_CONTEXT_TABLES = UPLOAD_TABLES + ("snapshot",)
+
+    FILE_TABLE_MAPPING = {
+        "orders.csv": "orders",
+        "production_log.csv": "production_log",
+        "workshops.csv": "workshops",
+    }
+
+    DATA_SOURCES = {
+        "orders": {
+            "source_name": "Orders",
+            "original_file": "orders.csv",
+            "description": "Customer order information, includes TOPS and ACCESSORIES categories",
+        },
+        "production_log": {
+            "source_name": "Production Log",
+            "original_file": "production_log.csv",
+            "description": "Daily production output by stage",
+        },
+        "workshops": {
+            "source_name": "Workshops",
+            "original_file": "workshops.csv",
+            "description": "External workshop capacity and cost information",
+        },
+    }
+
+    QUERY_CONTEXT_DESCRIPTIONS = {
+        "orders": "Current customer order information",
+        "production_log": "Current daily production output by stage",
+        "workshops": "Current workshop capacity and category information",
+        "snapshot": (
+            "Accumulated distinct order states from the initial seed "
+            "and subsequent successful orders uploads"
+        ),
+    }
+
+    TABLE_SCHEMAS = {
+        "orders": {
+            "columns": [
+                "order_id",
+                "customer",
+                "product",
+                "category",
+                "pieces",
+                "order_date",
+                "due_date",
+                "status",
+                "current_stage",
+                "last_activity_date",
+                "completed_date",
+                "days_late",
+            ],
+            "date_columns": [
+                "order_date",
+                "due_date",
+                "last_activity_date",
+                "completed_date",
+            ],
+            "int_columns": ["pieces", "days_late"],
+            "float_columns": [],
+            "nullable_columns": ["completed_date", "days_late"],
+            "column_mapping": {},
+        },
+        "production_log": {
+            "columns": ["date", "stage", "pieces_completed"],
+            "date_columns": ["date"],
+            "int_columns": ["pieces_completed"],
+            "float_columns": [],
+            "nullable_columns": [],
+            "column_mapping": {"date": "production_date",},
+        },
+        "workshops": {
+            "columns": [
+                "workshop_id",
+                "name",
+                "capacity_pieces_per_day",
+                "pickup_lead_days",
+                "defect_rate",
+                "cost_per_piece",
+                "makes",
+                "status",
+                "max_batch_pieces",
+                "current_queue_days",
+                "notes",
+            ],
+            "date_columns": [],
+            "int_columns": [
+                "capacity_pieces_per_day",
+                "pickup_lead_days",
+                "max_batch_pieces",
+            ],
+            "float_columns": [
+                "defect_rate",
+                "cost_per_piece",
+                "current_queue_days",
+            ],
+            "nullable_columns": ["max_batch_pieces"],
+            "column_mapping": {},
+        },
+    }
+
+
+def assert_upload_table(table_name: str) -> str:
+    if not table_name or table_name not in Config.UPLOAD_TABLES:
+        allowed = ", ".join(Config.UPLOAD_TABLES)
+        raise ValueError(f"table_name must be one of: {allowed}")
+    return table_name
+
+
+def get_database_columns(table_name: str) -> list[str]:
+    table_name = assert_upload_table(table_name)
+    schema = Config.TABLE_SCHEMAS[table_name]
+    mapping = schema.get("column_mapping", {})
+
+    return [mapping.get(column, column) for column in schema["columns"]]
+
+
+def quote_ident(name: str) -> str:
+    if not _IDENT_RE.match(name):
+        raise ValueError(f"Invalid identifier: {name}")
+    return f'"{name}"'
+
+
+def quote_table(table_name: str) -> str:
+    return quote_ident(assert_upload_table(table_name))
+
+
+def quote_column(table_name: str, column: str) -> str:
+    schema = Config.TABLE_SCHEMAS[assert_upload_table(table_name)]
+    if column not in schema["columns"]:
+        raise ValueError(f"Unknown column {column} for table {table_name}")
+    return quote_ident(column)

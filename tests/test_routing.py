@@ -5,12 +5,7 @@ from __future__ import annotations
 import re
 
 from backend.agent.graph import run_agent
-from backend.agent.routing import (
-    ACTION_NOT_IMPLEMENTED,
-    PROCEED,
-    UNSUPPORTED,
-    route_query,
-)
+from backend.agent.routing import PROCEED, UNSUPPORTED, route_query
 
 
 def test_revenue_question_is_unsupported():
@@ -41,18 +36,24 @@ def test_in_scope_questions_are_not_short_circuited():
         "Can we take 800 hoodies by August 25?",
         "Why is ORD-120 at risk?",
         "What stage is ORD-120 in?",
+        "Give me this morning's briefing",
+        "List the TrendCart orders",
+        "What should I be concerned about right now?",
+        "Draft a chase-up email for ORD-120.",
+        "Add a note to ORD-107.",
+        "Create a reminder to check ORD-005 tomorrow.",
     ):
         decision = route_query(text)
         assert decision.intent == PROCEED, text
         assert decision.short_circuit is False, text
 
 
-def test_worker_and_action_short_circuit():
+def test_worker_still_unsupported_actions_proceed():
     workers = route_query("Who is working on ORD-107?")
     assert workers.intent == UNSUPPORTED
     action = route_query("Draft a chase-up email for ORD-120.")
-    assert action.intent == ACTION_NOT_IMPLEMENTED
-    assert "not been sent" in action.answer.lower() or "not implemented" in action.answer.lower()
+    assert action.intent == PROCEED
+    assert action.short_circuit is False
 
 
 def test_hallucination_bait_does_not_confirm_amount(monkeypatch):

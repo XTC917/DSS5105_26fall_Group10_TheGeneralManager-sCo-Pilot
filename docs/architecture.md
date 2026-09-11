@@ -22,15 +22,21 @@ Manager (React UI)
  FastAPI  /api/chat
         │
         ▼
- Inspectable router  ── unsupported / action-not-implemented ──► answer, no tools
+ Inspectable router  ── unsupported ──► answer, no tools
         │
         ▼
  LangGraph ReAct agent
         │
         ├── get_order_status      (retrieval)
         ├── get_orders_at_risk    (retrieval)
+        ├── get_morning_briefing  (structured briefing)
+        ├── find_orders           (user-directed discovery)
+        ├── discover_factory_issues (ranked discovery)
         ├── trace_order           (tracing)
-        └── check_feasibility     (judgement)
+        ├── check_feasibility     (judgement)
+        ├── draft_chase_email / send_email / add_order_note / create_reminder
+        ├── create_watch / list_watches / cancel_watch
+        └── get_recent_actions    (audit read)
                 │
                 ▼
          services/  (SQLite + calculations)
@@ -63,7 +69,7 @@ can open `data/factory.db` in any viewer. Rebuilt from CSV on every API startup.
 
 ## Agent
 
-`langgraph.prebuilt.create_react_agent` with four tools and a `MemorySaver`
+`langgraph.prebuilt.create_react_agent` with the registered tools and a `MemorySaver`
 so one `conversation_id` keeps multi-turn context (e.g. "the first one").
 The API reports **only the tools used after the latest user message**. A
 feasibility answer must not list retrieval tools left over from earlier
@@ -77,6 +83,7 @@ Any OpenAI-compatible endpoint works (`OPENAI_BASE_URL` + `LLM_MODEL`).
 
 ## Evaluation vs unit tests
 
+
 | | `tests/` (pytest) | `evaluation/` |
 |---|---|---|
 | Purpose | Regression for tools, routing, API | Formal Track 1 case set |
@@ -87,17 +94,40 @@ Do not present scores on `evaluation/questions.json` as a held-out official
 accuracy number. The runner reports **data/tool accuracy** and **final-answer
 quality** separately. See `evaluation/README.md`.
 
-Side-effecting actions (email, notes, reminders) are not implemented. When they
-are added they must follow: propose → confirm → execute → audit log.
+Side-effecting actions follow: propose → UI Confirm click → local execute → audit log.
+The agent only proposes (`confirmed=false`). `POST /api/actions/confirm` runs the
+whitelisted tool with `confirmed=true` and does **not** call the LLM. Dismiss
+(`POST /api/actions/decline`) writes an audit row and saves nothing. Chat “yes”
+still works as a fallback. There is no SMTP. Confirmed "send email" writes a
+**simulated** audit row and still reports `sent: false`. Notes, reminders, and
+standing watches persist in `copilot_state.db`, which is separate from
+`factory.db` so CSV reload does not wipe them.
 
-## What is intentionally missing (MVP)
+**Reminders vs standing watches:** `create_reminder` stores a calendar note
+(`remind_on` + free-text message). Python does **not** evaluate that message.
+`create_watch` stores a typed condition (`ORDER_INACTIVE_BY_DATE`). Python
+evaluates it when `GET /api/watches?as_of=YYYY-MM-DD` runs. There is no
+scheduler and no `date.today()` — callers pass a factory `as_of` date
+(default `FACTORY_TODAY`). `cancel_watch` sets `status=CANCELLED` after
+confirmation — the row is **not deleted**, so `list_watches` can still answer
+"was there a watch?". ACTIVE stops evaluating; FIRED leaves the live alerts
+list and appears under cancelled history. A
+`WatchNotifier` protocol delivers alerts after the watch is already `FIRED`;
+V1 only has `LocalWatchNotifier`. Email would plug in later without changing
+the condition.
 
-Placeholders only — do not implement until we agree the next slice:
+**Ranked vs filtered discovery:** `find_orders` only applies the manager's
+filters. `discover_factory_issues` walks defined Python rules (order risk +
+stage-below-baseline), assigns priority, and returns Top N. It is read-only
+and is not a general anomaly detector. `GET /api/discovery?limit=5` exposes
+the same service as the tool.
 
-- Morning briefing / `discover_factory_issues`
-- Email, notes, reminders, audit log
-- `assess_stage_performance`
-- Confirmation UI for side-effecting actions
+## What is intentionally missing
+
+- `assess_stage_performance` (beyond the briefing/discovery last-day vs median check)
+- Real email / calendar / push integrations (watches fire as local alerts)
+- A background scheduler (watches evaluate when `/api/watches` is called)
+- Wiring Copilot tools to PostgreSQL `app.snapshot` (agent still reads CSVs / SQLite)
 
 ## Adding a new tool (later)
 

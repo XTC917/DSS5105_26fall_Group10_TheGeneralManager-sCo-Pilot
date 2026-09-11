@@ -1,0 +1,79 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from config import Config
+from db import get_postgres_connection
+from routers import datasource, query, upload
+
+app = FastAPI(
+    title="Factory Data Management System",
+    description=(
+        "CSV/Excel administration and read-only SQL access "
+        "for the PostgreSQL factory database"
+    ),
+    version="1.2.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(upload.router)
+app.include_router(datasource.router)
+app.include_router(query.router)
+
+Config.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@app.get("/")
+async def root():
+    return {
+        "message": "Factory PostgreSQL Data Management API",
+        "version": "1.2.0",
+        "docs": "/docs",
+        "upload_tables": list(Config.UPLOAD_TABLES),
+        "query_context_tables": list(Config.QUERY_CONTEXT_TABLES),
+    }
+
+
+@app.get("/health")
+async def health_check():
+    try:
+        conn = get_postgres_connection()
+        try:
+            row = conn.execute(
+                """
+                SELECT
+                    current_database() AS database_name,
+                    current_user AS login_role
+                """
+            ).fetchone()
+        finally:
+            conn.close()
+        return {
+            "status": "healthy",
+            "backend": "postgresql",
+            "database": row["database_name"],
+            "role": row["login_role"],
+        }
+    except Exception as exc:
+        return {
+            "status": "unhealthy",
+            "backend": "postgresql",
+            "error": str(exc),
+        }
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("main:app", host="127.0.0.1", port=8001, reload=True)

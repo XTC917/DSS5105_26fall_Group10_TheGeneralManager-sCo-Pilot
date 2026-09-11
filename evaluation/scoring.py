@@ -58,7 +58,10 @@ def add_case(
         td["tool_selection_n"] += 1
         if tool_selection_ok:
             td["tool_selection_pass"] += 1
-        if question.get("category") in UNSUPPORTED_CATEGORIES | ACTION_CATEGORIES:
+        if question.get("category") in UNSUPPORTED_CATEGORIES or (
+            question.get("category") in ACTION_CATEGORIES
+            and question.get("expected_tools") == []
+        ):
             td["unsupported_handling_n"] += 1
             if tool_selection_ok:
                 td["unsupported_handling_pass"] += 1

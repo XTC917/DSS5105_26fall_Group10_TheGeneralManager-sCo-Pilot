@@ -12,6 +12,15 @@ from backend.agent.routing import route_query
 from backend.services.calculations import assess_order_risk
 from backend.services.database import get_db
 from backend.services.feasibility import check_feasibility as run_feasibility
+from backend.tools.actions import (
+    add_order_note,
+    create_reminder,
+    draft_chase_email,
+    get_recent_actions,
+    send_email,
+)
+from backend.tools.briefing import get_morning_briefing
+from backend.tools.discovery import discover_factory_issues, find_orders
 from backend.tools.retrieval import get_order_status, get_orders_at_risk
 from backend.tools.tracing import trace_order
 from evaluation.schema import (
@@ -130,6 +139,10 @@ def check_question(question: dict[str, Any]) -> dict[str, Any]:
         "deterministic_trace": _check_trace,
         "deterministic_feasibility": _check_feasibility,
         "deterministic_routing": _check_routing,
+        "deterministic_briefing": _check_briefing,
+        "deterministic_find_orders": _check_find_orders,
+        "deterministic_ranked_discovery": _check_ranked_discovery,
+        "deterministic_action": _check_action,
     }
     handler = handlers.get(method)
     if handler is None:
@@ -289,3 +302,127 @@ def _check_routing(question: dict[str, Any]) -> dict[str, Any]:
     if not decision.short_circuit:
         mismatches.append("router did not short-circuit")
     return {"id": question["id"], "ok": not mismatches, "detail": mismatches or result.get("routing_intent")}
+
+
+def _check_briefing(question: dict[str, Any]) -> dict[str, Any]:
+    expected = question["expected_result"]
+    payload = parse_tool(get_morning_briefing.invoke({}))
+    if not payload.get("ok"):
+        return {"id": question["id"], "ok": False, "detail": payload}
+    data = payload["data"]
+    mismatches: list[str] = []
+    if data.get("factory_today") != expected.get("factory_today"):
+        mismatches.append(f"today {data.get('factory_today')}")
+    if data["at_risk"]["count"] != expected["at_risk_count"]:
+        mismatches.append(f"at_risk {data['at_risk']['count']}")
+    live_ids = {row["order_id"] for row in data["at_risk"]["orders"]}
+    if expected.get("order_ids") and live_ids != set(expected["order_ids"]):
+        mismatches.append(f"ids {sorted(live_ids)}")
+    workshop_id = expected.get("suspended_workshop_id")
+    if workshop_id:
+        found = {row["workshop_id"] for row in data.get("suspended_workshops") or []}
+        if workshop_id not in found:
+            mismatches.append(f"missing workshop {workshop_id}")
+    return {"id": question["id"], "ok": not mismatches, "detail": mismatches or "ok"}
+
+
+def _check_find_orders(question: dict[str, Any]) -> dict[str, Any]:
+    expected = question["expected_result"]
+    args = {
+        key: expected[key]
+        for key in ("customer", "product", "status", "current_stage")
+        if key in expected
+    }
+    payload = parse_tool(find_orders.invoke(args))
+    if expected.get("error_code"):
+        ok = (payload.get("error") or {}).get("code") == expected["error_code"]
+        return {"id": question["id"], "ok": ok, "detail": payload.get("error")}
+    if not payload.get("ok"):
+        return {"id": question["id"], "ok": False, "detail": payload}
+    data = payload["data"]
+    mismatches: list[str] = []
+    if "count" in expected and data["count"] != expected["count"]:
+        mismatches.append(f"count {data['count']}")
+    if expected.get("min_count") and data["count"] < expected["min_count"]:
+        mismatches.append(f"min_count {data['count']}")
+    if expected.get("matched_product") and data.get("filter", {}).get("matched_product") != expected["matched_product"]:
+        mismatches.append(f"matched {data.get('filter')}")
+    if expected.get("must_include_ids"):
+        ids = set(data.get("order_ids") or [])
+        missing = [oid for oid in expected["must_include_ids"] if oid not in ids]
+        if missing:
+            mismatches.append(f"missing ids {missing}")
+    return {"id": question["id"], "ok": not mismatches, "detail": mismatches or data["count"]}
+
+
+def _check_ranked_discovery(question: dict[str, Any]) -> dict[str, Any]:
+    expected = question["expected_result"]
+    limit = expected.get("limit", 5)
+    payload = parse_tool(discover_factory_issues.invoke({"limit": limit}))
+    if not payload.get("ok"):
+        return {"id": question["id"], "ok": False, "detail": payload}
+    data = payload["data"]
+    mismatches: list[str] = []
+    if "returned_count" in expected and data["returned_count"] != expected["returned_count"]:
+        mismatches.append(f"returned {data['returned_count']}")
+    if "total_found" in expected and data["total_found"] != expected["total_found"]:
+        mismatches.append(f"total {data['total_found']}")
+    if expected.get("issue_ids"):
+        live_ids = [row["issue_id"] for row in data["issues"]]
+        if live_ids != expected["issue_ids"]:
+            mismatches.append(f"ids {live_ids}")
+    if expected.get("must_include_order_ids"):
+        live_orders = {row.get("order_id") for row in data["issues"]}
+        missing = [oid for oid in expected["must_include_order_ids"] if oid not in live_orders]
+        if missing:
+            mismatches.append(f"missing orders {missing}")
+    if expected.get("must_include_issue_types"):
+        live_types = {row["issue_type"] for row in data["issues"]}
+        missing = [t for t in expected["must_include_issue_types"] if t not in live_types]
+        if missing:
+            mismatches.append(f"missing types {missing}")
+    if expected.get("must_include_stage"):
+        stages = {row.get("stage") for row in data["issues"]}
+        if expected["must_include_stage"] not in stages:
+            mismatches.append(f"missing stage {expected['must_include_stage']}")
+    expected_counts = expected.get("counts_by_type")
+    if expected_counts:
+        live_counts = data.get("counts_by_type") or {}
+        for key, value in expected_counts.items():
+            if live_counts.get(key) != value:
+                mismatches.append(f"count {key} {live_counts.get(key)}")
+    return {"id": question["id"], "ok": not mismatches, "detail": mismatches or data["returned_count"]}
+
+
+_ACTION_TOOLS = {
+    "draft_chase_email": draft_chase_email,
+    "send_email": send_email,
+    "add_order_note": add_order_note,
+    "create_reminder": create_reminder,
+    "get_recent_actions": get_recent_actions,
+}
+
+
+def _check_action(question: dict[str, Any]) -> dict[str, Any]:
+    expected = question["expected_result"]
+    tool = _ACTION_TOOLS[expected["tool"]]
+    payload = parse_tool(tool.invoke(expected.get("invoke") or {}))
+    if expected.get("error_code"):
+        ok = (payload.get("error") or {}).get("code") == expected["error_code"]
+        return {"id": question["id"], "ok": ok, "detail": payload.get("error")}
+    if not payload.get("ok"):
+        return {"id": question["id"], "ok": False, "detail": payload}
+    data = payload.get("data") or {}
+    mismatches: list[str] = []
+    if "sent" in expected and data.get("sent") is not expected["sent"]:
+        mismatches.append(f"sent {data.get('sent')}")
+    if "saved" in expected and data.get("saved") is not expected["saved"]:
+        mismatches.append(f"saved {data.get('saved')}")
+    order_id = expected.get("order_id")
+    if order_id:
+        blob = str(data)
+        if order_id not in blob:
+            mismatches.append(f"missing {order_id}")
+    if expected.get("remind_on") and data.get("remind_on") != expected["remind_on"]:
+        mismatches.append(f"remind_on {data.get('remind_on')}")
+    return {"id": question["id"], "ok": not mismatches, "detail": mismatches or "ok"}

@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 
 PROCEED = "proceed"
 UNSUPPORTED = "unsupported"
-ACTION_NOT_IMPLEMENTED = "action_not_implemented"
+ACTION_NOT_IMPLEMENTED = "action_not_implemented"  # unused; actions are now registered tools
 
 # Workshop cost_per_piece is in workshops.csv. Do not treat "cost" alone as
 # missing selling-price data.
@@ -81,22 +81,6 @@ _OTHER_MISSING = re.compile(
     re.IGNORECASE | re.VERBOSE,
 )
 
-_ACTION = re.compile(
-    r"""
-    \b(
-        (draft|send|write)\s+(an?\s+)?(chase[- ]up\s+)?emails? |
-        email\s+(the\s+)?(customer|workshop) |
-        chase\s+(them|the\s+customer)\s+up |
-        add\s+(an?\s+)?notes? |
-        create\s+(a\s+)?reminders? |
-        remind\s+me |
-        set\s+(a\s+)?reminder
-    )\b
-    """,
-    re.IGNORECASE | re.VERBOSE,
-)
-
-
 @dataclass
 class RoutingDecision:
     intent: str
@@ -117,20 +101,6 @@ def route_query(message: str) -> RoutingDecision:
             reason="empty_query",
             answer="Please ask a factory operations question.",
             missing=[],
-        )
-
-    if _ACTION.search(text):
-        return RoutingDecision(
-            intent=ACTION_NOT_IMPLEMENTED,
-            short_circuit=True,
-            reason="action_tools_not_in_mvp",
-            answer=(
-                "I cannot do that yet. Email, order notes, and reminders are not "
-                "implemented in this MVP. When they are added, the system will "
-                "propose the action, wait for your explicit confirmation, execute "
-                "it, and write an audit record. Nothing has been sent or saved."
-            ),
-            missing=["action_confirmation_flow", "audit_log"],
         )
 
     if _FINANCIAL.search(text):

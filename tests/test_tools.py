@@ -37,6 +37,12 @@ def test_get_order_status_not_found(db):
     assert payload["error"]["code"] == "NOT_FOUND"
 
 
+def test_get_order_status_product_case_insensitive(db):
+    payload = parse_tool(get_order_status.invoke({"order_id": "ORD-120", "product": "vest"}))
+    assert payload["ok"] is True
+    assert payload["data"]["order"]["product"] == "Vest"
+
+
 def test_get_order_status_requires_filter(db):
     payload = parse_tool(get_order_status.invoke({}))
     assert payload["error"]["code"] == "INVALID_INPUT"

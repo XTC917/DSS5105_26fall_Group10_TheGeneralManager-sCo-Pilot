@@ -9,7 +9,6 @@ from typing import Any
 
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
-from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
@@ -23,12 +22,68 @@ logger = logging.getLogger(__name__)
 _AGENT = None
 _CHECKPOINTER = MemorySaver()
 
+# ---------------------------------------------------------------------------
+# LLM provider switch.
+#
+#   Development (Gemini, default when GOOGLE_API_KEY is set):
+#       LLM_PROVIDER=gemini
+#       LLM_MODEL=gemini-3.6-flash        (current API default; use the exact
+#                                        name shown in AI Studio if it changes)
+#       GOOGLE_API_KEY=AIza...           (from https://aistudio.google.com/app/apikey)
+#
+#   Switch back to GPT (OpenAI-compatible):
+#       LLM_PROVIDER=openai
+#       LLM_MODEL=gpt-4o-mini            (or gpt-5.x once your key supports it)
+#       OPENAI_API_KEY=sk-...
+#       OPENAI_BASE_URL=                 (leave empty for api.openai.com)
+# ---------------------------------------------------------------------------
+
+
+def _get_provider() -> str:
+    provider = os.getenv("LLM_PROVIDER", "").strip().lower()
+    if provider in ("gemini", "google"):
+        return "gemini"
+    if provider == "openai":
+        return "openai"
+    # Auto-detect: prefer gemini when a Google key exists.
+    if os.getenv("GOOGLE_API_KEY"):
+        return "gemini"
+    return "openai"
+
+
+def active_provider() -> str:
+    return _get_provider()
+
+
+def active_model() -> str:
+    if _get_provider() == "gemini":
+        return os.getenv("LLM_MODEL", "gemini-3.6-flash")
+    return os.getenv("LLM_MODEL", "gpt-4o-mini")
+
 
 def llm_is_configured() -> bool:
+    if _get_provider() == "gemini":
+        return bool(os.getenv("GOOGLE_API_KEY"))
     return bool(os.getenv("OPENAI_API_KEY"))
 
 
-def build_model() -> ChatOpenAI:
+def build_model():
+    """Native provider client.
+
+    Gemini goes through langchain-google-genai (NOT the OpenAI-compat layer),
+    which is what preserves thought signatures for tool calls on thinking
+    models. OpenAI stays on langchain-openai.
+    """
+    if _get_provider() == "gemini":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        return ChatGoogleGenerativeAI(
+            model=os.getenv("LLM_MODEL", "gemini-3.6-flash"),
+            temperature=0,
+            google_api_key=os.getenv("GOOGLE_API_KEY"),
+        )
+    from langchain_openai import ChatOpenAI
+
     kwargs: dict[str, Any] = {
         "model": os.getenv("LLM_MODEL", "gpt-4o-mini"),
         "temperature": 0,
@@ -40,12 +95,13 @@ def build_model() -> ChatOpenAI:
 
 
 def get_agent():
-    """Build the agent once. Requires OPENAI_API_KEY (OpenAI-compatible)."""
+    """Build the agent once. Provider selected by LLM_PROVIDER / keys."""
     global _AGENT
     if _AGENT is None:
         if not llm_is_configured():
             raise RuntimeError(
-                "OPENAI_API_KEY is not set. Copy .env.example to .env. "
+                "LLM key is not set. For Gemini set GOOGLE_API_KEY; "
+                "for GPT set OPENAI_API_KEY. Copy .env.example to .env. "
                 "Tools can still be tested with pytest without a key."
             )
         model = build_model()
@@ -55,7 +111,12 @@ def get_agent():
             prompt=build_system_prompt(),
             checkpointer=_CHECKPOINTER,
         )
-        logger.info("LangGraph agent initialised with %s tools", len(MVP_TOOLS))
+        logger.info(
+            "LangGraph agent initialised with %s tools provider=%s model=%s",
+            len(MVP_TOOLS),
+            _get_provider(),
+            active_model(),
+        )
     return _AGENT
 
 
@@ -72,7 +133,7 @@ def run_agent(message: str, conversation_id: str) -> dict[str, Any]:
             conversation_id,
             decision.intent,
         )
-        return {
+        parsed = {
             "answer": decision.answer or "",
             "conversation_id": conversation_id,
             "tools_used": [],
@@ -81,6 +142,8 @@ def run_agent(message: str, conversation_id: str) -> dict[str, Any]:
             "limitation": decision.reason,
             "routing_intent": decision.intent,
         }
+        _audit_turn(message, conversation_id, parsed, short_circuit=True)
+        return parsed
 
     agent = get_agent()
     result = agent.invoke(
@@ -89,6 +152,7 @@ def run_agent(message: str, conversation_id: str) -> dict[str, Any]:
     )
     parsed = parse_agent_result(result, conversation_id)
     parsed["routing_intent"] = decision.intent
+    _audit_turn(message, conversation_id, parsed, short_circuit=False)
     return parsed
 
 
@@ -115,6 +179,7 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
     turn = _latest_turn(messages)
     tools_used: list[str] = []
     traces: list[dict[str, Any]] = []
+    proposed_actions: list[dict[str, Any]] = []
     limitation = None
 
     for msg in turn:
@@ -127,6 +192,10 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
                 tools_used.append(tool_name)
             if payload.get("trace"):
                 traces.append(payload["trace"])
+            data = payload.get("data") or {}
+            proposal = data.get("proposed_action")
+            if isinstance(proposal, dict):
+                proposed_actions.append(proposal)
             error = payload.get("error") or {}
             if error.get("code") in {"UNSUPPORTED", "NOT_IMPLEMENTED"}:
                 limitation = error.get("message")
@@ -149,10 +218,49 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
         "conversation_id": conversation_id,
         "tools_used": tools_used,
         "traces": traces,
-        "proposed_actions": [],
+        "proposed_actions": proposed_actions,
         "limitation": limitation,
         "routing_intent": "proceed",
     }
+
+
+def _audit_turn(
+    message: str,
+    conversation_id: str,
+    parsed: dict[str, Any],
+    *,
+    short_circuit: bool,
+) -> None:
+    try:
+        from backend.services.audit import record_event
+
+        tools = parsed.get("tools_used") or []
+        record_event(
+            event_type="short_circuit" if short_circuit else "agent_turn",
+            conversation_id=conversation_id,
+            user_query=message,
+            tool=",".join(tools) or None,
+            inputs={
+                "routing_intent": parsed.get("routing_intent"),
+                "tools_used": tools,
+            },
+            result_ok=True,
+            result_summary=(parsed.get("answer") or "")[:500],
+            execution_status="no_tool" if short_circuit else "answered",
+        )
+        for trace in parsed.get("traces") or []:
+            record_event(
+                event_type="tool_result",
+                conversation_id=conversation_id,
+                user_query=message,
+                tool=trace.get("tool"),
+                inputs=trace.get("filter") if isinstance(trace.get("filter"), dict) else None,
+                result_ok=True,
+                result_summary=(trace.get("basis") or "")[:500],
+                target=None,
+            )
+    except Exception:  # noqa: BLE001 — audit must not break answers
+        logger.exception("audit write failed")
 
 
 def _parse_json(content: Any) -> dict[str, Any] | None:

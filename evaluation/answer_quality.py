@@ -52,6 +52,27 @@ INDICATORS: dict[str, tuple[str, ...]] = {
         r"not (wired|available) yet",
         r"nothing has been sent",
     ),
+    "not_sent": (
+        r"not (been )?sent",
+        r"was not sent",
+        r"no (smtp|email) integration",
+        r"not actually sent",
+        r"local draft",
+        r"nothing was sent",
+    ),
+    "needs_confirmation": (
+        r"confirm",
+        r"not (yet )?(saved|created|recorded)",
+        r"awaiting confirmation",
+        r"need(s)? (your )?confirmation",
+    ),
+    "empty_result": (
+        r"no (matching )?orders",
+        r"0 orders",
+        r"no orders",
+        r"none match",
+        r"not find",
+    ),
     "heuristic": (
         r"heuristic",
         r"under this model",
@@ -159,6 +180,18 @@ def derive_criteria(question: dict[str, Any]) -> dict[str, Any]:
         must_indicate.append("heuristic")
     if expected.get("must_include_limitations"):
         must_indicate.append("heuristic")
+    if expected.get("sent") is False:
+        must_indicate.append("not_sent")
+    if expected.get("saved") is False:
+        must_indicate.append("needs_confirmation")
+    if expected.get("count") == 0:
+        must_indicate.append("empty_result")
+    elif expected.get("count") is not None and not order_ids:
+        must_contain.append(str(expected["count"]))
+    if expected.get("at_risk_count") is not None:
+        must_contain.append(str(expected["at_risk_count"]))
+    if expected.get("factory_today"):
+        must_contain.append(str(expected["factory_today"]))
 
     for token in expected.get("must_mention") or []:
         must_contain.append(str(token))

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { sendChat } from "../services/api.js";
+import { confirmAction, declineAction, sendChat } from "../services/api.js";
 import MessageBubble from "./MessageBubble.jsx";
 
 const STARTERS = [
@@ -8,9 +8,14 @@ const STARTERS = [
   "Which orders are at risk?",
   "Why is ORD-120 considered risky?",
   "Can we take 800 hoodies by August 25?",
+  "Give me this morning's briefing",
+  "What should I be concerned about right now?",
+  "List the TrendCart orders",
+  "Tell me if ORD-005 hasn't moved by Thursday",
+  "Cancel the watch on ORD-005",
 ];
 
-export default function ChatPanel({ conversationId, llmReady }) {
+export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -35,6 +40,7 @@ export default function ChatPanel({ conversationId, llmReady }) {
           toolsUsed: result.tools_used || [],
           traces: result.traces || [],
           limitation: result.limitation,
+          proposedActions: result.proposed_actions || [],
         },
       ]);
     } catch (err) {
@@ -44,6 +50,51 @@ export default function ChatPanel({ conversationId, llmReady }) {
       requestAnimationFrame(() => {
         listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
       });
+    }
+  }
+
+  async function confirm(index, action) {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await confirmAction(action);
+      setMessages((prev) =>
+        prev.map((msg, i) =>
+          i === index
+            ? {
+                ...msg,
+                proposedActions: [],
+                decision: { status: "confirmed", summary: result.summary },
+              }
+            : msg,
+        ),
+      );
+      onBoardChanged?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function dismiss(index, action) {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await declineAction(action);
+      setMessages((prev) =>
+        prev.map((msg, i) =>
+          i === index
+            ? { ...msg, proposedActions: [], decision: { status: "dismissed" } }
+            : msg,
+        ),
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -77,7 +128,13 @@ export default function ChatPanel({ conversationId, llmReady }) {
           </p>
         )}
         {messages.map((msg, idx) => (
-          <MessageBubble key={`${msg.role}-${idx}`} message={msg} />
+          <MessageBubble
+            key={`${msg.role}-${idx}`}
+            message={msg}
+            busy={busy}
+            onConfirm={(action) => confirm(idx, action)}
+            onDismiss={(action) => dismiss(idx, action)}
+          />
         ))}
         {busy && <p className="text-xs text-ink/45">Consulting factory tools…</p>}
       </div>

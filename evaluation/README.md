@@ -24,7 +24,7 @@ need an LLM key (except that unsupported questions go through the pre-router).
 
 Checks include:
 
-- correct tool result (order row, risk set, feasibility verdict, trace)
+- correct tool result (order row, risk set, briefing, find_orders, feasibility, action payload)
 - no unrelated tools on unsupported questions
 - tool selection when `--mode agent` is used
 
@@ -81,13 +81,13 @@ python -m evaluation.run_evaluation --dataset evaluation/held_out.json --mode to
 Example tools-mode excerpt:
 
 ```
-Deterministic tool checks: 32/32 passed
+Deterministic tool checks: 37/37 passed
 
 === Evaluation scores (separate dimensions) ===
 Set usage: development  — not an unbiased held-out official score.
 
 1. Data / Tool Accuracy
-   Factual tool result:     32/32 (100.0%)
+   Factual tool result:     37/37 (100.0%)
    Tool selection:          10/10 (100.0%)
    Unsupported / no-tool:   10/10 (100.0%)
 
@@ -97,13 +97,15 @@ Set usage: development  — not an unbiased held-out official score.
 ```
 
 In tools mode, final-answer scoring applies to **router/canned** replies
-(unsupported, hallucination bait, actions). Lookup/feasibility wording is
-scored in `--mode agent`.
+(unsupported, hallucination bait). Lookup, briefing, discovery, actions, and
+feasibility wording are scored in `--mode agent`. Tools mode still checks the
+Python gold for those questions.
 
 ## Categories
 
 `normal_lookup`, `risk_retrieval`, `judgement`, `traceability`, `ambiguous`,
-`unanswerable`, `hallucination_bait`, `feasibility`, `action`.
+`unanswerable`, `hallucination_bait`, `feasibility`, `action`, `briefing`,
+`discovery`.
 
 Course minimums (development file only):
 
