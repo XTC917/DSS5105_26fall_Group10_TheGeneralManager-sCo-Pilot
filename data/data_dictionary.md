@@ -16,8 +16,8 @@ It then moves through four production stages:
 |---|---|---|
 | `orders` | 120 | One customer order |
 | `production_log` | 360 | One stage on one day |
-| `workshops` | 8 | One outside workshop's profile card |
-| `order_daily_snapshot` | 223 | One order entering one stage |
+| `workshops` | 11 | One workshop–category pair (8 shops) |
+| `snapshot` | 223 | One order entering one stage |
 
 ## `orders`
 
@@ -47,24 +47,26 @@ and is that normal?"*
 
 ## `workshops`
 
-The eight outside workshops the factory can rent capacity from when it is full. For
-Track 1 this is the table behind feasibility questions — *"can we take 800 hoodies by the
-25th?"* needs to know what capacity exists beyond the factory's own.
+The eight outside workshops the factory can rent capacity from when it is full. A shop
+that makes both TOPS and ACCESSORIES is stored as two rows (eleven rows, eight shops).
+Do not add `capacity_pieces_per_day` across those rows. For Track 1 this is the table
+behind feasibility questions — *"can we take 800 hoodies by the 25th?"* needs to know
+what capacity exists beyond the factory's own.
 
 | Column | Meaning |
 |---|---|
 | `workshop_id`, `name` | `W1` … `W8` and a memorable name |
-| `capacity_pieces_per_day` | How much it can process per day; work beyond this queues |
+| `capacity_pieces_per_day` | Shop daily capacity; repeated on each category row — do not add |
 | `pickup_lead_days` | Fixed transport overhead per batch |
 | `defect_rate` | Chance a batch comes back defective and is partly redone |
 | `cost_per_piece` | What it charges |
-| `makes` | `TOPS`, `ACCESSORIES`, or `TOPS+ACCESSORIES` — what it is equipped for |
+| `makes` | `TOPS` or `ACCESSORIES` — one row per family this shop can make |
 | `status` | `ACTIVE`, or `SUSPENDED` (failed a quality audit — may not take new work) |
 | `max_batch_pieces` | Per-batch cap (workshops on trial); blank means no cap |
-| `current_queue_days` | Days of work it is already holding "today" |
+| `current_queue_days` | Days of work it is already holding "today"; repeated per category row |
 | `notes` | The one-line reputation a human dispatcher would give it |
 
-## `order_daily_snapshot`
+## `snapshot`
 
 Derived event log used to reconstruct an order's stage on a past day. Not factory output.
 Lookup for day D: for that `order_id`, take the latest row whose `date` is still `≤ D`.
