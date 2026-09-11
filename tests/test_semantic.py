@@ -1,4 +1,4 @@
-"""Semantic layer covers every CSV column and renders into the system prompt."""
+"""Semantic layer covers every stored column and renders into the system prompt."""
 
 from __future__ import annotations
 

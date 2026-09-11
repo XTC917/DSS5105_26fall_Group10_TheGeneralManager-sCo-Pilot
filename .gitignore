@@ -11,6 +11,7 @@ __pycache__/
 # Local data products
 data/factory.db
 data/copilot_state.db
+data/factory_copilot_preview.db
 logs/
 .env
 evaluation/last_tools_report.json

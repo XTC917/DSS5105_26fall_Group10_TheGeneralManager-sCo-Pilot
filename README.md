@@ -98,7 +98,7 @@ push, voice in/out, a YAML business ontology.
 ```
 backend/          FastAPI + LangGraph + tools + services
 frontend/         React + Vite + Tailwind
-data/             Track 1 CSVs + semantic_layer.yaml
+data/             Track 1 CSVs + semantic_layer.yaml + examples3.0 as-of snapshots
 docs/             architecture.md, tool_spec.md
 evaluation/       Track 1 development evaluation set (not a held-out official score)
 tests/            pytest — no LLM key required
@@ -116,7 +116,7 @@ final evaluation report.
 Field meanings for the agent live in `data/semantic_layer.yaml` (also loaded into the system prompt):
 
 - `data_definition` — every stored table/column, including descriptions
-- `term_definition` — special vocabulary that is **not** a CSV column (e.g. factory today, selling price, OVERDUE)
+- `term_definition` — special vocabulary that is **not** a stored column (e.g. factory today, selling price, OVERDUE)
 
 Do not put formulas in that file. Arithmetic stays in `backend/services/`. After editing the YAML, restart the backend.
 
@@ -209,7 +209,7 @@ Suggested order so the core Track 1 bar is covered before polish:
 
 ## Rules for teammates
 
-1. Do not invent columns or business facts that are not in `data/` + `data/semantic_layer.yaml` (and the short CSV overview in `data/data_dictionary.md`).
+1. Do not invent columns or business facts that are not in `data/` + `data/semantic_layer.yaml` (and the short table overview in `data/data_dictionary.md`).
 2. Do not put totals, day counts, or capacity math in the prompt — add a Python function.
 3. If a design is not supported by the files, leave a `# TODO` instead of guessing.
 4. Side-effecting actions must never run without an explicit confirmation, and must never claim an external email was sent.

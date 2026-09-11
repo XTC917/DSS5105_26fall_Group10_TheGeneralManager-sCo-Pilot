@@ -2,22 +2,24 @@
 
 **Canonical semantics** live in [`semantic_layer.yaml`](semantic_layer.yaml):
 column meanings in `data_definition`; special vocabulary in `term_definition`.
-This page stays a short CSV overview.
+This page stays a short table overview.
 
-Three small, clean CSV files. There are no missing values, no joins to figure out, and no
+Four stored tables. There are no missing values, no joins to figure out, and no
 traps — every number can be taken at face value. The data is deliberately not the challenge.
 
-"Today" in the dataset is **2026-04-01**; the files cover the 90 days before it. The factory
-is closed on Sundays. Garments move through four stages:
-**KNITTING → ASSEMBLY → WASHING → PACKING**.
+"Today" in the dataset is **2026-04-01**; the tables cover the 90 days before it. The factory
+is closed on Sundays. Before production begins, an order is in the **ORDERED** state.
+It then moves through four production stages:
+**KNITTING → ASSEMBLY → WASHING → PACKING**, followed by **COMPLETE**.
 
-| File | Rows | One row is |
+| Table | Rows | One row is |
 |---|---|---|
-| `orders.csv` | 120 | One customer order |
-| `production_log.csv` | 360 | One stage on one day |
-| `workshops.csv` | 8 | One outside workshop's profile card |
+| `orders` | 120 | One customer order |
+| `production_log` | 360 | One stage on one day |
+| `workshops` | 11 | One workshop–category pair (8 shops) |
+| `snapshot` | 223 | One order entering one stage |
 
-## `orders.csv`
+## `orders`
 
 | Column | Meaning |
 |---|---|
@@ -27,12 +29,12 @@ is closed on Sundays. Garments move through four stages:
 | `pieces` | How many garments |
 | `order_date`, `due_date` | When it was placed and when it is due |
 | `status` | `COMPLETE` or `IN_PROGRESS` |
-| `current_stage` | `KNITTING` / `ASSEMBLY` / `WASHING` / `PACKING` / `COMPLETE` |
-| `last_activity_date` | The last day any work was recorded on this order |
+| `current_stage` | `ORDERED` / `KNITTING` / `ASSEMBLY` / `WASHING` / `PACKING` / `COMPLETE` |
+| `last_activity_date` | Date the order entered its current stage; for ORDERED, the order date |
 | `completed_date` | When it finished (blank if still in progress) |
 | `days_late` | `completed_date − due_date`; negative means early; blank if in progress |
 
-## `production_log.csv`
+## `production_log`
 
 Factory-wide daily output — the table behind *"how much did assembly get through yesterday,
 and is that normal?"*
@@ -43,21 +45,35 @@ and is that normal?"*
 | `stage` | One of the four stages |
 | `pieces_completed` | Garments finished at that stage that day (0 on Sundays) |
 
-## `workshops.csv`
+## `workshops`
 
-The eight outside workshops the factory can rent capacity from when it is full. For
-Track 1 this is the table behind feasibility questions — *"can we take 800 hoodies by the
-25th?"* needs to know what capacity exists beyond the factory's own.
+The eight outside workshops the factory can rent capacity from when it is full. A shop
+that makes both TOPS and ACCESSORIES is stored as two rows (eleven rows, eight shops).
+Do not add `capacity_pieces_per_day` across those rows. For Track 1 this is the table
+behind feasibility questions — *"can we take 800 hoodies by the 25th?"* needs to know
+what capacity exists beyond the factory's own.
 
 | Column | Meaning |
 |---|---|
 | `workshop_id`, `name` | `W1` … `W8` and a memorable name |
-| `capacity_pieces_per_day` | How much it can process per day; work beyond this queues |
+| `capacity_pieces_per_day` | Shop daily capacity; repeated on each category row — do not add |
 | `pickup_lead_days` | Fixed transport overhead per batch |
 | `defect_rate` | Chance a batch comes back defective and is partly redone |
 | `cost_per_piece` | What it charges |
-| `makes` | `TOPS`, `ACCESSORIES`, or `TOPS+ACCESSORIES` — what it is equipped for |
+| `makes` | `TOPS` or `ACCESSORIES` — one row per family this shop can make |
 | `status` | `ACTIVE`, or `SUSPENDED` (failed a quality audit — may not take new work) |
 | `max_batch_pieces` | Per-batch cap (workshops on trial); blank means no cap |
-| `current_queue_days` | Days of work it is already holding "today" |
+| `current_queue_days` | Days of work it is already holding "today"; repeated per category row |
 | `notes` | The one-line reputation a human dispatcher would give it |
+
+## `snapshot`
+
+Derived event log used to reconstruct an order's stage on a past day. Not factory output.
+Lookup for day D: for that `order_id`, take the latest row whose `date` is still `≤ D`.
+
+| Column | Meaning |
+|---|---|
+| `order_id` | `ORD-001` … |
+| `status` | `IN_PROGRESS` until finished; `COMPLETE` only on the completion event |
+| `stage` | Stage this event entered: `ORDERED` / `KNITTING` / `ASSEMBLY` / `WASHING` / `PACKING` / `COMPLETE` |
+| `date` | Date the order entered that stage (`ORDERED` = order date; `COMPLETE` = completed date) |

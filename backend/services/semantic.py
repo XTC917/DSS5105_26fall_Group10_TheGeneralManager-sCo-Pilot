@@ -37,7 +37,7 @@ def render_semantic_prompt(layer: dict[str, Any] | None = None) -> str:
     lines: list[str] = [
         "## Semantic layer",
         "data_definition describes stored tables and columns.",
-        "term_definition explains special vocabulary (not extra CSV columns).",
+        "term_definition explains special vocabulary (not extra stored columns).",
         "Do not invent columns. Formulas stay in Python tools.",
         "",
         "### Data definition",
@@ -46,12 +46,7 @@ def render_semantic_prompt(layer: dict[str, Any] | None = None) -> str:
 
     tables = data_def.get("tables") or {}
     for table_key, table in tables.items():
-        physical = table.get("physical_name") or table_key
-        source = table.get("source") or ""
-        header = f"#### Table `{physical}`"
-        if source:
-            header += f" (source: {source})"
-        lines.append(header)
+        lines.append(f"#### Table `{table_key}`")
         grain = (table.get("grain") or "").strip()
         if grain:
             lines.append(f"Grain: {grain}")
@@ -73,7 +68,6 @@ def render_semantic_prompt(layer: dict[str, Any] | None = None) -> str:
 
 
 def _render_data_column(name: str, col: dict[str, Any]) -> list[str]:
-    physical = col.get("physical_name") or name
     bits: list[str] = []
     if col.get("type"):
         bits.append(str(col["type"]))
@@ -85,7 +79,7 @@ def _render_data_column(name: str, col: dict[str, Any]) -> list[str]:
     if allowed:
         bits.append("values: " + ", ".join(str(v) for v in allowed))
     suffix = f" [{'; '.join(bits)}]" if bits else ""
-    parts = [f"- `{physical}`{suffix}"]
+    parts = [f"- `{name}`{suffix}"]
     desc = (col.get("description") or "").strip()
     if desc:
         parts.append(f"  {desc}")
