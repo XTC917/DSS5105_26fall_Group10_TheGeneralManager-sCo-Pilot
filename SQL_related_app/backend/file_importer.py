@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any, Dict, Optional, Sequence, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+from psycopg import sql
 
-from config import Config, assert_allowed_table, quote_column, quote_table
-from db import get_connection, get_table_count, table_exists
-
+from config import Config, assert_upload_table, get_database_columns
+from db import get_postgres_admin_connection, get_postgres_table_count, postgres_table_exists
 
 class FileImporter:
     def detect_file_type(self, file_path: str) -> str:
@@ -67,24 +67,27 @@ class FileImporter:
         table_name: str,
         if_exists: str = "replace",
     ) -> Tuple[int, int, Optional[str]]:
+        total_rows = 0
         try:
-            table_name = assert_allowed_table(table_name)
+            table_name = assert_upload_table(table_name)
             if if_exists not in {"replace", "append"}:
                 return 0, 0, "if_exists must be 'replace' or 'append'"
-            if not table_exists(table_name):
-                return 0, 0, "Database is not initialized. Run python init_db.py"
+            if not postgres_table_exists(table_name):
+                return 0, 0, (f"PostgreSQL table {Config.PG_SCHEMA}.{table_name} does not exist")
 
             df = self.read_file(file_path)
+            total_rows = len(df)
             if df.empty:
                 return 0, 0, "File is empty"
 
             df = self._prepare_frame(df, table_name)
             total_rows = len(df)
+            if df.empty:
+                return 0, 0, "File contains no non-empty data rows"
             success_rows = self._write_rows(df, table_name, if_exists)
-            self._update_data_source_count(table_name)
             return total_rows, success_rows, None
         except Exception as exc:
-            return 0, 0, str(exc)
+            return total_rows, 0, str(exc)
 
     def _prepare_frame(self, df: pd.DataFrame, table_name: str) -> pd.DataFrame:
         df = df.dropna(how="all")
@@ -119,16 +122,15 @@ class FileImporter:
             df.loc[parsed.isna(), col] = None
 
         for col in schema.get("int_columns", []):
-            df[col] = pd.to_numeric(df[col].replace("", np.nan), errors="coerce")
-            if col not in nullable:
-                df[col] = df[col].fillna(0)
-            df[col] = df[col].apply(lambda v: None if pd.isna(v) else int(v))
+            numeric = pd.to_numeric(df[col].replace("", np.nan), errors="coerce",)
+            non_integer = (numeric.dropna() % 1) != 0
+            if non_integer.any():
+                raise ValueError(f"Column {col} must contain integers")
+            df[col] = numeric.apply(lambda value: None if pd.isna(value) else int(value))
 
         for col in schema.get("float_columns", []):
             df[col] = pd.to_numeric(df[col].replace("", np.nan), errors="coerce")
-            if col not in nullable:
-                df[col] = df[col].fillna(0)
-            df[col] = df[col].apply(lambda v: None if pd.isna(v) else float(v))
+            df[col] = df[col].apply(lambda value: None if pd.isna(value) else float(value))
 
         for col in df.columns:
             if col in schema.get("date_columns", []):
@@ -138,66 +140,147 @@ class FileImporter:
             if col in schema.get("float_columns", []):
                 continue
             df[col] = df[col].replace(["", "NULL"], np.nan)
-            if col not in nullable:
-                df[col] = df[col].where(pd.notnull(df[col]), "")
-            else:
-                df[col] = df[col].where(pd.notnull(df[col]), None)
+            df[col] = df[col].where(pd.notnull(df[col]), None)
 
+        missing_required = {
+            column: int(df[column].isna().sum())
+            for column in required
+            if df[column].isna().any()
+        }
+
+        if missing_required:
+            details = ", ".join(
+                f"{column}={count}"
+                for column, count in missing_required.items()
+            )
+            raise ValueError(
+                f"Required columns contain missing or invalid values: {details}"
+            )
+        if table_name == "workshops":
+            df = df.assign(
+                makes=df["makes"].astype(str).str.split("+", regex=False)
+            )
+            df = df.explode("makes", ignore_index=True)
+            df["makes"] = df["makes"].str.strip()
+            allowed_makes = {"TOPS", "ACCESSORIES"}
+            invalid_makes = sorted(set(df["makes"]) - allowed_makes)
+            if invalid_makes:
+                raise ValueError(
+                    "Invalid workshop makes values after splitting: "
+                  + ", ".join(invalid_makes)
+                )
+            duplicate_keys = df.duplicated(subset=["workshop_id", "makes"], keep=False,)
+            if duplicate_keys.any():
+                duplicate_values = (
+                    df.loc[duplicate_keys, ["workshop_id", "makes"],]
+                    .astype(str)
+                    .agg(" + ".join, axis=1)
+                    .drop_duplicates()
+                    .tolist()
+                )
+                raise ValueError(
+                    "Duplicate workshop category keys: "
+                    + ", ".join(duplicate_values)
+                )
+            shared_columns = [
+                "name",
+                "capacity_pieces_per_day",
+                "pickup_lead_days",
+                "defect_rate",
+                "cost_per_piece",
+                "status",
+                "max_batch_pieces",
+                "current_queue_days",
+                "notes",
+            ]
+            shared_profile_counts = (
+                df.groupby("workshop_id", dropna=False)[shared_columns]
+                .nunique(dropna=False)
+            )
+            inconsistent_workshops = (
+                shared_profile_counts.index[shared_profile_counts.gt(1).any(axis=1)].astype(str).tolist()
+            )
+            if inconsistent_workshops:
+                raise ValueError(
+                    "Inconsistent shared workshop attributes: "
+                    + ", ".join(inconsistent_workshops)
+                )
         return df
 
-    def _write_rows(self, df: pd.DataFrame, table_name: str, if_exists: str) -> int:
-        columns: Sequence[str] = list(df.columns)
-        table_sql = quote_table(table_name)
-        col_sql = ", ".join(quote_column(table_name, col) for col in columns)
-        placeholders = ", ".join("?" for _ in columns)
-        insert_sql = (
-            f"INSERT OR REPLACE INTO {table_sql} ({col_sql}) VALUES ({placeholders})"
-        )
+    def _map_database_columns(self, df: pd.DataFrame, table_name: str) -> pd.DataFrame:
+        table_name = assert_upload_table(table_name)
+        schema = Config.TABLE_SCHEMAS[table_name]
+        mapping = schema.get("column_mapping", {})
+        mapped_df = df.rename(columns=mapping)
+        database_columns = get_database_columns(table_name)
+        return mapped_df[database_columns]
 
+    def _write_rows(self, df: pd.DataFrame, table_name: str, if_exists: str) -> int:
+        table_name = assert_upload_table(table_name)
+        database_df = self._map_database_columns(df, table_name)
+        columns = list(database_df.columns)
+
+        qualified_table = sql.Identifier(Config.PG_SCHEMA, table_name)
+        column_list = sql.SQL(", ").join(sql.Identifier(column) for column in columns)
+        placeholders = sql.SQL(", ").join(sql.Placeholder() for _ in columns)
+
+        insert_query = sql.SQL(
+            "INSERT INTO {} ({}) VALUES ({})"
+        ).format(qualified_table, column_list, placeholders)
+        delete_query = sql.SQL("DELETE FROM {}").format(qualified_table)
         records = [
             tuple(None if (isinstance(v, float) and np.isnan(v)) else v for v in row)
-            for row in df.itertuples(index=False, name=None)
+            for row in database_df.itertuples(index=False, name=None)
         ]
-        # Convert datetime/date leftovers to ISO strings
         cleaned = []
         for row in records:
             converted = []
             for value in row:
                 if isinstance(value, datetime):
-                    converted.append(value.date().isoformat())
+                    converted.append(value.date())
                 elif isinstance(value, date):
-                    converted.append(value.isoformat())
+                    converted.append(value)
                 else:
                     converted.append(value)
             cleaned.append(tuple(converted))
 
-        conn = get_connection()
+        conn = get_postgres_admin_connection()
         try:
-            conn.execute("BEGIN")
-            if if_exists == "replace":
-                conn.execute(f"DELETE FROM {table_sql}")
-            conn.executemany(insert_sql, cleaned)
-            conn.commit()
+            with conn.transaction():
+                if if_exists == "replace":
+                    conn.execute(delete_query)
+                with conn.cursor() as cursor:
+                    for row in cleaned:
+                        cursor.execute(insert_query, row)
+                if table_name == "orders":
+                    update_snapshot_query = sql.SQL(
+                        """
+                        INSERT INTO {} (order_id, status, stage, date)
+                        SELECT order_id, status, current_stage, last_activity_date
+                        FROM {}
+                        ON CONFLICT (order_id, status, stage, date) DO NOTHING
+                        """
+                    ).format(
+                        sql.Identifier(Config.PG_SCHEMA, "snapshot"),
+                        sql.Identifier(Config.PG_SCHEMA, "orders"),
+                    )
+                    conn.execute(update_snapshot_query)
+                count_query = sql.SQL(
+                    "SELECT COUNT(*) AS cnt FROM {}"
+                ).format(qualified_table)
+                actual_count = conn.execute(count_query).fetchone()["cnt"]
+                update_row = conn.execute(
+                    """
+                    UPDATE admin_meta.data_sources
+                    SET row_count = %s, updated_at = CURRENT_TIMESTAMP, is_active = TRUE
+                    WHERE table_name = %s
+                    RETURNING id
+                    """,
+                    (actual_count, table_name)
+                ).fetchone()
+                if update_row is None:
+                    raise ValueError(f"Data source metadata not found for table: {table_name}")
             return len(cleaned)
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
-
-    def _update_data_source_count(self, table_name: str) -> None:
-        count = get_table_count(table_name)
-        conn = get_connection()
-        try:
-            conn.execute(
-                """
-                UPDATE data_sources
-                SET row_count = ?, updated_at = CURRENT_TIMESTAMP, is_active = 1
-                WHERE table_name = ?
-                """,
-                (count, table_name),
-            )
-            conn.commit()
         finally:
             conn.close()
 
@@ -205,18 +288,21 @@ class FileImporter:
         self, file_name: str, file_size: int, total_rows: int = 0
     ) -> int:
         del file_size
-        conn = get_connection()
+        conn = get_postgres_admin_connection()
         try:
-            cursor = conn.execute(
-                """
-                INSERT INTO upload_history
-                    (file_name, file_type, total_rows, status, created_at)
-                VALUES (?, ?, ?, 'processing', CURRENT_TIMESTAMP)
+            with conn.transaction():
+                row = conn.execute(
+                    """
+                    INSERT INTO admin_meta.upload_history
+                    (file_name, file_type, total_rows, status)
+                VALUES (%s, %s, %s, 'processing')
+                RETURNING id
                 """,
-                (file_name, self.detect_file_type(file_name), total_rows),
-            )
-            conn.commit()
-            return int(cursor.lastrowid)
+                (file_name, self.detect_file_type(file_name), total_rows,),
+                ).fetchone()
+                if row is None:
+                    raise ValueError("Upload history record was not created")
+            return int(row["id"])
         finally:
             conn.close()
 
@@ -227,28 +313,28 @@ class FileImporter:
         error_message: Optional[str] = None,
         total_rows: Optional[int] = None,
     ) -> None:
-        conn = get_connection()
+        allowed_statuses = {"pending", "processing", "success", "failed"}
+        if status not in allowed_statuses:
+            raise ValueError(f"Invalid upload status: {status}")
+        conn = get_postgres_admin_connection()
         try:
-            if total_rows is not None:
-                conn.execute(
+            with conn.transaction():
+                row = conn.execute(
                     """
-                    UPDATE upload_history
-                    SET status = ?, error_message = ?, total_rows = ?,
-                        completed_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
+                    UPDATE admin_meta.upload_history
+                    SET status = %s, error_message = %s, total_rows = COALESCE(%s, total_rows),
+                        completed_at = CASE
+                            WHEN %s IN ('success', 'failed')
+                            THEN CURRENT_TIMESTAMP
+                            ELSE NULL
+                        END
+                    WHERE id = %s
+                    RETURNING id
                     """,
-                    (status, error_message, total_rows, upload_id),
-                )
-            else:
-                conn.execute(
-                    """
-                    UPDATE upload_history
-                    SET status = ?, error_message = ?, completed_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (status, error_message, upload_id),
-                )
-            conn.commit()
+                    (status, error_message, total_rows, status, upload_id),
+                ).fetchone()
+                if row is None:
+                    raise ValueError(f"Upload record not found: {upload_id}")
         finally:
             conn.close()
 
@@ -261,29 +347,38 @@ class FileImporter:
         success_rows: int,
         error_message: Optional[str] = None,
     ) -> None:
-        conn = get_connection()
+        table_name = assert_upload_table(table_name)
+        if total_rows < 0:
+            raise ValueError("total_rows cannot be negative")
+        if success_rows < 0 or total_rows < success_rows:
+            raise ValueError("success_rows must be between 0 and total_rows")
+        failed_rows = total_rows - success_rows
+        status = "success" if error_message is None else "failed"
+        conn = get_postgres_admin_connection()
         try:
-            status = "success" if error_message is None else "failed"
-            conn.execute(
-                """
-                INSERT INTO import_details (
-                    upload_id, file_name, table_name, total_rows,
-                    success_rows, failed_rows, status, error_message,
-                    completed_at, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """,
-                (
-                    upload_id,
-                    file_name,
-                    table_name,
-                    total_rows,
-                    success_rows,
-                    max(total_rows - success_rows, 0),
-                    status,
-                    error_message,
-                ),
-            )
-            conn.commit()
+            with conn.transaction():
+                row = conn.execute(
+                    """
+                    INSERT INTO admin_meta.import_details (
+                        upload_id, file_name, table_name, total_rows,
+                        success_rows, failed_rows, status, error_message, completed_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    RETURNING id
+                     """,
+                    (
+                        upload_id,
+                        file_name,
+                        table_name,
+                        total_rows,
+                        success_rows,
+                        failed_rows,
+                        status,
+                        error_message,
+                    ),
+                ).fetchone()
+                if row is None:
+                    raise ValueError(f"Import detail record was not created")
         finally:
             conn.close()
 
@@ -293,33 +388,33 @@ class FileImporter:
         original_file: str,
         description: Optional[str] = None,
     ) -> None:
-        table_name = assert_allowed_table(table_name)
+        table_name = assert_upload_table(table_name)
         meta = Config.DATA_SOURCES[table_name]
-        count = get_table_count(table_name)
-        conn = get_connection()
+        count = get_postgres_table_count(table_name)
+        conn = get_postgres_admin_connection()
         try:
-            conn.execute(
-                """
-                INSERT INTO data_sources (
-                    source_name, table_name, original_file, description,
-                    row_count, is_active, updated_at
-                ) VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
-                ON CONFLICT(table_name) DO UPDATE SET
-                    source_name = excluded.source_name,
-                    original_file = excluded.original_file,
-                    description = excluded.description,
-                    row_count = excluded.row_count,
-                    is_active = 1,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    meta["source_name"],
-                    table_name,
-                    original_file,
-                    description or meta["description"],
-                    count,
-                ),
+            with conn.transaction():
+                conn.execute(
+                    """
+                    INSERT INTO admin_meta.data_sources (
+                        source_name, table_name, original_file, description,
+                        row_count, is_active, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, TRUE, CURRENT_TIMESTAMP)
+                    ON CONFLICT(table_name) DO UPDATE SET
+                        source_name = excluded.source_name,
+                        original_file = excluded.original_file,
+                        description = excluded.description,
+                        row_count = excluded.row_count,
+                        is_active = TRUE,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (
+                        meta["source_name"],
+                        table_name,
+                        original_file,
+                        description or meta["description"],
+                        count,
+                    ),
             )
-            conn.commit()
         finally:
             conn.close()

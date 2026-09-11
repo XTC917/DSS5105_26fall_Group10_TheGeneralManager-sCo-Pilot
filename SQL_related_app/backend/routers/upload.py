@@ -3,8 +3,8 @@ from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 
-from config import Config, assert_allowed_table
-from db import get_connection
+from config import Config, assert_upload_table
+from db import get_postgres_admin_connection
 from file_importer import FileImporter
 
 router = APIRouter(prefix="/api/admin", tags=["Upload"])
@@ -64,7 +64,7 @@ async def import_file(
 ):
     original_name = file.filename or "upload.csv"
     try:
-        table_name = assert_allowed_table(table_name)
+        table_name = assert_upload_table(table_name)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -107,23 +107,23 @@ async def import_file(
 
 @router.get("/upload/status/{upload_id}")
 async def get_import_status(upload_id: int):
-    conn = get_connection()
+    conn = get_postgres_admin_connection()
     try:
         upload = conn.execute(
             """
             SELECT id, file_name, file_type, total_rows, status,
                    error_message, uploaded_by, created_at, completed_at
-            FROM upload_history WHERE id = ?
+            FROM admin_meta.upload_history WHERE id = %s
             """,
             (upload_id,),
         ).fetchone()
-        if not upload:
+        if upload is None:
             raise HTTPException(404, "Upload record not found")
         details = conn.execute(
             """
             SELECT file_name, table_name, total_rows, success_rows,
                    failed_rows, status, error_message, created_at, completed_at
-            FROM import_details WHERE upload_id = ?
+            FROM admin_meta.import_details WHERE upload_id = %s
             """,
             (upload_id,),
         ).fetchall()

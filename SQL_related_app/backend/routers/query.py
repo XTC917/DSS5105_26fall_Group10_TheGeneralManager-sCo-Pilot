@@ -24,14 +24,17 @@ async def execute_query(request: QueryRequest):
         raise HTTPException(400, "SQL statement is required")
     try:
         results = schema_service.execute_query(request.sql)
+        truncated = len(results) > 100
+        visible_results = results[:100]
         return {
             "success": True,
-            "data": results[:100],
-            "total": len(results),
+            "data": visible_results,
+            "total": len(visible_results),
+            "truncated": truncated,
             "sql": request.sql,
             "message": (
-                f"Returning first 100 of {len(results)} results"
-                if len(results) > 100
+                "Returning the first 100 rows; more rows may exist"
+                if truncated
                 else None
             ),
         }

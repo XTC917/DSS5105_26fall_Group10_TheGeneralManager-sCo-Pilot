@@ -1,0 +1,20 @@
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+*credential*
+*secret*
+*.pem
+*.key
+
+# Local PostgreSQL backup artifacts
+*.dump
+*.backup
+*.bak
+
+# Editor and operating-system files
+.vscode/
+.DS_Store
+Thumbs.db
+*~
+*.tmp

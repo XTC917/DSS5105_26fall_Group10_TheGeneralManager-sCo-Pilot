@@ -4,23 +4,30 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
-
 BACKEND_DIR = Path(__file__).resolve().parent
+load_dotenv(BACKEND_DIR / ".env")
+
 _IDENT_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 class Config:
-    DB_PATH = Path(os.getenv("DB_PATH", BACKEND_DIR / "data" / "factory_data.db"))
-    if not DB_PATH.is_absolute():
-        DB_PATH = BACKEND_DIR / DB_PATH
+    PG_HOST = os.getenv("PGHOST", "localhost")
+    PG_PORT = int(os.getenv("PGPORT", "5432"))
+    PG_DATABASE = os.getenv("PGDATABASE", "factory_copilot_db")
+    PG_USER = os.getenv("PGUSER", "")
+    PG_PASSWORD = os.getenv("PGPASSWORD", "")
+    PG_ADMIN_USER = os.getenv("PG_ADMIN_USER", "")
+    PG_ADMIN_PASSWORD = os.getenv("PG_ADMIN_PASSWORD", "")
+    PG_SCHEMA = os.getenv("PGSCHEMA", "app")
+    PG_CONNECT_TIMEOUT = int(os.getenv("PGCONNECT_TIMEOUT", "5"))
 
     UPLOAD_DIR = BACKEND_DIR / "uploads"
     MAX_FILE_SIZE = 100 * 1024 * 1024
     ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
     BATCH_SIZE = 1000
 
-    ALLOWED_TABLES = ("orders", "production_log", "workshops")
+    UPLOAD_TABLES = ("orders", "production_log", "workshops")
+    QUERY_CONTEXT_TABLES = UPLOAD_TABLES + ("snapshot",)
 
     FILE_TABLE_MAPPING = {
         "orders.csv": "orders",
@@ -44,6 +51,16 @@ class Config:
             "original_file": "workshops.csv",
             "description": "External workshop capacity and cost information",
         },
+    }
+
+    QUERY_CONTEXT_DESCRIPTIONS = {
+        "orders": "Current customer order information",
+        "production_log": "Current daily production output by stage",
+        "workshops": "Current workshop capacity and category information",
+        "snapshot": (
+            "Accumulated distinct order states from the initial seed "
+            "and subsequent successful orders uploads"
+        ),
     }
 
     TABLE_SCHEMAS = {
@@ -71,6 +88,7 @@ class Config:
             "int_columns": ["pieces", "days_late"],
             "float_columns": [],
             "nullable_columns": ["completed_date", "days_late"],
+            "column_mapping": {},
         },
         "production_log": {
             "columns": ["date", "stage", "pieces_completed"],
@@ -78,6 +96,7 @@ class Config:
             "int_columns": ["pieces_completed"],
             "float_columns": [],
             "nullable_columns": [],
+            "column_mapping": {"date": "production_date",},
         },
         "workshops": {
             "columns": [
@@ -104,16 +123,25 @@ class Config:
                 "cost_per_piece",
                 "current_queue_days",
             ],
-            "nullable_columns": ["max_batch_pieces", "notes"],
+            "nullable_columns": ["max_batch_pieces"],
+            "column_mapping": {},
         },
     }
 
 
-def assert_allowed_table(table_name: str) -> str:
-    if not table_name or table_name not in Config.ALLOWED_TABLES:
-        allowed = ", ".join(Config.ALLOWED_TABLES)
+def assert_upload_table(table_name: str) -> str:
+    if not table_name or table_name not in Config.UPLOAD_TABLES:
+        allowed = ", ".join(Config.UPLOAD_TABLES)
         raise ValueError(f"table_name must be one of: {allowed}")
     return table_name
+
+
+def get_database_columns(table_name: str) -> list[str]:
+    table_name = assert_upload_table(table_name)
+    schema = Config.TABLE_SCHEMAS[table_name]
+    mapping = schema.get("column_mapping", {})
+
+    return [mapping.get(column, column) for column in schema["columns"]]
 
 
 def quote_ident(name: str) -> str:
@@ -123,11 +151,11 @@ def quote_ident(name: str) -> str:
 
 
 def quote_table(table_name: str) -> str:
-    return quote_ident(assert_allowed_table(table_name))
+    return quote_ident(assert_upload_table(table_name))
 
 
 def quote_column(table_name: str, column: str) -> str:
-    schema = Config.TABLE_SCHEMAS[assert_allowed_table(table_name)]
+    schema = Config.TABLE_SCHEMAS[assert_upload_table(table_name)]
     if column not in schema["columns"]:
         raise ValueError(f"Unknown column {column} for table {table_name}")
     return quote_ident(column)

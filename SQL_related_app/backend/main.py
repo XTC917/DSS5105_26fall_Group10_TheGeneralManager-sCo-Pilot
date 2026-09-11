@@ -2,13 +2,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import Config
-from db import get_connection
+from db import get_postgres_connection
 from routers import datasource, query, upload
 
 app = FastAPI(
     title="Factory Data Management System",
-    description="CSV/Excel upload into a SQLite database for the three Track 1 tables",
-    version="1.1.0",
+    description=(
+        "CSV/Excel administration and read-only SQL access "
+        "for the PostgreSQL factory database"
+    ),
+    version="1.2.0",
 )
 
 app.add_middleware(
@@ -29,30 +32,45 @@ app.include_router(datasource.router)
 app.include_router(query.router)
 
 Config.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-Config.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 @app.get("/")
 async def root():
     return {
-        "message": "Factory Data Management System API",
-        "version": "1.1.0",
+        "message": "Factory PostgreSQL Data Management API",
+        "version": "1.2.0",
         "docs": "/docs",
-        "tables": list(Config.ALLOWED_TABLES),
+        "upload_tables": list(Config.UPLOAD_TABLES),
+        "query_context_tables": list(Config.QUERY_CONTEXT_TABLES),
     }
 
 
 @app.get("/health")
 async def health_check():
     try:
-        conn = get_connection()
+        conn = get_postgres_connection()
         try:
-            conn.execute("SELECT 1").fetchone()
+            row = conn.execute(
+                """
+                SELECT
+                    current_database() AS database_name,
+                    current_user AS login_role
+                """
+            ).fetchone()
         finally:
             conn.close()
-        return {"status": "healthy", "database": str(Config.DB_PATH.name)}
+        return {
+            "status": "healthy",
+            "backend": "postgresql",
+            "database": row["database_name"],
+            "role": row["login_role"],
+        }
     except Exception as exc:
-        return {"status": "unhealthy", "error": str(exc)}
+        return {
+            "status": "unhealthy",
+            "backend": "postgresql",
+            "error": str(exc),
+        }
 
 
 if __name__ == "__main__":

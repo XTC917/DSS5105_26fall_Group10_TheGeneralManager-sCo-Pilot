@@ -7,6 +7,11 @@ This repository is a **working first co-pilot**: inspectable Python tools, a
 chat API, a laptop manager UI, and a development evaluation set. Factory date
 in the dataset: **2026-04-01**. Do not use the computer clock for business logic.
 
+The repository also contains a local PostgreSQL database and an experimental
+PostgreSQL version of the standalone data-administration service. The data
+administration UI is now present in the main application, but its main-system
+data services still use SQLite until the PostgreSQL integration is completed.
+
 Track 1 asks for five kinds of tool (retrieval / judgement / tracing /
 discovery / action), a scheduled briefing, all-day Q&A, standing watches,
 feasibility estimates, confirmed actions, and full traceability. What is
@@ -17,6 +22,8 @@ shipped vs still open is listed below.
 ### Data and API
 
 - Load `orders.csv`, `production_log.csv`, `workshops.csv` into SQLite
+- Reproduce and validate the local PostgreSQL design under `postgresql_database/`
+- Run the experimental PostgreSQL administration API under `SQL_related_app/`
 - `POST /api/chat` — inspectable pre-router, then LangGraph ReAct for in-scope questions
 - Multi-turn chat with **fresh tool calls each turn** (`conversation_id` + MemorySaver)
 - Unsupported questions (revenue, selling price, workers, …) return a limitation with **no tool call**
@@ -94,6 +101,8 @@ data/             Track 1 CSVs (source of truth)
 docs/             architecture.md, tool_spec.md
 evaluation/       Track 1 development evaluation set (not a held-out official score)
 tests/            pytest — no LLM key required
+postgresql_database/  PostgreSQL schema, seed data, validation, and permission tests
+SQL_related_app/      Standalone data-administration app and PostgreSQL experiment
 ```
 
 Read `docs/architecture.md` and `docs/tool_spec.md` before changing rules.
