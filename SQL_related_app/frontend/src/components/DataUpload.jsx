@@ -329,7 +329,7 @@ const DataUpload = () => {
     <div>
       <h2>Data Upload</h2>
       <p style={{ color: '#666', marginBottom: 20 }}>
-        Upload a CSV or Excel file into one of the three SQLite tables.
+        Upload a CSV or Excel file into one of the three PostgreSQL business tables.
         Re-importing a file replaces the existing rows in that table.
       </p>
       <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} />

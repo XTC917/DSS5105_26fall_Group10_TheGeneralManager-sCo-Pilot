@@ -77,12 +77,44 @@ The `evidence` directory stores the latest reviewed local outputs from scripts 0
 - PostgreSQL `bin` on the Windows PATH;
 - the three supplied current-data CSV files and `altogether_summary.csv` under `data/`.
 
-Verify the client and server:
+### Start and verify PostgreSQL on Windows
+
+PostgreSQL must be running before executing the SQL scripts or starting the administration backend.
+
+First, confirm that the PostgreSQL command-line tools are available:
 
 ```powershell
 psql --version
+```
+Find the PostgreSQL service installed on the computer:
+
+```powershell
+Get-Service -Name "postgresql*"
+```
+
+If its status is `Stopped`, open PowerShell as Administrator and start it using the service name shown by the previous command. For example:
+
+```powershell
+Start-Service -Name "postgresql-x64-18"
+```
+
+The exact service name depends on the installed PostgreSQL version. Do not assume that every computer uses `postgresql-x64-18`.
+
+Verify that PostgreSQL is accepting connections:
+
+```powershell
 pg_isready -h localhost -p 5432
 ```
+
+A successful result should resemble:
+
+```text
+localhost:5432 - accepting connections
+```
+
+If `Start-Service` reports a permission error, run PowerShell as Administrator. PostgreSQL can also be started visually by pressing `Win + R`, entering `services.msc`, locating the PostgreSQL service, and selecting **Start**.
+
+Starting the PostgreSQL service is a routine operation and may be required after restarting the computer. Scripts `01` and `02` are for first-time database construction. Script `03` is used for the initial data import or an intentional baseline reset.
 
 Do not store PostgreSQL passwords in this repository.
 

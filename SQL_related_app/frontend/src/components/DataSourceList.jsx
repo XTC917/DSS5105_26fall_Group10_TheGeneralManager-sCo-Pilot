@@ -128,7 +128,7 @@ const DataSourceList = () => {
           </Button>
           <Popconfirm
             title="Deactivate this data source?"
-            description="The SQLite table is kept. Only the catalog entry is marked inactive."
+            description="The PostgreSQL table and its rows are kept. Only the catalog entry is marked inactive."
             onConfirm={() => handleDelete(record.id)}
             okText="Yes"
             cancelText="No"
