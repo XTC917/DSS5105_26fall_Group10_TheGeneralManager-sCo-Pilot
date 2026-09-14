@@ -100,6 +100,27 @@ Actions:
 """
 
 
+def format_retrieved_templates(hits: list | tuple | None) -> str:
+    """Wording references for the final reply. Tool JSON remains the source of numbers."""
+    if not hits:
+        return ""
+    lines = [
+        "## Retrieved answer templates",
+        "These are the closest development-set questions. Use them only as wording "
+        "and structure for the FINAL reply after tools have returned.",
+        "Every number, order id, flag, and verdict must come from this turn's tool "
+        "JSON, not from the templates (a template may describe a different order).",
+        "",
+    ]
+    for i, hit in enumerate(hits, 1):
+        qid = hit.get("id") or f"T{i}"
+        lines.append(f"### Template {i} ({qid})")
+        lines.append(f"Question: {hit.get('question') or ''}")
+        lines.append(f"Answer pattern: {hit.get('expected_answer') or ''}")
+        lines.append("")
+    return "\n".join(lines).rstrip()
+
+
 def build_system_prompt() -> str:
     """Routing/presentation rules plus the semantic layer the model may judge against."""
     return _PROMPT_BODY.rstrip() + "\n\n" + render_semantic_prompt()

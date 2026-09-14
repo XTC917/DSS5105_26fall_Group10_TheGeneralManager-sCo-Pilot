@@ -5,15 +5,17 @@ from __future__ import annotations
 import json
 import logging
 import os
+from contextvars import ContextVar
 from typing import Any
 
 from dotenv import load_dotenv
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
-from backend.agent.prompts import build_system_prompt
+from backend.agent.prompts import build_system_prompt, format_retrieved_templates
 from backend.agent.routing import route_query
+from backend.services.question_templates import retrieve_answer_templates
 from backend.tools.registry import MVP_TOOLS
 
 load_dotenv()
@@ -21,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 _AGENT = None
 _CHECKPOINTER = MemorySaver()
+_TEMPLATE_QUERY: ContextVar[str] = ContextVar("template_query", default="")
 
 # ---------------------------------------------------------------------------
 # LLM provider switch.
@@ -94,6 +97,19 @@ def build_model():
     return ChatOpenAI(**kwargs)
 
 
+def _react_prompt(state: dict[str, Any]):
+    """Add answer templates only after this turn has produced tool JSON."""
+    system = build_system_prompt()
+    messages = state.get("messages") or []
+    turn = _latest_turn(messages)
+    if any(isinstance(msg, ToolMessage) for msg in turn):
+        hits = retrieve_answer_templates(_TEMPLATE_QUERY.get())
+        extra = format_retrieved_templates(hits)
+        if extra:
+            system = system + "\n\n" + extra
+    return [SystemMessage(content=system), *messages]
+
+
 def get_agent():
     """Build the agent once. Provider selected by LLM_PROVIDER / keys."""
     global _AGENT
@@ -108,7 +124,7 @@ def get_agent():
         _AGENT = create_react_agent(
             model,
             MVP_TOOLS,
-            prompt=build_system_prompt(),
+            prompt=_react_prompt,
             checkpointer=_CHECKPOINTER,
         )
         logger.info(
@@ -145,11 +161,15 @@ def run_agent(message: str, conversation_id: str) -> dict[str, Any]:
         _audit_turn(message, conversation_id, parsed, short_circuit=True)
         return parsed
 
-    agent = get_agent()
-    result = agent.invoke(
-        {"messages": [{"role": "user", "content": message}]},
-        config={"configurable": {"thread_id": conversation_id}},
-    )
+    token = _TEMPLATE_QUERY.set(message)
+    try:
+        agent = get_agent()
+        result = agent.invoke(
+            {"messages": [{"role": "user", "content": message}]},
+            config={"configurable": {"thread_id": conversation_id}},
+        )
+    finally:
+        _TEMPLATE_QUERY.reset(token)
     parsed = parse_agent_result(result, conversation_id)
     parsed["routing_intent"] = decision.intent
     _audit_turn(message, conversation_id, parsed, short_circuit=False)
