@@ -19,8 +19,13 @@ STATE_DB_PATH = DATA_DIR / "copilot_state.db"
 # Dataset clock — do not replace this with date.today().
 FACTORY_TODAY = date(2026, 4, 1)
 
-# Production sequence from Factory_Primer.md / data_dictionary.md
-STAGES_IN_ORDER = ("KNITTING", "ASSEMBLY", "WASHING", "PACKING")
+# Order lifecycle: ORDERED is an order state, not a production_log stage.
+# Production stages (production_log grain) are KNITTING -> ASSEMBLY -> WASHING -> PACKING.
+ORDER_LIFECYCLE_IN_ORDER = ("ORDERED", "KNITTING", "ASSEMBLY", "WASHING", "PACKING")
+PRODUCTION_STAGES_IN_ORDER = ("KNITTING", "ASSEMBLY", "WASHING", "PACKING")
+# Kept for backwards compatibility: full order lifecycle including ORDERED.
+STAGES_IN_ORDER = ORDER_LIFECYCLE_IN_ORDER
+ORDERED_STAGE = "ORDERED"
 STAGE_COMPLETE = "COMPLETE"
 
 # Sunday = 6 in Python's datetime.weekday(). Factory is closed on Sundays.

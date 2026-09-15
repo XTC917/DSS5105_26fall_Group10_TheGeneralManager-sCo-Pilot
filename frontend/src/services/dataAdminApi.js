@@ -1,4 +1,5 @@
 import axios from "axios";
+import { clearToken, getToken } from "./authApi.js";
 
 // ---------------------------------------------------------------------------
 // Data Admin API client — deliberately separated from services/api.js.
@@ -10,12 +11,37 @@ import axios from "axios";
 //   /api/admin/upload/*, /api/admin/datasources/*, /api/query/*
 //
 // vite.config.js proxies all /api/* to http://127.0.0.1:8000. No :8001.
+// Every request carries Authorization: Bearer <token> (set at login).
 // ---------------------------------------------------------------------------
 
 const dataAdminApi = axios.create({
   baseURL: "/api/admin",
   timeout: 60000,
 });
+
+dataAdminApi.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) {
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+dataAdminApi.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    if (error?.response?.status === 401) {
+      clearToken();
+      try {
+        window.dispatchEvent(new Event("sweaterco:unauthorized"));
+      } catch {
+        // non-browser environment; ignore
+      }
+    }
+    return Promise.reject(error);
+  },
+);
 
 export const previewExcel = (file) => {
   const formData = new FormData();

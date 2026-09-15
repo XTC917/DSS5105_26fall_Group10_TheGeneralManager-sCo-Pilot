@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import FACTORY_TODAY
@@ -23,10 +23,12 @@ from backend.models.schemas import (
     ConfirmActionResponse,
 )
 from backend.services.audit import list_audit
+from backend.services.auth import CurrentUser, get_current_user
 from backend.services.briefing import build_morning_briefing
 from backend.services.calculations import parse_iso_date
 from backend.services.confirm_actions import ConfirmError, confirm_proposed_action, decline_proposed_action
 from backend.services.database import get_db, init_db
+from backend.services.request_context import set_current_user
 from backend.services.discovery import DEFAULT_LIMIT, MAX_LIMIT, discover_factory_issues
 from backend.routers.data_admin import (
     datasource_router,
@@ -35,6 +37,7 @@ from backend.routers.data_admin import (
 )
 from backend.services.watches import evaluate_and_list
 from backend.tools.registry import MVP_TOOLS
+from backend.routers.auth import router as auth_router, users_router
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +72,8 @@ app.add_middleware(
 app.include_router(upload_router)
 app.include_router(datasource_router)
 app.include_router(query_router)
+app.include_router(auth_router)
+app.include_router(users_router)
 
 
 @app.get("/api/health")
@@ -119,18 +124,23 @@ def discovery(limit: int = DEFAULT_LIMIT) -> dict:
 
 
 @app.get("/api/audit")
-def audit(limit: int = 15) -> dict:
-    """Recent local audit rows. Not a compliance archive."""
+def audit(limit: int = 15, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Recent audit rows for the authenticated user. Not a compliance archive."""
     cap = max(1, min(limit, 50))
-    return {"items": list_audit(limit=cap), "limit": cap}
+    set_current_user(user)
+    try:
+        return {"items": list_audit(limit=cap, user_id=user.id), "limit": cap}
+    finally:
+        set_current_user(None)
 
 
 @app.get("/api/watches")
-def watches(as_of: str | None = None) -> dict:
+def watches(as_of: str | None = None, user: CurrentUser = Depends(get_current_user)) -> dict:
     """Evaluate active watches at factory `as_of`, then return fired + active.
 
     Default as_of is FACTORY_TODAY (2026-04-01), not the computer clock.
     There is no scheduler; calling this endpoint is the evaluation trigger.
+    Only the authenticated user's watches are evaluated and returned.
     """
     if as_of:
         try:
@@ -142,15 +152,19 @@ def watches(as_of: str | None = None) -> dict:
     else:
         day = FACTORY_TODAY
     get_db()
-    return evaluate_and_list(day)
+    set_current_user(user)
+    try:
+        return evaluate_and_list(day)
+    finally:
+        set_current_user(None)
 
 
 @app.post("/api/actions/confirm", response_model=ConfirmActionResponse)
-def confirm_action(request: ConfirmActionRequest) -> ConfirmActionResponse:
+def confirm_action(request: ConfirmActionRequest, user: CurrentUser = Depends(get_current_user)) -> ConfirmActionResponse:
     """Persist a proposed action after a UI click. Does not call the LLM."""
     get_db()
     try:
-        result = confirm_proposed_action(request.action)
+        result = confirm_proposed_action(request.action, current_user=user)
     except ConfirmError as exc:
         raise HTTPException(status_code=400, detail=exc.message) from exc
     if not result.get("ok"):
@@ -163,11 +177,11 @@ def confirm_action(request: ConfirmActionRequest) -> ConfirmActionResponse:
 
 
 @app.post("/api/actions/decline", response_model=ConfirmActionResponse)
-def decline_action(request: ConfirmActionRequest) -> ConfirmActionResponse:
+def decline_action(request: ConfirmActionRequest, user: CurrentUser = Depends(get_current_user)) -> ConfirmActionResponse:
     """Record that the manager dismissed a proposal. Nothing is persisted."""
     get_db()
     try:
-        result = decline_proposed_action(request.action)
+        result = decline_proposed_action(request.action, current_user=user)
     except ConfirmError as exc:
         raise HTTPException(status_code=400, detail=exc.message) from exc
     return ConfirmActionResponse(ok=True, type=result.get("type"), declined=True, summary="Dismissed. Nothing was saved.")

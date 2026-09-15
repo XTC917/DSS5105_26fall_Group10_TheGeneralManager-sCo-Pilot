@@ -51,8 +51,9 @@ def test_discovery_endpoint():
         assert body["issues"][0]["issue_id"] == "order:ORD-107"
 
 
-def test_audit_endpoint():
+def test_audit_endpoint(employee_auth_headers):
+    admin_auth_headers = employee_auth_headers
     with TestClient(app) as client:
-        res = client.get("/api/audit")
+        res = client.get("/api/audit", headers=admin_auth_headers)
         assert res.status_code == 200
         assert "items" in res.json()

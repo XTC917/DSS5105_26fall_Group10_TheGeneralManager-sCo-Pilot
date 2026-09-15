@@ -12,13 +12,16 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
+from psycopg.errors import UniqueViolation
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, Protocol
 
 from backend.config import FACTORY_TODAY
-from backend.services.audit import connect_state, record_event
+from backend.services.audit import record_event
+from backend.pg_config import COPILOT_SCHEMA
+from backend.services.pg_database import connect
+from backend.services.request_context import get_current_user_id
 from backend.services.calculations import parse_iso_date
 from backend.services.database import get_db
 
@@ -173,43 +176,74 @@ def _row_to_watch(row: Any) -> dict[str, Any]:
     return item
 
 
+def _ownership_filter(*, user_id: int | None) -> tuple[str, list[Any]]:
+    if user_id is None:
+        user_id = get_current_user_id(required=False)
+    if user_id is None:
+        return "", []
+    return "user_id = %s", [user_id]
+
+
 def list_watches(
     *,
     status: str | None = None,
     order_id: str | None = None,
+    user_id: int | None = None,
 ) -> list[dict[str, Any]]:
-    clauses: list[str] = []
+    conditions: list[str] = []
     params: list[Any] = []
+    owner_clause, owner_params = _ownership_filter(user_id=user_id)
+    if owner_clause:
+        conditions.append(owner_clause)
+        params.extend(owner_params)
     if status:
-        clauses.append("status = ?")
+        conditions.append("status = %s")
         params.append(status)
     if order_id:
-        clauses.append("order_id = ? COLLATE NOCASE")
+        conditions.append("LOWER(order_id) = LOWER(%s)")
         params.append(order_id.strip())
-    where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-    with connect_state() as conn:
+    where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+    with connect(admin=True) as conn:
         rows = conn.execute(
-            f"SELECT * FROM watches{where} ORDER BY id DESC",
+            f"SELECT * FROM {COPILOT_SCHEMA}.watches{where} ORDER BY id DESC",
             tuple(params),
         ).fetchall()
     return [_row_to_watch(r) for r in rows]
 
 
-def get_watch(watch_id: int) -> dict[str, Any] | None:
-    with connect_state() as conn:
-        row = conn.execute("SELECT * FROM watches WHERE id = ?", (watch_id,)).fetchone()
+def get_watch(watch_id: int, *, user_id: int | None = None) -> dict[str, Any] | None:
+    owner_clause, owner_params = _ownership_filter(user_id=user_id)
+    with connect(admin=True) as conn:
+        if owner_clause:
+            row = conn.execute(
+                f"SELECT * FROM {COPILOT_SCHEMA}.watches WHERE id = %s AND {owner_clause}",
+                (watch_id, *owner_params),
+            ).fetchone()
+        else:
+            row = conn.execute(f"SELECT * FROM {COPILOT_SCHEMA}.watches WHERE id = %s", (watch_id,)).fetchone()
     return _row_to_watch(row) if row else None
 
 
-def list_watch_events(*, watch_id: int | None = None) -> list[dict[str, Any]]:
-    with connect_state() as conn:
+def list_watch_events(*, watch_id: int | None = None, user_id: int | None = None) -> list[dict[str, Any]]:
+    with connect(admin=True) as conn:
+        owner_clause, owner_params = _ownership_filter(user_id=user_id)
         if watch_id is not None:
+            owner = get_watch(watch_id, user_id=user_id if user_id is not None else get_current_user_id(required=False))
+            if owner is None:
+                return []
             rows = conn.execute(
-                "SELECT * FROM watch_events WHERE watch_id = ? ORDER BY id DESC",
+                f"SELECT * FROM {COPILOT_SCHEMA}.watch_events WHERE watch_id = %s ORDER BY id DESC",
                 (watch_id,),
             ).fetchall()
+        elif owner_clause:
+            rows = conn.execute(
+                f"""SELECT e.* FROM {COPILOT_SCHEMA}.watch_events e
+                    JOIN {COPILOT_SCHEMA}.watches w ON w.id = e.watch_id
+                    WHERE w.{owner_clause} ORDER BY e.id DESC""",
+                tuple(owner_params),
+            ).fetchall()
         else:
-            rows = conn.execute("SELECT * FROM watch_events ORDER BY id DESC").fetchall()
+            rows = conn.execute(f"SELECT * FROM {COPILOT_SCHEMA}.watch_events ORDER BY id DESC").fetchall()
     items: list[dict[str, Any]] = []
     for row in rows:
         item = dict(row)
@@ -219,6 +253,10 @@ def list_watch_events(*, watch_id: int | None = None) -> list[dict[str, Any]]:
                 item["snapshot"] = json.loads(raw)
             except json.JSONDecodeError:
                 item["snapshot"] = None
+        elif isinstance(raw, dict):
+            item["snapshot"] = raw
+        else:
+            item["snapshot"] = None
         items.append(item)
     return items
 
@@ -238,16 +276,19 @@ def create_watch_row(
         )
     now = _now_utc()
     params = {"check_date": check_date.isoformat()}
-    with connect_state() as conn:
+    owner_id = get_current_user_id(required=False)
+    with connect(admin=True) as conn:
         cur = conn.execute(
-            """
-            INSERT INTO watches (
-                created_at, created_factory_today, order_id, condition_type,
+            f"""
+            INSERT INTO {COPILOT_SCHEMA}.watches (
+                user_id, created_at, created_factory_today, order_id, condition_type,
                 params_json, message, status, last_evaluated_as_of, fired_as_of,
                 fired_at, notify_channel
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NULL, NULL, NULL, %s)
+            RETURNING id
             """,
             (
+                owner_id,
                 now,
                 FACTORY_TODAY.isoformat(),
                 order_id,
@@ -258,7 +299,7 @@ def create_watch_row(
                 NOTIFY_LOCAL,
             ),
         )
-        watch_id = int(cur.lastrowid)
+        watch_id = int(cur.fetchone()["id"])
     watch = get_watch(watch_id)
     assert watch is not None
     return watch
@@ -338,11 +379,11 @@ def cancel_watch_row(watch_id: int) -> dict[str, Any]:
             f"Watch {watch_id} has status {watch['status']} and cannot be cancelled.",
         )
     previous = watch["status"]
-    with connect_state() as conn:
+    with connect(admin=True) as conn:
         cur = conn.execute(
-            """
-            UPDATE watches SET status = ?
-            WHERE id = ? AND status IN (?, ?)
+            f"""
+            UPDATE {COPILOT_SCHEMA}.watches SET status = %s
+            WHERE id = %s AND status IN (%s, %s)
             """,
             (STATUS_CANCELLED, int(watch_id), STATUS_ACTIVE, STATUS_FIRED),
         )
@@ -399,12 +440,12 @@ def _fire_watch(
     now = _now_utc()
     snapshot_json = json.dumps(snapshot, ensure_ascii=False, default=str)
     try:
-        with connect_state() as conn:
+        with connect(admin=True) as conn:
             cur = conn.execute(
-                """
-                UPDATE watches
-                SET status = ?, fired_as_of = ?, fired_at = ?, last_evaluated_as_of = ?
-                WHERE id = ? AND status = ?
+                f"""
+                UPDATE {COPILOT_SCHEMA}.watches
+                SET status = %s, fired_as_of = %s, fired_at = %s, last_evaluated_as_of = %s
+                WHERE id = %s AND status = %s
                 """,
                 (
                     STATUS_FIRED,
@@ -418,10 +459,11 @@ def _fire_watch(
             if cur.rowcount != 1:
                 return None
             event_cur = conn.execute(
-                """
-                INSERT INTO watch_events (
+                f"""
+                INSERT INTO {COPILOT_SCHEMA}.watch_events (
                     watch_id, event_type, as_of, timestamp, snapshot_json, delivery_status
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
                 """,
                 (
                     watch["id"],
@@ -432,8 +474,8 @@ def _fire_watch(
                     DELIVERY_LOCAL,
                 ),
             )
-            event_id = int(event_cur.lastrowid)
-    except sqlite3.IntegrityError:
+            event_id = int(event_cur.fetchone()["id"])
+    except UniqueViolation:
         logger.info("watch_id=%s already has a fired event", watch["id"])
         return None
 
@@ -447,6 +489,7 @@ def _fire_watch(
         "delivery_status": DELIVERY_LOCAL,
     }
     record_event(
+        user_id=watch.get("user_id"),
         event_type="watch_fired",
         tool="evaluate_active_watches",
         inputs={
@@ -490,17 +533,17 @@ def evaluate_active_watches(
         check_raw = (watch.get("params") or {}).get("check_date")
         check_date = parse_iso_date(check_raw)
         if order is None or check_date is None:
-            with connect_state() as conn:
+            with connect(admin=True) as conn:
                 conn.execute(
-                    "UPDATE watches SET last_evaluated_as_of = ? WHERE id = ?",
+                    f"UPDATE {COPILOT_SCHEMA}.watches SET last_evaluated_as_of = %s WHERE id = %s",
                     (as_of.isoformat(), watch["id"]),
                 )
             continue
 
         if watch["condition_type"] != CONDITION_INACTIVE:
-            with connect_state() as conn:
+            with connect(admin=True) as conn:
                 conn.execute(
-                    "UPDATE watches SET last_evaluated_as_of = ? WHERE id = ?",
+                    f"UPDATE {COPILOT_SCHEMA}.watches SET last_evaluated_as_of = %s WHERE id = %s",
                     (as_of.isoformat(), watch["id"]),
                 )
             continue
@@ -509,9 +552,9 @@ def evaluate_active_watches(
             order, check_date=check_date, as_of=as_of
         )
         if not met:
-            with connect_state() as conn:
+            with connect(admin=True) as conn:
                 conn.execute(
-                    "UPDATE watches SET last_evaluated_as_of = ? WHERE id = ?",
+                    f"UPDATE {COPILOT_SCHEMA}.watches SET last_evaluated_as_of = %s WHERE id = %s",
                     (as_of.isoformat(), watch["id"]),
                 )
             continue

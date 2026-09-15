@@ -12,7 +12,7 @@ export default function DataManagement() {
           <h2 className="text-sm font-semibold">Data Management</h2>
           <p className="text-xs text-ink/55">
             Upload CSV/Excel into the three factory tables and preview dataset contents.
-            Temporarily served by the standalone Data Admin backend on :8001.
+            Served by the integrated backend on :8000.
           </p>
         </div>
         <div className="flex gap-2">

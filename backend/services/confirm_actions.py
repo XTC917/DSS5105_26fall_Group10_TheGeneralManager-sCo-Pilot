@@ -11,6 +11,8 @@ import logging
 from typing import Any
 
 from backend.services.audit import record_event
+from backend.services.auth import CurrentUser
+from backend.services.request_context import set_current_user
 from backend.tools.actions import add_order_note, create_reminder, send_email
 from backend.tools.watches import cancel_watch, create_watch
 
@@ -43,7 +45,7 @@ def _parse_tool_result(raw: Any) -> dict[str, Any]:
     raise ConfirmError("INTERNAL", "Tool did not return JSON.")
 
 
-def confirm_proposed_action(action: dict[str, Any]) -> dict[str, Any]:
+def confirm_proposed_action(action: dict[str, Any], *, current_user: CurrentUser | None = None) -> dict[str, Any]:
     if not isinstance(action, dict):
         raise ConfirmError("INVALID_INPUT", "action must be an object.")
     kind = action.get("type")
@@ -60,8 +62,12 @@ def confirm_proposed_action(action: dict[str, Any]) -> dict[str, Any]:
             continue
         kwargs[key] = value
     kwargs["confirmed"] = True
-    logger.info("ui confirm type=%s keys=%s", kind, sorted(k for k in kwargs if k != "confirmed"))
-    payload = _parse_tool_result(tool.invoke(kwargs))
+    set_current_user(current_user)
+    try:
+        logger.info("ui confirm type=%s keys=%s", kind, sorted(k for k in kwargs if k != "confirmed"))
+        payload = _parse_tool_result(tool.invoke(kwargs))
+    finally:
+        set_current_user(None)
     return {
         "ok": bool(payload.get("ok")),
         "type": kind,
@@ -73,22 +79,26 @@ def confirm_proposed_action(action: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def decline_proposed_action(action: dict[str, Any]) -> dict[str, Any]:
+def decline_proposed_action(action: dict[str, Any], *, current_user: CurrentUser | None = None) -> dict[str, Any]:
     if not isinstance(action, dict):
         raise ConfirmError("INVALID_INPUT", "action must be an object.")
     kind = action.get("type") or "unknown"
     if kind not in ALLOWED_ACTIONS and kind != "unknown":
         raise ConfirmError("UNSUPPORTED", "That action cannot be declined from the UI.")
-    record_event(
-        event_type="action_declined",
-        tool=kind if kind in ALLOWED_ACTIONS else None,
-        inputs={"type": kind, "order_id": action.get("order_id"), "watch_id": action.get("watch_id")},
-        result_ok=True,
-        result_summary=f"{kind} declined in UI",
-        confirmation_status="declined",
-        execution_status="not_saved",
-        target=action.get("order_id"),
-    )
+    set_current_user(current_user)
+    try:
+        record_event(
+            event_type="action_declined",
+            tool=kind if kind in ALLOWED_ACTIONS else None,
+            inputs={"type": kind, "order_id": action.get("order_id"), "watch_id": action.get("watch_id")},
+            result_ok=True,
+            result_summary=f"{kind} declined in UI",
+            confirmation_status="declined",
+            execution_status="not_saved",
+            target=action.get("order_id"),
+        )
+    finally:
+        set_current_user(None)
     return {"ok": True, "type": kind, "declined": True}
 
 

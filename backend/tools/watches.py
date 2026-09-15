@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from backend.config import FACTORY_TODAY
 from backend.services.audit import record_event
 from backend.services.database import get_db
+from backend.services.request_context import get_current_user_id
 from backend.services.watches import (
     CONDITION_INACTIVE,
     WatchError,
@@ -264,7 +265,7 @@ def list_watches(order_id: Optional[str] = None) -> str:
     tool_name = "list_watches"
     try:
         oid = (order_id or "").strip() or None
-        all_rows = [watch_summary(row) for row in load_watches(order_id=oid)]
+        all_rows = [watch_summary(row) for row in load_watches(order_id=oid, user_id=get_current_user_id(required=False))]
         by_status = {"ACTIVE": [], "FIRED": [], "CANCELLED": []}
         for row in all_rows:
             by_status.setdefault(row["status"], []).append(row)

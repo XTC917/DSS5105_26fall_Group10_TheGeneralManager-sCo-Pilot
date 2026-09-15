@@ -19,6 +19,7 @@ def test_briefing_reuses_at_risk_set(db):
     assert data["at_risk"]["count"] == 10
     assert data["in_progress_order_count"] == 34
     assert set(data["in_progress_by_stage"]) == {
+        "ORDERED",
         "KNITTING",
         "ASSEMBLY",
         "WASHING",

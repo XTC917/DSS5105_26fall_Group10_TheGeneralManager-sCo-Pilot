@@ -15,7 +15,7 @@ def _client(db, monkeypatch):
     return TestClient(app)
 
 
-def test_ui_confirm_creates_watch(db, clean_state, monkeypatch):
+def test_ui_confirm_creates_watch(db, clean_state, test_user, monkeypatch, employee_auth_headers):
     proposed = parse_tool(
         create_watch.invoke(
             {
@@ -27,7 +27,7 @@ def test_ui_confirm_creates_watch(db, clean_state, monkeypatch):
     )
     action = proposed["data"]["proposed_action"]
     with _client(db, monkeypatch) as client:
-        res = client.post("/api/actions/confirm", json={"action": action})
+        res = client.post("/api/actions/confirm", json={"action": action}, headers=employee_auth_headers)
     assert res.status_code == 200
     body = res.json()
     assert body["ok"] is True
@@ -38,7 +38,7 @@ def test_ui_confirm_creates_watch(db, clean_state, monkeypatch):
     assert rows[0]["order_id"] == "ORD-005"
 
 
-def test_ui_dismiss_does_not_create_watch(db, clean_state, monkeypatch):
+def test_ui_dismiss_does_not_create_watch(db, clean_state, test_user, monkeypatch, employee_auth_headers):
     proposed = parse_tool(
         create_watch.invoke(
             {
@@ -50,23 +50,24 @@ def test_ui_dismiss_does_not_create_watch(db, clean_state, monkeypatch):
     )
     action = proposed["data"]["proposed_action"]
     with _client(db, monkeypatch) as client:
-        res = client.post("/api/actions/decline", json={"action": action})
+        res = client.post("/api/actions/decline", json={"action": action}, headers=employee_auth_headers)
     assert res.status_code == 200
     assert res.json()["declined"] is True
     assert list_watches() == []
 
 
-def test_ui_confirm_rejects_unknown_type(db, clean_state, monkeypatch):
+def test_ui_confirm_rejects_unknown_type(db, clean_state, test_user, monkeypatch, employee_auth_headers):
     with _client(db, monkeypatch) as client:
         res = client.post(
             "/api/actions/confirm",
             json={"action": {"type": "run_sql", "order_id": "ORD-005"}},
+            headers=employee_auth_headers,
         )
     assert res.status_code == 400
     assert list_watches() == []
 
 
-def test_ui_confirm_cancel_watch(db, clean_state, monkeypatch):
+def test_ui_confirm_cancel_watch(db, clean_state, test_user, monkeypatch, employee_auth_headers):
     parse_tool(
         create_watch.invoke(
             {
@@ -81,6 +82,6 @@ def test_ui_confirm_cancel_watch(db, clean_state, monkeypatch):
     proposed = parse_tool(cancel_watch.invoke({"order_id": "ORD-005", "confirmed": False}))
     action = proposed["data"]["proposed_action"]
     with _client(db, monkeypatch) as client:
-        res = client.post("/api/actions/confirm", json={"action": action})
+        res = client.post("/api/actions/confirm", json={"action": action}, headers=employee_auth_headers)
     assert res.status_code == 200
     assert list_watches()[0]["status"] == "CANCELLED"
