@@ -13,7 +13,7 @@ from typing import Optional
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from backend.config import STAGE_COMPLETE, STAGES_IN_ORDER
+from backend.config import ORDER_LIFECYCLE_IN_ORDER, STAGE_COMPLETE
 from backend.services.database import get_db
 from backend.services.discovery import (
     DEFAULT_LIMIT,
@@ -26,7 +26,7 @@ from backend.tools.common import tool_error, tool_json
 logger = logging.getLogger(__name__)
 
 ALLOWED_STATUS = {"IN_PROGRESS", "COMPLETE"}
-ALLOWED_STAGE = set(STAGES_IN_ORDER) | {STAGE_COMPLETE}
+ALLOWED_STAGE = set(ORDER_LIFECYCLE_IN_ORDER) | {STAGE_COMPLETE}
 MAX_ROWS = 60
 
 
@@ -48,7 +48,7 @@ class FindOrdersInput(BaseModel):
     )
     current_stage: Optional[str] = Field(
         default=None,
-        description="KNITTING, ASSEMBLY, WASHING, PACKING, or COMPLETE.",
+        description="ORDERED, KNITTING, ASSEMBLY, WASHING, PACKING, or COMPLETE.",
     )
 
 
@@ -103,7 +103,7 @@ def find_orders(
             return tool_error(
                 tool_name,
                 "INVALID_INPUT",
-                "current_stage must be KNITTING, ASSEMBLY, WASHING, PACKING, or COMPLETE.",
+                "current_stage must be ORDERED, KNITTING, ASSEMBLY, WASHING, PACKING, or COMPLETE.",
                 allowed=sorted(ALLOWED_STAGE),
             )
 

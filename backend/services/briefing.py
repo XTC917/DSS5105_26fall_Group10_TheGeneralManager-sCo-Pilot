@@ -8,8 +8,9 @@ from typing import Any
 
 from backend.config import (
     FACTORY_TODAY,
+    ORDER_LIFECYCLE_IN_ORDER,
     PRODUCTION_DROP_RATIO,
-    STAGES_IN_ORDER,
+    PRODUCTION_STAGES_IN_ORDER,
 )
 from backend.services.calculations import is_working_day, parse_iso_date
 from backend.services.database import FactoryDB
@@ -29,7 +30,7 @@ def build_morning_briefing(db: FactoryDB) -> dict[str, Any]:
 
     in_progress = db.in_progress_orders()
     stage_counts = Counter(o["current_stage"] for o in in_progress)
-    by_stage = {stage: int(stage_counts.get(stage, 0)) for stage in STAGES_IN_ORDER}
+    by_stage = {stage: int(stage_counts.get(stage, 0)) for stage in ORDER_LIFECYCLE_IN_ORDER}
 
     last_date, last_by_stage = last_working_day_output(db)
     unusual = unusual_stage_output(db)
@@ -102,7 +103,7 @@ def last_working_day_output(db: FactoryDB) -> tuple[str | None, dict[str, int]]:
     last = max(working_dates)
     by_stage: dict[str, int] = {}
     for row in log:
-        if parse_iso_date(row["date"]) == last and row["stage"] in STAGES_IN_ORDER:
+        if parse_iso_date(row["date"]) == last and row["stage"] in PRODUCTION_STAGES_IN_ORDER:
             by_stage[row["stage"]] = int(row["pieces_completed"])
     return last.isoformat(), by_stage
 
@@ -116,7 +117,7 @@ def unusual_stage_output(db: FactoryDB) -> list[dict[str, Any]]:
     throughput = stage_throughput_medians(db)
     last_date, last_by_stage = last_working_day_output(db)
     unusual: list[dict[str, Any]] = []
-    for stage in STAGES_IN_ORDER:
+    for stage in PRODUCTION_STAGES_IN_ORDER:
         median = throughput["medians_pieces_per_working_day"].get(stage)
         last_pieces = last_by_stage.get(stage)
         if median and last_pieces is not None and median > 0:

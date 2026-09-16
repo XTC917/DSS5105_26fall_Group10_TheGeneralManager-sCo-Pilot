@@ -46,14 +46,14 @@ def test_send_email_confirmed_is_still_simulated(db, clean_state):
     assert payload["data"]["execution_status"] == "SIMULATED"
 
 
-def test_add_order_note_requires_confirmation(db, clean_state):
+def test_add_order_note_requires_confirmation(db, clean_state, test_user):
     proposed = parse_tool(
         add_order_note.invoke(
             {"order_id": "ORD-107", "note": "Chase packing tomorrow", "confirmed": False}
         )
     )
     assert proposed["data"]["saved"] is False
-    assert list_notes("ORD-107") == []
+    assert list_notes(order_id="ORD-107") == []
 
     saved = parse_tool(
         add_order_note.invoke(
@@ -61,22 +61,23 @@ def test_add_order_note_requires_confirmation(db, clean_state):
         )
     )
     assert saved["data"]["saved"] is True
-    notes = list_notes("ORD-107")
+    notes = list_notes(order_id="ORD-107")
     assert len(notes) == 1
     assert notes[0]["note"] == "Chase packing tomorrow"
+    assert notes[0]["user_id"] == test_user.id
 
 
-def test_add_order_note_empty_and_missing(db, clean_state):
+def test_add_order_note_empty_and_missing(db, clean_state, test_user):
     empty = parse_tool(add_order_note.invoke({"order_id": "ORD-107", "note": "   "}))
     assert empty["error"]["code"] == "INVALID_INPUT"
     missing = parse_tool(
         add_order_note.invoke({"order_id": "ORD-999", "note": "hello", "confirmed": True})
     )
     assert missing["error"]["code"] == "NOT_FOUND"
-    assert list_notes("ORD-999") == []
+    assert list_notes(order_id="ORD-999") == []
 
 
-def test_create_reminder_factory_tomorrow(db, clean_state):
+def test_create_reminder_factory_tomorrow(db, clean_state, test_user):
     proposed = parse_tool(
         create_reminder.invoke(
             {
@@ -103,9 +104,9 @@ def test_create_reminder_factory_tomorrow(db, clean_state):
     )
     assert saved["data"]["saved"] is True
     assert saved["data"]["notified"] is False
-    rows = list_reminders()
+    rows = list_reminders(user_id=test_user.id)
     assert len(rows) == 1
-    assert rows[0]["remind_on"] == "2026-04-02"
+    assert str(rows[0]["remind_on"]) == "2026-04-02"
 
 
 def test_create_reminder_invalid_date(db, clean_state):

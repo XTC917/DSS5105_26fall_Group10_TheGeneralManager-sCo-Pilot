@@ -13,6 +13,8 @@ from typing import Any
 from backend.config import (
     CLOSED_WEEKDAY,
     FACTORY_TODAY,
+    ORDERED_STAGE,
+    PRODUCTION_STAGES_IN_ORDER,
     STAGE_COMPLETE,
     STAGES_IN_ORDER,
     STALL_WORKING_DAYS,
@@ -59,10 +61,14 @@ def remaining_stages(current_stage: str) -> list[str]:
     """Stages still required, including the current stage.
 
     COMPLETE has none. Unknown stage names return an empty list so callers
-    can surface a limitation instead of guessing.
+    can surface a limitation instead of guessing. ORDERED is an order
+    lifecycle state: the order still needs KNITTING..PACKING, so remaining
+    work is the four production stages.
     """
     if current_stage == STAGE_COMPLETE:
         return []
+    if current_stage == ORDERED_STAGE:
+        return list(PRODUCTION_STAGES_IN_ORDER)
     if current_stage not in STAGES_IN_ORDER:
         return []
     idx = STAGES_IN_ORDER.index(current_stage)

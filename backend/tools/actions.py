@@ -16,6 +16,7 @@ from backend.config import FACTORY_TODAY
 from backend.services.audit import add_note, add_reminder, list_audit, record_event
 from backend.services.calculations import assess_order_risk, parse_iso_date
 from backend.services.database import get_db
+from backend.services.request_context import get_current_user_id
 from backend.tools.common import tool_error, tool_json
 
 logger = logging.getLogger(__name__)
@@ -279,7 +280,7 @@ def add_order_note(order_id: str, note: str, confirmed: bool = False) -> str:
                     },
                 }
             )
-        note_id = add_note(order["order_id"], text)
+        note_id = add_note(user_id=get_current_user_id(required=False), order_id=order["order_id"], note=text)
         record_event(
             event_type="action_execution",
             tool=tool_name,
@@ -389,7 +390,7 @@ def create_reminder(
                     },
                 }
             )
-        reminder_id = add_reminder(order["order_id"], when.isoformat(), text)
+        reminder_id = add_reminder(user_id=get_current_user_id(required=False), order_id=order["order_id"], remind_on=when.isoformat(), message=text)
         record_event(
             event_type="action_execution",
             tool=tool_name,
@@ -435,7 +436,7 @@ def get_recent_actions(limit: int = 15) -> str:
     tool_name = "get_recent_actions"
     try:
         cap = max(1, min(int(limit or 15), 50))
-        items = list_audit(limit=cap)
+        items = list_audit(limit=cap, user_id=get_current_user_id(required=False))
         return tool_json(
             {
                 "ok": True,

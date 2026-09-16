@@ -1,132 +1,57 @@
-"""Read-only SQL + live schema text for the three business tables.
-
-Migrated from SQL_related_app/backend/schema_service.py.
-Reads the shared factory.db through FactoryDB; the SQLite authorizer still
-restricts reads to the allowlisted tables.
-"""
-
+"""Read-only PostgreSQL SQL gateway for approved operational tables."""
 from __future__ import annotations
 
-import sqlite3
 from typing import Any
 
-from backend.services.data_admin import (
-    ALLOWED_TABLES,
-    DATA_SOURCES_META,
-    assert_allowed_table,
-    quote_table,
-)
-from backend.services.database import FactoryDB, get_db
+from psycopg import sql
 
-_ALLOWED_ACTIONS = {
-    sqlite3.SQLITE_SELECT,
-    sqlite3.SQLITE_READ,
-    sqlite3.SQLITE_FUNCTION,
-}
+from backend.pg_config import PG_SCHEMA
+from backend.services.data_admin import ALLOWED_TABLES, DATA_SOURCES_META, assert_allowed_table, quote_table
+from backend.services.pg_database import connect
 
 
 class SchemaService:
-    def _connect(self) -> sqlite3.Connection:
-        try:
-            db: FactoryDB = get_db()
-        except RuntimeError:
-            db = FactoryDB()
-        db.db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(db.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
-
-    def _pragma_table_info(self, table_name: str) -> list[dict[str, Any]]:
-        conn = self._connect()
-        try:
-            rows = conn.execute(
-                f"PRAGMA table_info({quote_table(table_name)})"
-            ).fetchall()
-            return [
-                {
-                    "cid": row["cid"],
-                    "name": row["name"],
-                    "type": row["type"],
-                    "notnull": row["notnull"],
-                    "dflt_value": row["dflt_value"],
-                    "pk": row["pk"],
-                }
-                for row in rows
-            ]
-        finally:
-            conn.close()
-
-    def pragma_table_info(self, table_name: str) -> list[dict[str, Any]]:
+    def _columns(self, table_name: str) -> list[dict[str, Any]]:
         assert_allowed_table(table_name)
-        return self._pragma_table_info(table_name)
+        with connect() as conn:
+            rows = conn.execute(
+                """SELECT ordinal_position AS cid, column_name AS name, data_type AS type,
+                    (is_nullable = 'NO') AS notnull
+                    FROM information_schema.columns
+                    WHERE table_schema=%s AND table_name=%s ORDER BY ordinal_position""",
+                (PG_SCHEMA, table_name),
+            ).fetchall()
+        return [dict(row) | {"dflt_value": None, "pk": 0} for row in rows]
+
+    def pragma_table_info(self, table_name: str):
+        return self._columns(table_name)
 
     def get_live_schema(self) -> str:
         parts = ["Database tables available for query:", ""]
-        conn = self._connect()
-        try:
+        with connect() as conn:
             for table_name in ALLOWED_TABLES:
-                parts.append(f"## Table: {table_name}")
-                parts.append(f"Description: {DATA_SOURCES_META[table_name]['description']}")
-                for col in self._pragma_table_info(table_name):
-                    pk = " [PRIMARY KEY]" if col["pk"] else ""
-                    nullable = " [NOT NULL]" if col["notnull"] else " [NULL]"
-                    parts.append(f"  - {col['name']}: {col['type']}{pk}{nullable}")
-                count = conn.execute(
-                    f"SELECT COUNT(*) AS cnt FROM {quote_table(table_name)}"
-                ).fetchone()["cnt"]
+                parts.extend([f"## Table: {table_name}", f"Description: {DATA_SOURCES_META[table_name]['description']}"])
+                for col in self._columns(table_name):
+                    parts.append(f"  - {col['name']}: {col['type']}" + (" [NOT NULL]" if col["notnull"] else " [NULL]"))
+                count = conn.execute(sql.SQL("SELECT COUNT(*) AS cnt FROM {}.{}").format(sql.Identifier(PG_SCHEMA), sql.Identifier(table_name))).fetchone()["cnt"]
                 parts.append(f"  Row count: {count}")
-                sample = conn.execute(
-                    f"SELECT * FROM {quote_table(table_name)} LIMIT 2"
-                ).fetchall()
-                if sample:
-                    parts.append("  Sample data:")
-                    for row in sample:
-                        parts.append(f"    {dict(row)}")
                 parts.append("")
-        finally:
-            conn.close()
-
-        parts.extend(
-            [
-                "## Business Rules",
-                "- Factory is closed on Sundays (production_log has 0 pieces_completed)",
-                "- Production stages: KNITTING -> ASSEMBLY -> WASHING -> PACKING",
-                "- days_late = completed_date - due_date (negative means early, NULL means not completed)",
-                "- Only ACTIVE workshops can take new orders",
-                "- Current date is 2026-04-01",
-            ]
-        )
+        parts.extend(["## Business Rules", "- Factory is closed on Sundays", "- Order lifecycle: ORDERED -> KNITTING -> ASSEMBLY -> WASHING -> PACKING -> COMPLETE", "- production_log stages: KNITTING -> ASSEMBLY -> WASHING -> PACKING", "- Current date is 2026-04-01"])
         return "\n".join(parts)
 
-    def execute_query(self, sql: str) -> list[dict[str, Any]]:
-        stripped = sql.strip()
+    def execute_query(self, query_text: str) -> list[dict[str, Any]]:
+        stripped = query_text.strip()
         if stripped.endswith(";"):
             stripped = stripped[:-1].strip()
-        if not stripped:
-            raise ValueError("SQL statement is required")
-        if ";" in stripped:
-            raise ValueError("Multiple SQL statements are not allowed")
-        if not stripped.upper().startswith("SELECT"):
-            raise ValueError("Only SELECT queries are allowed")
-
-        conn = self._connect()
-
-        def _authorizer(action, arg1, _arg2, _dbname, _source):
-            if action not in _ALLOWED_ACTIONS:
-                return sqlite3.SQLITE_DENY
-            if action == sqlite3.SQLITE_READ and arg1:
-                if arg1 not in ALLOWED_TABLES:
-                    return sqlite3.SQLITE_DENY
-            return sqlite3.SQLITE_OK
-
-        try:
-            conn.set_authorizer(_authorizer)
-            rows = conn.execute(stripped).fetchall()
-            return [dict(row) for row in rows]
-        except sqlite3.DatabaseError as exc:
-            raise ValueError(str(exc)) from exc
-        finally:
-            conn.close()
+        if not stripped or ";" in stripped or not stripped.upper().startswith("SELECT"):
+            raise ValueError("Only one SELECT statement is allowed")
+        with connect() as conn:
+            with conn.transaction():
+                conn.execute("SET TRANSACTION READ ONLY")
+                conn.execute("SET LOCAL statement_timeout = '5s'")
+                conn.execute(sql.SQL("SET LOCAL search_path TO {}, pg_catalog").format(sql.Identifier(PG_SCHEMA)))
+                rows = conn.execute(stripped).fetchmany(101)
+        return [dict(row) for row in rows]
 
 
 schema_service = SchemaService()

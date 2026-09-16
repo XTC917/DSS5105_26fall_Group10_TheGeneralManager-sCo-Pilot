@@ -15,4 +15,4 @@ def test_short_circuit_writes_audit_row(db, clean_state):
     assert latest["event_type"] == "short_circuit"
     assert "revenue" in (latest["user_query"] or "").lower()
     assert latest["execution_status"] == "no_tool"
-    assert latest["factory_today"] == "2026-04-01"
+    assert str(latest["factory_today"]) == "2026-04-01"

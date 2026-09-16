@@ -40,7 +40,7 @@ def test_thursday_resolves_from_factory_today_not_wall_clock():
     assert resolve_check_date("2026-04-02") == date(2026, 4, 2)
 
 
-def test_unconfirmed_watch_is_not_persisted(db, clean_state):
+def test_unconfirmed_watch_is_not_persisted(db, clean_state, test_user):
     payload = _create("ORD-005", "Thursday", confirmed=False)
     assert payload["ok"] is True
     assert payload["data"]["saved"] is False
@@ -50,7 +50,7 @@ def test_unconfirmed_watch_is_not_persisted(db, clean_state):
     assert list_watch_events() == []
 
 
-def test_confirmed_watch_is_active(db, clean_state):
+def test_confirmed_watch_is_active(db, clean_state, test_user):
     payload = _create("ORD-005", "2026-04-02", confirmed=True)
     assert payload["ok"] is True
     assert payload["data"]["saved"] is True
@@ -64,7 +64,7 @@ def test_confirmed_watch_is_active(db, clean_state):
     assert rows[0]["notify_channel"] == "local"
 
 
-def test_does_not_fire_before_check_date(db, clean_state):
+def test_does_not_fire_before_check_date(db, clean_state, test_user):
     _create("ORD-005", "2026-04-02", confirmed=True)
     evaluate_active_watches(date(2026, 4, 1))
     rows = list_watches()
@@ -72,7 +72,7 @@ def test_does_not_fire_before_check_date(db, clean_state):
     assert list_watch_events() == []
 
 
-def test_fires_on_check_date(db, clean_state):
+def test_fires_on_check_date(db, clean_state, test_user):
     _create("ORD-005", "2026-04-02", confirmed=True)
     evaluate_active_watches(date(2026, 4, 2))
     rows = list_watches()
@@ -92,7 +92,7 @@ def test_fires_on_check_date(db, clean_state):
     assert audit[0]["target"] == "ORD-005"
 
 
-def test_repeat_evaluate_does_not_refire(db, clean_state):
+def test_repeat_evaluate_does_not_refire(db, clean_state, test_user):
     _create("ORD-005", "2026-04-02", confirmed=True)
     evaluate_active_watches(date(2026, 4, 2))
     evaluate_active_watches(date(2026, 4, 3))
@@ -102,7 +102,7 @@ def test_repeat_evaluate_does_not_refire(db, clean_state):
     assert len(audit) == 1
 
 
-def test_recent_activity_does_not_fire(db, clean_state):
+def test_recent_activity_does_not_fire(db, clean_state, test_user):
     _create("ORD-005", "2026-04-02", confirmed=True)
 
     def moved(_order_id: str) -> dict:
@@ -118,18 +118,18 @@ def test_recent_activity_does_not_fire(db, clean_state):
     assert list_watch_events() == []
 
 
-def test_complete_order_cannot_create_inactive_watch(db, clean_state):
+def test_complete_order_cannot_create_inactive_watch(db, clean_state, test_user):
     payload = _create("ORD-058", "Thursday", confirmed=True)
     assert payload["ok"] is False
     assert payload["error"]["code"] == "INVALID_INPUT"
     assert list_watches() == []
 
 
-def test_get_watches_api_returns_fired_and_active(db, clean_state, monkeypatch):
+def test_get_watches_api_returns_fired_and_active(db, clean_state, test_user, monkeypatch, employee_auth_headers):
     _create("ORD-005", "2026-04-02", confirmed=True)
     monkeypatch.setattr("backend.main.init_db", lambda *args, **kwargs: db)
     with TestClient(app) as client:
-        waiting = client.get("/api/watches?as_of=2026-04-01")
+        waiting = client.get("/api/watches?as_of=2026-04-01", headers=employee_auth_headers)
         assert waiting.status_code == 200
         body = waiting.json()
         assert body["as_of"] == "2026-04-01"
@@ -139,7 +139,7 @@ def test_get_watches_api_returns_fired_and_active(db, clean_state, monkeypatch):
         assert body["active"][0]["order_id"] == "ORD-005"
         assert body["active"][0]["status"] == "ACTIVE"
 
-        fired = client.get("/api/watches?as_of=2026-04-02")
+        fired = client.get("/api/watches?as_of=2026-04-02", headers=employee_auth_headers)
         assert fired.status_code == 200
         board = fired.json()
         assert board["as_of"] == "2026-04-02"
@@ -153,7 +153,7 @@ def test_get_watches_api_returns_fired_and_active(db, clean_state, monkeypatch):
         assert item["as_of"] == "2026-04-02"
 
 
-def test_notifier_failure_does_not_unfire(db, clean_state):
+def test_notifier_failure_does_not_unfire(db, clean_state, test_user):
     _create("ORD-005", "2026-04-02", confirmed=True)
 
     class BoomNotifier:
@@ -165,7 +165,7 @@ def test_notifier_failure_does_not_unfire(db, clean_state):
     assert len(list_watch_events()) == 1
 
 
-def test_evaluate_and_list_shape(db, clean_state):
+def test_evaluate_and_list_shape(db, clean_state, test_user):
     _create("ORD-005", "Thursday", confirmed=True)
     board = evaluate_and_list(date(2026, 4, 2))
     assert set(board) >= {"as_of", "fired", "active"}
@@ -183,7 +183,7 @@ def _cancel(order_id=None, watch_id=None, *, confirmed: bool):
     return parse_tool(cancel_watch.invoke(payload))
 
 
-def test_unconfirmed_cancel_does_not_change_status(db, clean_state):
+def test_unconfirmed_cancel_does_not_change_status(db, clean_state, test_user):
     _create("ORD-005", "2026-04-02", confirmed=True)
     payload = _cancel("ORD-005", confirmed=False)
     assert payload["ok"] is True
@@ -192,7 +192,7 @@ def test_unconfirmed_cancel_does_not_change_status(db, clean_state):
     assert list_watches()[0]["status"] == "ACTIVE"
 
 
-def test_confirmed_cancel_active_watch_does_not_fire(db, clean_state):
+def test_confirmed_cancel_active_watch_does_not_fire(db, clean_state, test_user):
     created = _create("ORD-005", "2026-04-02", confirmed=True)
     payload = _cancel("ORD-005", confirmed=True)
     assert payload["ok"] is True
@@ -210,7 +210,7 @@ def test_confirmed_cancel_active_watch_does_not_fire(db, clean_state):
     assert board["cancelled"][0]["status"] == "CANCELLED"
 
 
-def test_cancel_fired_watch_leaves_alerts_list(db, clean_state):
+def test_cancel_fired_watch_leaves_alerts_list(db, clean_state, test_user):
     _create("ORD-005", "2026-04-02", confirmed=True)
     evaluate_active_watches(date(2026, 4, 2))
     assert list_watches()[0]["status"] == "FIRED"
@@ -225,13 +225,13 @@ def test_cancel_fired_watch_leaves_alerts_list(db, clean_state):
     assert board["cancelled"][0]["order_id"] == "ORD-005"
 
 
-def test_cancel_missing_watch_is_not_found(db, clean_state):
+def test_cancel_missing_watch_is_not_found(db, clean_state, test_user):
     payload = _cancel("ORD-005", confirmed=True)
     assert payload["ok"] is False
     assert payload["error"]["code"] == "NOT_FOUND"
 
 
-def test_cancel_already_cancelled_is_rejected(db, clean_state):
+def test_cancel_already_cancelled_is_rejected(db, clean_state, test_user):
     created = _create("ORD-005", "2026-04-02", confirmed=True)
     watch_id = created["data"]["watch_id"]
     _cancel("ORD-005", confirmed=True)
@@ -243,7 +243,7 @@ def test_cancel_already_cancelled_is_rejected(db, clean_state):
     assert by_id["error"]["code"] == "INVALID_INPUT"
 
 
-def test_cancel_ambiguous_when_several_watches(db, clean_state):
+def test_cancel_ambiguous_when_several_watches(db, clean_state, test_user):
     _create("ORD-005", "2026-04-02", confirmed=True)
     _create("ORD-005", "2026-04-03", confirmed=True)
     payload = _cancel("ORD-005", confirmed=True)
@@ -258,7 +258,7 @@ def test_cancel_ambiguous_when_several_watches(db, clean_state):
     assert len(remaining) == 1
 
 
-def test_list_watches_tool_keeps_cancelled_for_trace(db, clean_state):
+def test_list_watches_tool_keeps_cancelled_for_trace(db, clean_state, test_user):
     _create("ORD-005", "2026-04-02", confirmed=True)
     _create("ORD-107", "2026-04-02", confirmed=True)
     listed = parse_tool(list_watches_tool.invoke({"order_id": "ORD-005"}))

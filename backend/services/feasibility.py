@@ -23,7 +23,7 @@ from typing import Any
 
 from backend.config import (
     FACTORY_TODAY,
-    STAGES_IN_ORDER,
+    PRODUCTION_STAGES_IN_ORDER,
     THROUGHPUT_LOOKBACK_WORKING_DAYS,
 )
 from backend.services.calculations import (
@@ -146,7 +146,7 @@ def resolve_category(db: FactoryDB, product: str | None, category: str | None) -
 def stage_throughput_medians(db: FactoryDB, today: date = FACTORY_TODAY) -> dict[str, Any]:
     """Median pieces_completed per stage on the last N working days (Sundays excluded)."""
     log = db.production_log()
-    by_stage: dict[str, list[int]] = {s: [] for s in STAGES_IN_ORDER}
+    by_stage: dict[str, list[int]] = {s: [] for s in PRODUCTION_STAGES_IN_ORDER}
     working_dates = sorted(
         {
             parse_iso_date(row["date"])
@@ -170,7 +170,7 @@ def stage_throughput_medians(db: FactoryDB, today: date = FACTORY_TODAY) -> dict
     bottleneck_median = None
     if present:
         bottleneck_stage = min(
-            (s for s in STAGES_IN_ORDER if medians[s] is not None),
+            (s for s in PRODUCTION_STAGES_IN_ORDER if medians[s] is not None),
             key=lambda s: medians[s] or 0,
         )
         bottleneck_median = medians[bottleneck_stage]
