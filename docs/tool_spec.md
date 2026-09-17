@@ -147,7 +147,9 @@ revenue or worker names.
 - Customer: case-insensitive exact match.
 - Product: names already in `orders.csv`, plus simple plurals (`hoodies` → Hoodie).
 - Status: `IN_PROGRESS` or `COMPLETE`.
-- Stage: `KNITTING`, `ASSEMBLY`, `WASHING`, `PACKING`, `COMPLETE`.
+- Stage: `ORDERED`, `KNITTING`, `ASSEMBLY`, `WASHING`, `PACKING`, `COMPLETE`.
+  (`ORDERED` is an order lifecycle state, not a `production_log` stage.
+  Factory today 2026-04-01 has no ORDERED rows; earlier as-of CSVs do.)
 
 Returns **all** matching rows (ids + summary fields). Never picks one order.
 0 rows → `count: 0`, not an invented customer. Invalid status/stage → `INVALID_INPUT`.

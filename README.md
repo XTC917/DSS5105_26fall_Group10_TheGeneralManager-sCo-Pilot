@@ -70,15 +70,7 @@ real-time monitoring and **not** a scheduler.
 - `WatchNotifier` is the future email hook. V1 is `LocalWatchNotifier` only (no SMTP)
 - `create_reminder` is unchanged: a local calendar note, not a watch
 
-### Evaluation (development set)
-
-`evaluation/questions.json` has **43** questions (course minimum 30):
-
-- **11** ambiguous / unanswerable / hallucination-bait (minimum 5)
-- **7** feasibility or action requests (minimum 5)
-
-Gold answers are recomputed from the CSVs and Python services. This file is a
-**development** set. Do not present scores on it as a held-out official result.
+`evaluation/questions.json` is a few-shot wording bank for the agent, not a scoring harness.
 
 ## What is not built yet (course gaps first)
 
@@ -161,20 +153,6 @@ pytest
 ```
 
 These tests check schemas, date arithmetic, risk flags, routing, and tool JSON. They do not call an LLM.
-
-## Evaluation
-
-```powershell
-python -m evaluation.run_evaluation --validate
-python -m evaluation.run_evaluation --mode tools
-```
-
-`--mode tools` does not need an API key. `--mode agent` does.
-
-`evaluation/questions.json` is used during development. Do not treat scores on
-this file as an unbiased held-out evaluation. Scores are two dimensions:
-**data/tool accuracy** and **final-answer quality**. See `evaluation/README.md`.
-Pass a later held-out file with `--dataset`.
 
 Division of labour:
 

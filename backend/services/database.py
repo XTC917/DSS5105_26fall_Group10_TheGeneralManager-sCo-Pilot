@@ -72,6 +72,27 @@ class FactoryDB:
     def in_progress_orders(self):
         return self.find_orders(status="IN_PROGRESS")
 
+    def order_snapshot_history(self, order_id: str) -> list[dict[str, Any]]:
+        """Observed stage-entry dates from app.snapshot (not production_log)."""
+        rows = self._fetch(
+            f"""
+            SELECT order_id, status, stage, date
+            FROM {PG_SCHEMA}.snapshot
+            WHERE order_id = %s
+            ORDER BY date, stage
+            """,
+            (order_id.strip(),),
+        )
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            d = item.get("date")
+            if hasattr(d, "isoformat"):
+                item["date"] = d.isoformat()
+            out.append(item)
+        return out
+
+
     def list_products(self):
         return self._fetch(f"SELECT DISTINCT product, category FROM {PG_SCHEMA}.orders ORDER BY product")
 

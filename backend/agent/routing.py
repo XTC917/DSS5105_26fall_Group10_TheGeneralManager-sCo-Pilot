@@ -1,20 +1,10 @@
 """Inspectable pre-routing. Runs before the LLM picks a tool.
 
-This is not a second agent and it does no arithmetic. It only decides whether
-the requested information exists in the Track 1 tables. If it does not, we
-return a limitation and never call an unrelated tool.
+This is not a second agent and it does no arithmetic. If an intercept regex
+matches, we return a limitation and never call an unrelated tool.
 
-Available columns (do not invent others):
-
-* orders: order_id, customer, product, category, pieces, order_date, due_date,
-  status, current_stage, last_activity_date, completed_date, days_late
-* production_log: date, stage, pieces_completed
-* workshops: workshop_id, name, capacity_pieces_per_day, pickup_lead_days,
-  defect_rate, cost_per_piece, makes, status, max_batch_pieces,
-  current_queue_days, notes
-
-Not in the dataset: selling price, revenue, profit, worker names.
-workshop cost_per_piece is a subcontractor charge, not a garment selling price.
+Fill FINANCIAL_KEYWORDS / WORKER_KEYWORDS / OTHER_MISSING_KEYWORDS to enable
+short-circuit. Leave them empty (current default) so nothing is intercepted.
 """
 
 from __future__ import annotations
@@ -26,60 +16,21 @@ PROCEED = "proceed"
 UNSUPPORTED = "unsupported"
 ACTION_NOT_IMPLEMENTED = "action_not_implemented"  # unused; actions are now registered tools
 
-# Workshop cost_per_piece is in workshops.csv. Do not treat "cost" alone as
-# missing selling-price data.
-_FINANCIAL = re.compile(
-    r"""
-    \b(
-        revenues? |
-        profits? |
-        (gross\s+)?margin |
-        ebitda |
-        selling[-\s]?prices? |
-        unit[-\s]?prices? |
-        sale\s+prices? |
-        sales\s+(revenue|total|income) |
-        turnover |
-        (net\s+)?income\s+from |
-        how\s+much\s+(money\s+)?(did\s+we|have\s+we|we)\s+(make|made|earn|earned) |
-        what\s+did\s+we\s+(make|earn)\s+from |
-        what\s+did\s+\w+\s+pay\s+(us|you) |
-        garment\s+prices? |
-        (hoodie|beanie|scarf|vest|cardigan)\s+prices?
-    )\b
-    |营收|利润|售价|销售额|营业收入
-    """,
-    re.IGNORECASE | re.VERBOSE,
-)
+# VERBOSE regex alternatives. Empty string = this bucket does not intercept.
+FINANCIAL_KEYWORDS = r""
+WORKER_KEYWORDS = r""
+OTHER_MISSING_KEYWORDS = r""
 
-_WORKERS = re.compile(
-    r"""
-    \b(
-        who\s+is\s+(working|assigned|on\s+duty) |
-        worker\s+names? |
-        operators? |
-        employees? |
-        staff\s+members? |
-        packing\s+manager |
-        knitters?
-    )\b
-    |工人|员工姓名
-    """,
-    re.IGNORECASE | re.VERBOSE,
-)
 
-_OTHER_MISSING = re.compile(
-    r"""
-    \b(
-        customer\s+(phone|email|address) |
-        raw\s+materials? |
-        fabric\s+inventory |
-        machine\s+serial |
-        tracking\s+number
-    )\b
-    """,
-    re.IGNORECASE | re.VERBOSE,
-)
+def _compile_intercept(terms: str) -> re.Pattern[str] | None:
+    if not (terms or "").strip():
+        return None
+    return re.compile(terms, re.IGNORECASE | re.VERBOSE)
+
+
+_FINANCIAL = _compile_intercept(FINANCIAL_KEYWORDS)
+_WORKERS = _compile_intercept(WORKER_KEYWORDS)
+_OTHER_MISSING = _compile_intercept(OTHER_MISSING_KEYWORDS)
 
 @dataclass
 class RoutingDecision:
@@ -103,7 +54,7 @@ def route_query(message: str) -> RoutingDecision:
             missing=[],
         )
 
-    if _FINANCIAL.search(text):
+    if _FINANCIAL is not None and _FINANCIAL.search(text):
         return RoutingDecision(
             intent=UNSUPPORTED,
             short_circuit=True,
@@ -118,7 +69,7 @@ def route_query(message: str) -> RoutingDecision:
             missing=["selling_price", "revenue", "profit"],
         )
 
-    if _WORKERS.search(text):
+    if _WORKERS is not None and _WORKERS.search(text):
         return RoutingDecision(
             intent=UNSUPPORTED,
             short_circuit=True,
@@ -131,7 +82,7 @@ def route_query(message: str) -> RoutingDecision:
             missing=["worker_name", "operator", "staff_assignment"],
         )
 
-    if _OTHER_MISSING.search(text):
+    if _OTHER_MISSING is not None and _OTHER_MISSING.search(text):
         return RoutingDecision(
             intent=UNSUPPORTED,
             short_circuit=True,

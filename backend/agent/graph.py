@@ -13,12 +13,14 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
+from backend.config import PROJECT_ROOT
+from backend.agent.answerability import assess_answerability
 from backend.agent.prompts import build_system_prompt, format_retrieved_templates
 from backend.agent.routing import route_query
 from backend.services.question_templates import retrieve_answer_templates
 from backend.tools.registry import MVP_TOOLS
 
-load_dotenv()
+load_dotenv(PROJECT_ROOT / ".env", override=True)
 logger = logging.getLogger(__name__)
 
 _AGENT = None
@@ -66,8 +68,8 @@ def active_model() -> str:
 
 def llm_is_configured() -> bool:
     if _get_provider() == "gemini":
-        return bool(os.getenv("GOOGLE_API_KEY"))
-    return bool(os.getenv("OPENAI_API_KEY"))
+        return bool((os.getenv("GOOGLE_API_KEY") or "").strip())
+    return bool((os.getenv("OPENAI_API_KEY") or "").strip())
 
 
 def build_model():
@@ -161,6 +163,20 @@ def run_agent(message: str, conversation_id: str) -> dict[str, Any]:
         _audit_turn(message, conversation_id, parsed, short_circuit=True)
         return parsed
 
+    gate = assess_answerability(message)
+    if not gate.proceed:
+        parsed = {
+            "answer": gate.answer or "",
+            "conversation_id": conversation_id,
+            "tools_used": ["assess_stored_data", "assess_tool_coverage"],
+            "traces": gate.traces,
+            "proposed_actions": [],
+            "limitation": gate.limitation,
+            "routing_intent": decision.intent,
+        }
+        _audit_turn(message, conversation_id, parsed, short_circuit=False)
+        return parsed
+
     token = _TEMPLATE_QUERY.set(message)
     try:
         agent = get_agent()
@@ -172,6 +188,7 @@ def run_agent(message: str, conversation_id: str) -> dict[str, Any]:
         _TEMPLATE_QUERY.reset(token)
     parsed = parse_agent_result(result, conversation_id)
     parsed["routing_intent"] = decision.intent
+    parsed["traces"] = list(gate.traces) + list(parsed.get("traces") or [])
     _audit_turn(message, conversation_id, parsed, short_circuit=False)
     return parsed
 

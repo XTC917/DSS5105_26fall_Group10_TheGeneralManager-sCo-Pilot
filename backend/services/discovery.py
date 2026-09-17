@@ -13,6 +13,7 @@ from backend.config import FACTORY_TODAY, PRODUCTION_DROP_RATIO
 from backend.services.briefing import unusual_stage_output
 from backend.services.calculations import assess_order_risk
 from backend.services.database import FactoryDB
+from backend.services.pace import production_attention, today_priority
 
 DEFAULT_LIMIT = 5
 MAX_LIMIT = 20
@@ -32,8 +33,12 @@ PRIORITY_BY_TYPE = {
 SEVERITY_BY_PRIORITY = {1: "high", 2: "medium", 3: "low"}
 
 LIMITATIONS = [
-    "V1 only flags defined order-risk rules (OVERDUE / STALLED / TIGHT_DEADLINE) "
+    "V1 flags defined order-risk rules (OVERDUE / STALLED / TIGHT_DEADLINE) "
     "and stage output below 0.70 × the 30-day median.",
+    "today_priority is the grouping for 'what should we prioritize today?'. "
+    "Do not use issues[].priority (those are all P1 for overdue).",
+    "production is the factory-wide queue and last-day vs 30-day median picture. "
+    "Use it for unusual production issues; do not answer that with the order list.",
     "Not a general anomaly detector. Issues the CSVs cannot define are omitted.",
     "One issue per at-risk order; multiple flags stay on that issue's evidence.",
     "production_log.csv is factory-wide (date × stage), not per order.",
@@ -196,6 +201,8 @@ def discover_factory_issues(db: FactoryDB, limit: int = DEFAULT_LIMIT) -> dict[s
             ISSUE_ORDER_TIGHT_DUE: int(counts.get(ISSUE_ORDER_TIGHT_DUE, 0)),
             ISSUE_STAGE_BELOW_BASELINE: int(counts.get(ISSUE_STAGE_BELOW_BASELINE, 0)),
         },
+        "today_priority": today_priority(db),
+        "production": production_attention(db),
         "issues": returned,
         "message": empty_message,
         "limitations": list(LIMITATIONS),

@@ -81,18 +81,7 @@ answered without an API key because they never reach the LLM.
 
 Any OpenAI-compatible endpoint works (`OPENAI_BASE_URL` + `LLM_MODEL`).
 
-## Evaluation vs unit tests
-
-
-| | `tests/` (pytest) | `evaluation/` |
-|---|---|---|
-| Purpose | Regression for tools, routing, API | Formal Track 1 case set |
-| Needs API key | No | Only `--mode agent` |
-| Current file | — | `questions.json` is a **development** set |
-
-Do not present scores on `evaluation/questions.json` as a held-out official
-accuracy number. The runner reports **data/tool accuracy** and **final-answer
-quality** separately. See `evaluation/README.md`.
+`evaluation/questions.json` is the few-shot answer-template bank (not an eval runner).
 
 Side-effecting actions follow: propose → UI Confirm click → local execute → audit log.
 The agent only proposes (`confirmed=false`). `POST /api/actions/confirm` runs the

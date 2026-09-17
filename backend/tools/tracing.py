@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from backend.services.calculations import assess_order_risk, order_computed_fields
 from backend.services.database import get_db
+from backend.services.pace import pace_fields, snapshot_timeline, stage_medians
 from backend.tools.common import tool_error, tool_json
 
 logger = logging.getLogger(__name__)
@@ -20,14 +21,11 @@ class TraceOrderInput(BaseModel):
 
 @tool(args_schema=TraceOrderInput)
 def trace_order(order_id: str) -> str:
-    """Return the source row and calculations for one order.
+    """Return the source row, snapshot stage history, pace estimate, and risk flags.
 
-    Use when the manager asks "why is this order at risk?", "where did that number
-    come from?", or when you have just made a factual claim about an order and
-    need to attach evidence.
-
-    Note: production_log.csv is factory-wide (date × stage), not per order.
-    Per-order evidence is the orders.csv row plus derived date/stage fields.
+    Use when the manager asks why an order is risky or to trace its situation.
+    Stage history comes from app.snapshot (entry date per stage), not production_log.
+    Remaining work days use pieces / 30-day median per remaining stage.
     """
     tool_name = "trace_order"
     try:
@@ -42,9 +40,14 @@ def trace_order(order_id: str) -> str:
 
         computed = order_computed_fields(order)
         risk = assess_order_risk(order)
+        medians = stage_medians(db)
+        pace = pace_fields(order, medians)
+        snap = snapshot_timeline(db, order["order_id"])
+        consider_workshop = bool(
+            computed.get("is_overdue")
+            and (pace["estimated_remaining_working_days"] or 0) >= 5
+        )
 
-        # production_log cannot be joined to a single order. We still return the
-        # last factory-wide day so the UI can show the limitation clearly.
         production = db.production_log()
         last_date = max((row["date"] for row in production), default=None)
 
@@ -56,6 +59,9 @@ def trace_order(order_id: str) -> str:
                 "data": {
                     "order": order,
                     "computed": computed,
+                    "pace": pace,
+                    "snapshot": snap,
+                    "consider_external_workshop": consider_workshop,
                     "risk": {
                         "at_risk": risk["at_risk"],
                         "flags": risk["flags"],
@@ -63,8 +69,8 @@ def trace_order(order_id: str) -> str:
                     },
                     "limitations": [
                         "production_log.csv is factory-wide daily output by stage, "
-                        "not a per-order history. This order's only activity timestamp "
-                        f"is last_activity_date={order['last_activity_date']}.",
+                        "not a per-order history. Per-order stage entry dates are "
+                        f"from app.snapshot. last_activity_date={order['last_activity_date']}.",
                         f"The production log ends on {last_date}; factory today is 2026-04-01.",
                     ],
                 },
@@ -86,6 +92,18 @@ def trace_order(order_id: str) -> str:
                             "working_days_since_last_activity",
                             "remaining_stages",
                         )
+                    ]
+                    + [
+                        {
+                            "name": "estimated_remaining_working_days",
+                            "formula": pace["formula"],
+                            "result": pace["estimated_remaining_working_days"],
+                        },
+                        {
+                            "name": "calendar_days_order_to_first_production",
+                            "formula": "first snapshot stage that is not ORDERED minus order_date",
+                            "result": snap["calendar_days_order_to_first_production"],
+                        },
                     ],
                     "basis": risk["basis"],
                 },

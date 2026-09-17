@@ -180,17 +180,13 @@ class DiscoverFactoryIssuesInput(BaseModel):
 
 @tool(args_schema=DiscoverFactoryIssuesInput)
 def discover_factory_issues(limit: int = DEFAULT_LIMIT) -> str:
-    """Ranked factory issues from defined Python rules (not a general anomaly detector).
+    """Ranked issues plus today's order-priority buckets and a production snapshot.
 
-    Use when the manager asks what to be concerned about, the biggest factory
-    problems, what to pay attention to, or to find top issues. Python discovers
-    and sorts: overdue / stalled / tight-deadline orders, and stages whose last
-    working-day output is below 0.70 × the 30-day median.
-
-    Do NOT use for a named customer's order list (find_orders), a specific
-    order's status (get_order_status), the at-risk order list only
-    (get_orders_at_risk), a morning briefing script (get_morning_briefing),
-    revenue, or workers.
+    For "what should we prioritize today?" copy data.today_priority (1st/2nd/3rd).
+    Do not use issues[].priority — overdue rows are all P1 there.
+    For unusual production / stage bottlenecks copy data.production
+    (queue by stage, last working day vs 30-day median). Do not answer that
+    with the at-risk order list.
     """
     tool_name = "discover_factory_issues"
     try:

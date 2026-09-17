@@ -20,7 +20,7 @@ from backend.config import PROJECT_ROOT
 logger = logging.getLogger(__name__)
 
 QUESTIONS_PATH = PROJECT_ROOT / "evaluation" / "questions.json"
-DEFAULT_K = 3
+DEFAULT_K = 2
 _TOKEN = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 
 
@@ -28,8 +28,13 @@ def _tokens(text: str) -> list[str]:
     return _TOKEN.findall((text or "").lower())
 
 
-@lru_cache(maxsize=1)
 def _index() -> tuple[tuple[dict[str, str], ...], dict[str, int], np.ndarray, np.ndarray]:
+    mtime = QUESTIONS_PATH.stat().st_mtime if QUESTIONS_PATH.is_file() else 0.0
+    return _index_at(mtime)
+
+
+@lru_cache(maxsize=1)
+def _index_at(mtime: float) -> tuple[tuple[dict[str, str], ...], dict[str, int], np.ndarray, np.ndarray]:
     if not QUESTIONS_PATH.is_file():
         logger.warning("question bank missing: %s", QUESTIONS_PATH)
         empty = np.zeros((0, 0))
@@ -108,5 +113,9 @@ def retrieve_answer_templates(query: str, k: int = DEFAULT_K) -> list[dict[str, 
             continue
         item = items[int(idx)]
         hits.append({**item, "score": round(score, 4)})
-    logger.info("retrieved answer templates %s", [h["id"] for h in hits])
+    logger.info(
+        "retrieved answer templates %s query=%r",
+        [(h["id"], h["score"]) for h in hits],
+        (query or "")[:120],
+    )
     return hits

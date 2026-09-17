@@ -82,6 +82,12 @@ def test_find_orders_invalid_stage(db):
     assert payload["error"]["code"] == "INVALID_INPUT"
 
 
+def test_find_orders_accepts_ordered_stage(db):
+    payload = parse_tool(find_orders.invoke({"current_stage": "ORDERED"}))
+    assert payload["ok"] is True
+    assert all(row["current_stage"] == "ORDERED" for row in payload["data"]["orders"])
+
+
 def test_find_orders_requires_a_filter(db):
     payload = parse_tool(find_orders.invoke({}))
     assert payload["ok"] is False

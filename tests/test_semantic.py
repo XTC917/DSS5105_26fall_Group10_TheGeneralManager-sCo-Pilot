@@ -29,6 +29,8 @@ def test_semantic_prompt_includes_field_descriptions_and_terms():
     assert "How many garments in this order" in text
     assert "selling_price" in text
     assert "factory_today" in text
+    assert "feasibility" in text
+    assert "check_feasibility" in text
 
 
 def test_system_prompt_embeds_semantic_layer():

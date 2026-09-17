@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from backend.services.calculations import assess_order_risk, order_computed_fields
 from backend.services.database import get_db
+from backend.services.pace import likely_to_miss_due_dates, likely_to_miss_due_next_n_days, pace_fields, stage_medians
 from backend.tools.common import tool_error, tool_json
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,10 @@ class GetOrderStatusInput(BaseModel):
 class GetOrdersAtRiskInput(BaseModel):
     flag: Optional[str] = Field(
         default=None,
-        description="Optional filter: OVERDUE, STALLED, or TIGHT_DEADLINE. Omit to return all at-risk orders.",
+        description=(
+            "Optional: OVERDUE, STALLED, or TIGHT_DEADLINE for the legacy flag list. "
+            "Omit to return that list plus the pace-based miss-due groups."
+        ),
     )
 
 
@@ -146,14 +150,15 @@ def get_order_status(
 
 @tool(args_schema=GetOrdersAtRiskInput)
 def get_orders_at_risk(flag: Optional[str] = None) -> str:
-    """List in-progress orders that are overdue, stalled, or on a tight deadline.
+    """List operational risk. Python computes flags and pace estimates.
 
-    Risk flags are computed in Python (see assess_order_risk), not by the LLM:
-    - OVERDUE: due_date < 2026-04-01
-    - STALLED: idle at least 3 working days
-    - TIGHT_DEADLINE: remaining working days < remaining stages
-
-    Use this when the manager asks which orders are at risk, late, stuck, or slipping.
+    data.orders — OVERDUE / STALLED / TIGHT_DEADLINE (stage-count heuristic).
+    data.likely_to_miss_due_dates — not overdue; due today..+3 calendar days;
+      estimated remaining working days = sum_stage pieces / 30-day median.
+      Use this for "which orders are likely to miss their due dates".
+    data.likely_to_miss_due_next_7_days — due in 1–7 calendar days and at least
+      one working day short at current pace. Use for "next 7 days at current pace".
+    Do not answer miss-due questions from OVERDUE/STALLED rows.
     """
     tool_name = "get_orders_at_risk"
     try:
@@ -167,6 +172,7 @@ def get_orders_at_risk(flag: Optional[str] = None) -> str:
             )
 
         db = get_db()
+        medians = stage_medians(db)
         in_progress = db.in_progress_orders()
         assessed: list[dict[str, Any]] = []
         for order in in_progress:
@@ -187,10 +193,13 @@ def get_orders_at_risk(flag: Optional[str] = None) -> str:
                     "flags": risk["flags"],
                     "rank_score": risk["rank_score"],
                     "computed": risk["computed"],
+                    "pace": pace_fields(order, medians),
                 }
             )
 
         assessed.sort(key=lambda r: r["rank_score"], reverse=True)
+        miss_due = likely_to_miss_due_dates(db)
+        miss_week = likely_to_miss_due_next_n_days(db)
         logger.info("get_orders_at_risk returned %s rows (flag=%s)", len(assessed), flag_norm)
         return tool_json(
             {
@@ -200,10 +209,32 @@ def get_orders_at_risk(flag: Optional[str] = None) -> str:
                     "count": len(assessed),
                     "flag_filter": flag_norm,
                     "orders": assessed,
+                    "likely_to_miss_due_dates": {
+                        "count": len(miss_due),
+                        "order_ids": [r["order_id"] for r in miss_due],
+                        "orders": miss_due,
+                        "basis": (
+                            "Not overdue. Due today through +3 calendar days. "
+                            "estimated_remaining_working_days = sum over remaining "
+                            "stages of pieces / 30-day median pieces_completed. "
+                            "Flagged when that estimate exceeds working days until due."
+                        ),
+                    },
+                    "likely_to_miss_due_next_7_days": {
+                        "count": len(miss_week),
+                        "order_ids": [r["order_id"] for r in miss_week],
+                        "orders": miss_week,
+                        "basis": (
+                            "Due in 1–7 calendar days (not due today). "
+                            "Same pace formula. Requires at least 1 extra working day short."
+                        ),
+                    },
                     "basis": (
                         "OVERDUE: due_date < 2026-04-01. "
                         "STALLED: working days since last_activity_date >= 3. "
                         "TIGHT_DEADLINE: working days until due < remaining stage count. "
+                        "For 'likely to miss due dates' copy likely_to_miss_due_dates, "
+                        "not the OVERDUE/STALLED list. "
                         "Only IN_PROGRESS orders. Ranked overdue first."
                     ),
                 },

@@ -14,8 +14,13 @@ import yaml
 from backend.config import SEMANTIC_LAYER_PATH
 
 
-@lru_cache(maxsize=1)
 def load_semantic_layer() -> dict[str, Any]:
+    mtime = SEMANTIC_LAYER_PATH.stat().st_mtime if SEMANTIC_LAYER_PATH.exists() else 0.0
+    return _load_semantic_layer_at(mtime)
+
+
+@lru_cache(maxsize=1)
+def _load_semantic_layer_at(_mtime: float) -> dict[str, Any]:
     if not SEMANTIC_LAYER_PATH.exists():
         raise FileNotFoundError(
             f"Semantic layer missing: {SEMANTIC_LAYER_PATH}. "
@@ -28,6 +33,9 @@ def load_semantic_layer() -> dict[str, Any]:
     if "data_definition" not in data or "term_definition" not in data:
         raise ValueError("semantic_layer.yaml must have data_definition and term_definition.")
     return data
+
+
+load_semantic_layer.cache_clear = _load_semantic_layer_at.cache_clear  # type: ignore[method-assign]
 
 
 def render_semantic_prompt(layer: dict[str, Any] | None = None) -> str:

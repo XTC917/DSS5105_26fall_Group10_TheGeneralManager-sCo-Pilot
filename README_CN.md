@@ -89,24 +89,7 @@ Track 1 要求系统具备五类工具能力：
 
 ---
 
-## Evaluation｜开发阶段评测集
-
-`evaluation/questions.json` 当前包含 **43 个问题**，超过课程要求的最低 30 个。
-
-其中包括：
-
-* **10 个**模糊 / 无法回答 / 容易诱导幻觉的问题
-
-  * 课程最低要求：5 个
-* **7 个**可行性分析或操作请求
-
-  * 课程最低要求：5 个
-
-Gold Answer 均根据 CSV 数据和 Python Service 重新计算得到。
-
-> ⚠️ `questions.json` 是**开发阶段评测集（development set）**。
->
-> 不要将该文件上的分数描述为正式的、无偏的 Held-out Evaluation 结果。
+`evaluation/questions.json` 是 few-shot 答法模板库，不是评测 runner。
 
 ---
 
@@ -332,38 +315,6 @@ pytest
 测试**不会调用 LLM**。
 
 ---
-
-# Evaluation｜运行评测
-
-```powershell
-python -m evaluation.run_evaluation --validate
-
-python -m evaluation.run_evaluation --mode tools
-```
-
-其中：
-
-* `--mode tools`：无需 API Key
-* `--mode agent`：需要 API Key
-
-评测结果包含两个维度：
-
-1. **Data / Tool Accuracy** — 数据与工具调用准确性
-2. **Final-answer Quality** — 最终回答质量
-
-详细说明见：
-
-```text
-evaluation/README.md
-```
-
-后续可以通过：
-
-```text
---dataset
-```
-
-传入独立的 Held-out Evaluation 数据集。
 
 ---
 

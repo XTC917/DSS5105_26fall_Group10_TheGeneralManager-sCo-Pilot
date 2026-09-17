@@ -5,7 +5,9 @@ import os
 
 from dotenv import load_dotenv
 
-load_dotenv()
+from backend.config import PROJECT_ROOT
+
+load_dotenv(PROJECT_ROOT / ".env", override=True)
 
 
 def postgres_dsn(*, admin: bool = False) -> str:

@@ -6,7 +6,13 @@ from backend.agent.graph import run_agent
 from backend.services.audit import list_audit
 
 
-def test_short_circuit_writes_audit_row(db, clean_state):
+def test_short_circuit_writes_audit_row(db, clean_state, monkeypatch):
+    import re
+
+    monkeypatch.setattr(
+        "backend.agent.routing._FINANCIAL",
+        re.compile(r"revenues?", re.I),
+    )
     result = run_agent("How much revenue did we make from TrendCart?", "audit-rev")
     assert result["tools_used"] == []
     rows = list_audit(limit=10)
