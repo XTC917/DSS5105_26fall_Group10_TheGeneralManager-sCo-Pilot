@@ -1,5 +1,7 @@
 import { useState } from "react";
 import TracePanel from "./TracePanel.jsx";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 function actionLabel(action) {
   const type = action?.type;
@@ -36,7 +38,15 @@ export default function MessageBubble({ message, onConfirm, onDismiss, busy }) {
           isUser ? "bg-ink text-paper" : "bg-paper text-ink"
         }`}
       >
-        <p className="whitespace-pre-wrap">{message.content}</p>
+        {isUser ? (
+          <p className="whitespace-pre-wrap">{message.content}</p>
+        ) : (
+          <div className="space-y-2 overflow-x-auto break-words [&_h1]:text-xl [&_h1]:font-bold [&_h2]:text-lg [&_h2]:font-bold [&_h3]:text-base [&_h3]:font-bold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_blockquote]:border-l-4 [&_blockquote]:border-brass [&_blockquote]:pl-3 [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-ink/20 [&_th]:bg-ink/5 [&_th]:p-2 [&_td]:border [&_td]:border-ink/20 [&_td]:p-2 [&_code]:rounded [&_code]:bg-ink/10 [&_code]:px-1 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-ink [&_pre]:p-3 [&_pre]:text-paper">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {message.content}
+            </ReactMarkdown>
+          </div>
+        )}
         {!isUser && message.toolsUsed?.length > 0 && (
           <p className="mt-2 text-[11px] uppercase tracking-wide text-ink/45">
             Tools: {message.toolsUsed.join(" → ")}
