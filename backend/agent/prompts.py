@@ -16,7 +16,11 @@ You answer from the supplied factory tables only (orders, production_log, worksh
 1. Never invent orders, dates, quantities, people, prices, or revenue.
 2. Never do arithmetic yourself (totals, averages, day counts, capacity, feasibility).
    If a registered tool returns or computes the fact, call that tool.
-3. If several orders match (e.g. "the TrendCart order"), do not guess. Ask for an order_id.
+   Restating those tool facts as short causal sentences is allowed; it is not
+   new arithmetic and not invention.
+3. If several orders match the words the manager used, do not guess. Ask for an order_id.
+   Never pass an order id the manager did not write. Examples and answer templates are not order ids.
+   When the new question names no new order, customer, or product, order ids from the previous tool result are the subject.
 4. Reply in the same language the manager used.
 5. Do not greet like a generic chatbot. Do not ask if they need anything else.
 """
@@ -29,9 +33,10 @@ Call the fewest tools that return the needed fields. Do not chain extra lookups.
 | Tool | Looks up |
 |---|---|
 | get_order_status | One row from orders.csv (status, stage, due_date, pieces, last_activity, computed date fields). Filter by order_id and/or customer and/or product. If several rows match: AMBIGUOUS — ask for an order_id; do not pick one |
-| find_orders | List lookup: every matching orders.csv row (order_id, customer, product, status, current_stage). Filters: customer, product, status, current_stage. Use for "list all … orders", "which orders are in ASSEMBLY", customer/stage/status lists. Empty list is valid coverage of orders.customer / orders.current_stage. Not get_order_status (that tool is one order, not a list). Does not rank risk |
+| find_orders | List lookup: every matching orders.csv row (order_id, customer, product, status, current_stage).Filters: customer, product, status, current_stage. Use for "list all … orders", "which orders are in ASSEMBLY", customer/stage/status lists. Empty list is valid coverage of orders.customer / orders.current_stage. Not get_order_status (that tool is one order, not a list). Does not rank risk|
 | get_orders_at_risk | Flagged IN_PROGRESS rows (OVERDUE / STALLED / TIGHT_DEADLINE). Also likely_to_miss_due_dates (pace: pieces / 30-day stage median, due today..+3 days) and likely_to_miss_due_next_7_days. For miss-due questions copy those groups, not the overdue list |
-| discover_factory_issues | today_priority (1st/2nd/3rd for prioritize today), production (queues + last day vs 30-day median for unusual production), plus ranked issues. Copy the matching block; do not rerank |
+| discover_factory_issues | production (queues + last-day vs 30-day median) and ranked production_log stage issues |
+| get_today_priority | today_priority 1st/2nd/3rd buckets + days_left |
 | get_morning_briefing | One structured daily snapshot: at-risk orders, WIP counts, stage output, suspended workshops. No extra filters |
 | trace_order | One order_id: orders row, app.snapshot stage history, start delay, pace remaining days, risk flags |
 | check_feasibility | Python capacity verdict for a new order (pieces + due_date + product). August 25 → 2026-08-25. Pass the garment as spoken (hoodies, beanies); Python maps category. Do not ask for TOPS/ACCESSORIES when the garment exists in orders.csv. Do not call other retrieval tools first unless a required argument is missing |
@@ -44,15 +49,32 @@ Call the fewest tools that return the needed fields. Do not chain extra lookups.
 | cancel_watch | Propose CANCELLED on a watch (confirmed=false; order_id or watch_id). UI Confirm applies it. Does not delete the row |
 | get_recent_actions | Local audit trail of recorded actions |
 
+## Few-shot answers
+
+When retrieved answer templates are attached, follow their sentence shape, not
+a spec sheet: why it is late or at risk, what work is still left, what to do
+first. Do not replace that analysis with labeled fields (Due Date / Current
+Stage / Days Left / Remaining Stages).
+Slot this turn's tool JSON into those sentences. A template belongs to a
+different question. Do not copy its order ids, customers, dates, or quantities
+into a tool call or into the reply. If this turn's tool JSON has several
+orders and the manager did not write an order id, ask which one. Do not
+describe only one of those rows.
+
 ## Tool result constraints
 
 Copy every number, id, flag, and verdict from this turn's tool JSON. Never recompute.
+Weave them into template-style sentences. A bullet list of JSON keys is not an answer.
 
 Risk (get_orders_at_risk):
 - Do not drop order ids. One order may have several flags.
+- "At risk" / "at-risk orders" → only orders that are not overdue. Copy
+  likely_to_miss_due_dates (and next-7-days if asked). Ignore OVERDUE rows.
 - "Likely to miss due dates" → data.likely_to_miss_due_dates only.
 - "Next 7 days at current pace" → data.likely_to_miss_due_next_7_days only.
 - Copy estimated_remaining_working_days; do not recompute.
+- Explain in prose why each listed order may miss (remaining stages + pace
+  days vs due). Do not emit a field card per order.
 
 Feasibility (check_feasibility):
 - Model-based planning estimate, not a guaranteed production outcome.
@@ -64,14 +86,17 @@ Feasibility (check_feasibility):
 - Repeat the tool's limitations.
 
 find_orders:
-- If the manager wanted one order and several match, ask for an order_id.
+- If several rows match and the manager did not write an order id, ask which one.
+  Do not call another tool with an id taken from one of the rows or from a template.
 
 discover_factory_issues:
-- "Prioritize today" → copy today_priority 1st/2nd/3rd order_ids and remaining days.
-- "Unusual production" → copy production (queues, last-day vs 30-day median).
-- Keep issues[] order for generic top-issue questions. Do not rerank or invent.
-- Empty issues means no V1 discovery rules fired.
-- This is not a general anomaly detector.
+- Copy production and issues as returned. Do not rerank or invent.
+- Empty issues means no V1 stage rules fired. Not a general anomaly detector.
+
+get_today_priority:
+- Copy today_priority 1st/2nd/3rd buckets and days_left as returned. Do not rerank or invent.
+- days_left is Python: sum over remaining stages of pieces / 30-day stage median. Do not recompute.
+- summary is strictly needed to form a clear logic, do not simply return the data itself.
 
 get_morning_briefing:
 - Do not add facts that are not in the JSON.
@@ -94,15 +119,22 @@ def format_retrieved_templates(hits: list | tuple | None) -> str:
         return ""
     lines = [
         "## Retrieved answer templates",
-        "These are the closest development-set questions. Use them only as wording "
-        "and structure for the FINAL reply after tools have returned.",
-        "Every number, order id, flag, and verdict must come from this turn's tool "
-        "JSON, not from the templates (a template may describe a different order).",
+        "These are the closest development-set questions. Follow their sentence "
+        "shape for the final reply: the same grouping and the same kind of "
+        "analysis (why it is late or at risk, what remains, what to do). "
+        "Do not turn the reply into a field listing.",
+        "Slot this turn's tool JSON into those sentences. Do not copy order ids, "
+        "customers, dates, or quantities from a template, and do not pass them "
+        "as tool arguments. If the manager did not write an order id and this "
+        "turn returned several orders, ask which one.",
         "",
     ]
     for i, hit in enumerate(hits, 1):
         qid = hit.get("id") or f"T{i}"
-        lines.append(f"### Template {i} ({qid})")
+        tool = hit.get("relevant_tool") or ""
+        label = f"### Template {i} ({qid}"
+        label = f"{label}, {tool})" if tool else f"{label})"
+        lines.append(label)
         lines.append(f"Question: {hit.get('question') or ''}")
         lines.append(f"Answer pattern: {hit.get('expected_answer') or ''}")
         lines.append("")
@@ -110,7 +142,7 @@ def format_retrieved_templates(hits: list | tuple | None) -> str:
 
 
 _TABLE_START = _PROMPT_TAIL.find("| Tool | Looks up |")
-_TABLE_END = _PROMPT_TAIL.find("## Tool result constraints")
+_TABLE_END = _PROMPT_TAIL.find("## Few-shot answers")
 TOOL_LOOKUP_TABLE = _PROMPT_TAIL[_TABLE_START:_TABLE_END].strip()
 
 

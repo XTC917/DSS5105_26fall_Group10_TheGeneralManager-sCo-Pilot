@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 QUESTIONS_PATH = PROJECT_ROOT / "evaluation" / "questions.json"
 DEFAULT_K = 2
 _TOKEN = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
+_ORDER_ID = re.compile(r"ORD-\d+", re.IGNORECASE)
 
 
 def _tokens(text: str) -> list[str]:
@@ -51,6 +52,7 @@ def _index_at(mtime: float) -> tuple[tuple[dict[str, str], ...], dict[str, int],
                 "id": qid,
                 "question": question,
                 "expected_answer": str(row.get("expected_answer") or "").strip(),
+                "relevant_tool": str(row.get("relevant_tool") or "").strip(),
             }
         )
     docs = [_tokens(item["question"]) for item in items]
@@ -80,11 +82,10 @@ def _index_at(mtime: float) -> tuple[tuple[dict[str, str], ...], dict[str, int],
     return tuple(items), vocab, matrix / norms, idf
 
 
-def retrieve_answer_templates(query: str, k: int = DEFAULT_K) -> list[dict[str, Any]]:
-    """Return up to k bank questions most similar to the manager's query."""
+def _query_scores(query: str) -> np.ndarray | None:
     items, vocab, matrix, idf = _index()
     if not items or not (query or "").strip() or not vocab:
-        return []
+        return None
     q_tokens = _tokens(query)
     vec = np.zeros(len(vocab), dtype=np.float64)
     if q_tokens:
@@ -101,7 +102,15 @@ def retrieve_answer_templates(query: str, k: int = DEFAULT_K) -> list[dict[str, 
         norm = np.linalg.norm(vec)
         if norm:
             vec = vec / norm
-    scores = matrix @ vec
+    return matrix @ vec
+
+
+def retrieve_answer_templates(query: str, k: int = DEFAULT_K) -> list[dict[str, Any]]:
+    """Return up to k bank questions most similar to the manager's query."""
+    items, _, _, _ = _index()
+    scores = _query_scores(query)
+    if scores is None or not items:
+        return []
     k = max(0, min(int(k), len(items)))
     if k == 0:
         return []
@@ -111,11 +120,81 @@ def retrieve_answer_templates(query: str, k: int = DEFAULT_K) -> list[dict[str, 
         score = float(scores[int(idx)])
         if score <= 0:
             continue
-        item = items[int(idx)]
-        hits.append({**item, "score": round(score, 4)})
+        hits.append({**items[int(idx)], "score": round(score, 4)})
     logger.info(
         "retrieved answer templates %s query=%r",
         [(h["id"], h["score"]) for h in hits],
         (query or "")[:120],
     )
     return hits
+
+
+def without_foreign_order_templates(
+    query: str,
+    hits: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Drop examples whose question names an order id the manager did not write.
+
+    The answer text may still name orders the tool found. The question text may
+    not point the model at a different order.
+    """
+    named = {match.group(0).upper() for match in _ORDER_ID.finditer(query or "")}
+    kept: list[dict[str, Any]] = []
+    for hit in hits or []:
+        ids = {match.group(0).upper() for match in _ORDER_ID.finditer(str(hit.get("question") or ""))}
+        foreign = ids - named
+        if foreign:
+            logger.info(
+                "dropped answer template %s foreign order ids %s",
+                hit.get("id"),
+                sorted(foreign),
+            )
+            continue
+        kept.append(hit)
+    return kept
+
+
+def supplement_templates_for_tools(
+    query: str,
+    hits: list[dict[str, Any]] | None,
+    tools: list[str] | tuple[str, ...] | None,
+) -> list[dict[str, Any]]:
+    """If a called tool has no retrieved example, append its closest bank question."""
+    merged: list[dict[str, Any]] = list(hits or [])
+    seen_ids = {str(h.get("id") or "") for h in merged}
+    covered = {str(h.get("relevant_tool") or "") for h in merged if h.get("relevant_tool")}
+    needed: list[str] = []
+    for name in tools or []:
+        tool = str(name or "").strip()
+        if not tool or tool in covered or tool in needed:
+            continue
+        needed.append(tool)
+    if not needed:
+        return merged
+    items, _, _, _ = _index()
+    scores = _query_scores(query)
+    if scores is None or not items:
+        return merged
+    extras: list[tuple[str, str]] = []
+    for tool in needed:
+        best_idx = None
+        best_score = -1.0
+        for i, item in enumerate(items):
+            if item.get("relevant_tool") != tool:
+                continue
+            if item["id"] in seen_ids:
+                continue
+            score = float(scores[i])
+            if score > best_score:
+                best_score = score
+                best_idx = i
+        if best_idx is None:
+            continue
+        extra = {**items[best_idx], "score": round(best_score, 4)}
+        merged.append(extra)
+        seen_ids.add(extra["id"])
+        covered.add(tool)
+        extras.append((extra["id"], tool))
+    if extras:
+        logger.info("supplemented answer templates %s query=%r", extras, (query or "")[:120])
+    return merged

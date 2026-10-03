@@ -10,7 +10,7 @@ from backend.tools.actions import (
     send_email,
 )
 from backend.tools.briefing import get_morning_briefing
-from backend.tools.discovery import discover_factory_issues, find_orders
+from backend.tools.discovery import discover_factory_issues, find_orders, get_today_priority
 from backend.tools.judgement import check_feasibility
 from backend.tools.retrieval import get_order_status, get_orders_at_risk
 from backend.tools.tracing import trace_order
@@ -22,6 +22,7 @@ MVP_TOOLS = [
     get_morning_briefing,
     find_orders,
     discover_factory_issues,
+    get_today_priority,
     trace_order,
     check_feasibility,
     draft_chase_email,

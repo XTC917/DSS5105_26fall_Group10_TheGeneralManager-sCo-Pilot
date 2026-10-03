@@ -22,7 +22,7 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
   const [error, setError] = useState("");
   const listRef = useRef(null);
 
-  async function submit(text) {
+  async function submit(text, clarificationReply = false) {
     const content = (text ?? input).trim();
     if (!content || busy) return;
     setInput("");
@@ -31,7 +31,7 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
     setMessages((prev) => [...prev, userMsg]);
     setBusy(true);
     try {
-      const result = await sendChat(content, conversationId);
+      const result = await sendChat(content, conversationId, clarificationReply);
       setMessages((prev) => [
         ...prev,
         {
@@ -41,6 +41,7 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
           traces: result.traces || [],
           limitation: result.limitation,
           proposedActions: result.proposed_actions || [],
+          clarification: result.clarification || null,
         },
       ]);
     } catch (err) {
@@ -134,6 +135,12 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
             busy={busy}
             onConfirm={(action) => confirm(idx, action)}
             onDismiss={(action) => dismiss(idx, action)}
+            onClarify={(text) => {
+              setMessages((prev) =>
+                prev.map((item, i) => (i === idx ? { ...item, clarification: null } : item)),
+              );
+              submit(text, true);
+            }}
           />
         ))}
         {busy && <p className="text-xs text-ink/45">Consulting factory tools…</p>}

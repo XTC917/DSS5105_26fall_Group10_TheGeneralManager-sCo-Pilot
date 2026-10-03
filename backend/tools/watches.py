@@ -27,13 +27,13 @@ from backend.services.watches import (
     resolve_watch_for_cancel,
     watch_summary,
 )
-from backend.tools.common import tool_error, tool_json
+from backend.tools.common import order_id_named_by_manager, tool_error, tool_json, ungrounded_order_error
 
 logger = logging.getLogger(__name__)
 
 
 class CreateWatchInput(BaseModel):
-    order_id: str = Field(..., description="Exact order id such as ORD-005.")
+    order_id: str = Field(..., description="Order id the manager wrote.")
     check_date: str = Field(
         ...,
         description=(
@@ -70,12 +70,14 @@ def create_watch(
 ) -> str:
     """Propose or save a standing watch. Does not decide if the condition is true.
 
-    Use when the manager asks to be told if an order has not moved by a date
-    (e.g. "Tell me if ORD-005 hasn't moved by Thursday"). Pass weekday names
+    Use when the manager asks to be told if an order has not moved by a date.
+    Pass weekday names
     through as spoken. Do not calculate whether the order is already inactive.
     """
     tool_name = "create_watch"
     try:
+        if not order_id_named_by_manager(order_id):
+            return ungrounded_order_error(tool_name, order_id)
         kind = (condition_type or CONDITION_INACTIVE).strip()
         if kind != CONDITION_INACTIVE:
             return tool_error(
@@ -234,14 +236,14 @@ def create_watch(
 class ListWatchesInput(BaseModel):
     order_id: Optional[str] = Field(
         default=None,
-        description="If set, only watches for this order id (e.g. ORD-005).",
+        description="If set, only watches for an order id the manager wrote.",
     )
 
 
 class CancelWatchInput(BaseModel):
     order_id: Optional[str] = Field(
         default=None,
-        description="Order id such as ORD-005. Use when the manager names the order.",
+        description="Order id the manager wrote. Omit when they named a watch id instead.",
     )
     watch_id: Optional[int] = Field(
         default=None,
@@ -265,6 +267,8 @@ def list_watches(order_id: Optional[str] = None) -> str:
     tool_name = "list_watches"
     try:
         oid = (order_id or "").strip() or None
+        if oid and not order_id_named_by_manager(oid):
+            return ungrounded_order_error(tool_name, oid)
         all_rows = [watch_summary(row) for row in load_watches(order_id=oid, user_id=get_current_user_id(required=False))]
         by_status = {"ACTIVE": [], "FIRED": [], "CANCELLED": []}
         for row in all_rows:
@@ -321,6 +325,8 @@ def cancel_watch(
     """
     tool_name = "cancel_watch"
     try:
+        if order_id and not order_id_named_by_manager(order_id):
+            return ungrounded_order_error(tool_name, order_id)
         try:
             watch = resolve_watch_for_cancel(watch_id=watch_id, order_id=order_id)
         except WatchError as exc:

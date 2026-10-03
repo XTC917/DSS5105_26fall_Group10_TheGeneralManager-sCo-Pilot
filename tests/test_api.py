@@ -19,6 +19,7 @@ def test_health():
         assert "get_morning_briefing" in body["tools"]
         assert "find_orders" in body["tools"]
         assert "discover_factory_issues" in body["tools"]
+        assert "get_today_priority" in body["tools"]
 
 
 def test_chat_without_key_is_503(monkeypatch):
@@ -46,9 +47,10 @@ def test_discovery_endpoint():
         assert res.status_code == 200
         body = res.json()
         assert body["factory_today"] == "2026-04-01"
-        assert body["returned_count"] == 5
-        assert body["total_found"] == 11
-        assert body["issues"][0]["issue_id"] == "order:ORD-107"
+        assert body["returned_count"] == 1
+        assert body["total_found"] == 1
+        assert body["issues"][0]["issue_id"] == "stage:ASSEMBLY"
+        assert "today_priority" not in body
 
 
 def test_audit_endpoint(employee_auth_headers):

@@ -17,7 +17,7 @@ from backend.services.audit import add_note, add_reminder, list_audit, record_ev
 from backend.services.calculations import assess_order_risk, parse_iso_date
 from backend.services.database import get_db
 from backend.services.request_context import get_current_user_id
-from backend.tools.common import tool_error, tool_json
+from backend.tools.common import order_id_named_by_manager, tool_error, tool_json, ungrounded_order_error
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +28,11 @@ NO_SMTP = (
 
 
 class DraftEmailInput(BaseModel):
-    order_id: str = Field(..., description="Exact order id such as ORD-120.")
+    order_id: str = Field(..., description="Order id the manager wrote.")
 
 
 class SendEmailInput(BaseModel):
-    order_id: str = Field(..., description="Exact order id such as ORD-120.")
+    order_id: str = Field(..., description="Order id the manager wrote.")
     confirmed: bool = Field(
         default=False,
         description="Must be false unless the manager explicitly confirmed sending.",
@@ -40,7 +40,7 @@ class SendEmailInput(BaseModel):
 
 
 class AddNoteInput(BaseModel):
-    order_id: str = Field(..., description="Exact order id such as ORD-107.")
+    order_id: str = Field(..., description="Order id the manager wrote.")
     note: str = Field(..., description="Short operational note in the manager's words.")
     confirmed: bool = Field(
         default=False,
@@ -49,7 +49,7 @@ class AddNoteInput(BaseModel):
 
 
 class CreateReminderInput(BaseModel):
-    order_id: str = Field(..., description="Exact order id such as ORD-005.")
+    order_id: str = Field(..., description="Order id the manager wrote.")
     remind_on: str = Field(
         ...,
         description="Factory-calendar date YYYY-MM-DD. Tomorrow from 2026-04-01 is 2026-04-02.",
@@ -100,6 +100,8 @@ def draft_chase_email(order_id: str) -> str:
     """
     tool_name = "draft_chase_email"
     try:
+        if not order_id_named_by_manager(order_id):
+            return ungrounded_order_error(tool_name, order_id)
         order = _lookup_order(order_id)
         if not order:
             return tool_error(tool_name, "NOT_FOUND", "No order with that id in orders.csv.")
@@ -154,6 +156,8 @@ def send_email(order_id: str, confirmed: bool = False) -> str:
     """
     tool_name = "send_email"
     try:
+        if not order_id_named_by_manager(order_id):
+            return ungrounded_order_error(tool_name, order_id)
         order = _lookup_order(order_id)
         if not order:
             return tool_error(tool_name, "NOT_FOUND", "No order with that id in orders.csv.")
@@ -236,6 +240,8 @@ def add_order_note(order_id: str, note: str, confirmed: bool = False) -> str:
     """Propose or locally save an order note. Requires confirmation to persist."""
     tool_name = "add_order_note"
     try:
+        if not order_id_named_by_manager(order_id):
+            return ungrounded_order_error(tool_name, order_id)
         text = (note or "").strip()
         if not text:
             return tool_error(tool_name, "INVALID_INPUT", "note must be non-empty.")
@@ -327,6 +333,8 @@ def create_reminder(
     """Propose or locally save a reminder. No push notification is sent."""
     tool_name = "create_reminder"
     try:
+        if not order_id_named_by_manager(order_id):
+            return ungrounded_order_error(tool_name, order_id)
         text = (message or "").strip()
         if not text:
             return tool_error(tool_name, "INVALID_INPUT", "message must be non-empty.")

@@ -79,9 +79,10 @@ def pace_fields(order: dict[str, Any], medians: dict[str, float]) -> dict[str, A
         "remaining_stages": stages,
         "remaining_stage_count": len(stages),
         "estimated_remaining_working_days": estimated,
+        "days_left": estimated,
         "pace_slack_working_days": slack,
         "formula": (
-            "estimated_remaining_working_days = sum_over_remaining_stages "
+            "days_left = sum_over_remaining_stages "
             "pieces / 30-day_median(stage)"
         ),
     }
@@ -158,9 +159,10 @@ def today_priority(db: FactoryDB) -> dict[str, Any]:
     second.sort(key=lambda r: (0 if r["calendar_days_until_due"] == 0 else 1, r["calendar_days_until_due"]))
     third.sort(key=lambda r: r["calendar_days_until_due"])
     return {
-        "1st_priority": first,
-        "2nd_priority": second,
-        "3rd_priority": third,
+        "1st_priority": [_priority_card(r) for r in first],
+        "2nd_priority": [_priority_card(r) for r in second],
+        "3rd_priority": [_priority_card(r) for r in third],
+        "days_left_formula": "sum over remaining stages of pieces / 30-day stage median",
         "rule": (
             "1st: overdue and close to done (PACKING or estimated remaining days "
             f"< {NEAR_COMPLETE_DAYS}). "
@@ -170,6 +172,21 @@ def today_priority(db: FactoryDB) -> dict[str, Any]:
             f"{MISS_DUE_CALENDAR_HORIZON} calendar days, and estimated remaining "
             "working days exceed working days until due."
         ),
+    }
+
+
+def _priority_card(row: dict[str, Any]) -> dict[str, Any]:
+    """Minimal fields for the agent: identity + days_left."""
+    return {
+        "order_id": row["order_id"],
+        "customer": row["customer"],
+        "product": row["product"],
+        "pieces": row["pieces"],
+        "due_date": row["due_date"],
+        "current_stage": row["current_stage"],
+        "remaining_stages": row["remaining_stages"],
+        "calendar_days_until_due": row["calendar_days_until_due"],
+        "days_left": row["days_left"],
     }
 
 

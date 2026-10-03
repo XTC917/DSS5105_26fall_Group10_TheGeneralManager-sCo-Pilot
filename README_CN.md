@@ -57,7 +57,8 @@ Track 1 要求系统具备五类工具能力：
 | Judgement | `check_feasibility`                  | 对新订单进行产能可行性估算，并明确列出计算假设                                           |
 | Tracing   | `trace_order`                        | 查看 `orders.csv` 中对应的原始数据行、计算字段以及风险标记                              |
 | Discovery | `find_orders`                        | 根据客户、产品、生产阶段、状态等条件列出**所有匹配订单**（用户指定筛选）          |
-| Discovery | `discover_factory_issues`            | 按已定义规则主动发现并排序 Top N 问题（订单风险 + 阶段产量偏低） |
+| Discovery | `discover_factory_issues`            | production_log 阶段产量偏低 + 产线快照，Python 排序 |
+| Priority | `get_today_priority`                 | 今日 1st/2nd/3rd 订单优先级桶 + `days_left` |
 | Briefing  | `get_morning_briefing`               | 生成结构化生产运营信息，包括风险订单、最近一天产量与 30 天中位数对比、暂停生产的车间等                     |
 | Action    | `draft_chase_email`                  | 根据订单信息生成本地催单邮件草稿，不会发送                                             |
 | Action    | `send_email`                         | Proposal → Confirm → **模拟执行**并写入审计记录；目前仍为 `sent: false`，没有真实 SMTP |
@@ -130,10 +131,11 @@ notified: false
 
 ### 3. Ranked Discovery｜主动发现并排序工厂问题
 
-V1 已注册 `discover_factory_issues`。
+V1 已注册 `discover_factory_issues` 和 `get_today_priority`。
 
 * `find_orders` 仍只做用户指定的条件筛选
-* `discover_factory_issues` 按已定义规则主动找出订单风险和阶段产量偏低，并由 Python 排序
+* `discover_factory_issues` 按 production_log 的阶段产量规则找出偏低阶段，并由 Python 排序
+* `get_today_priority` 给出今日订单 1st/2nd/3rd 优先级桶
 * 不是万能异常检测器；不会用 LLM 写 SQL，也没有副作用
 
 阶段产量规则仍是 briefing 里那条 `0.70 × 30 天中位数`，不是完整的 `assess_stage_performance`。

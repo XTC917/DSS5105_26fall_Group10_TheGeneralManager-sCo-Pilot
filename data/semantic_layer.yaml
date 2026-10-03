@@ -25,7 +25,7 @@ data_definition:
           type: string
           nullable: false
           allowed_values: null
-          description: Order identifier, ORD-001 … ORD-120.
+          description: Order identifier written as ORD- plus digits.
         customer:
           type: string
           nullable: false
@@ -130,6 +130,7 @@ data_definition:
           type: string
           nullable: false
           allowed_values:
+          
             - KNITTING
             - ASSEMBLY
             - WASHING
@@ -272,7 +273,7 @@ data_definition:
           type: string
           nullable: false
           allowed_values: null
-          description: Order identifier, ORD-001 … ORD-120.
+          description: Order identifier written as ORD- plus digits.
         status:
           type: string
           nullable: false
@@ -320,12 +321,13 @@ term_definition:
         The CSV stores due_date; overdue / pace-miss are Python flags on
         that date, not missing data.
     prioritize:
-      tool: discover_factory_issues
+      tool: get_today_priority
       description: >
-        Same manager wording as priority, what to prioritize today, and
+        Same manager wording as priority, what to prioritize today, concern about, and
         today's production priority. ** It is NOT an action **. kind != action, stored=true. table=orders,
         column=due_date. Ranking is a Python grouping on stored order
-        dates and stages, not missing data.
+        dates and stages, not missing data. Use get_today_priority, not
+        discover_factory_issues.
     unusual_production:
       tool: discover_factory_issues
       description: >
@@ -338,9 +340,29 @@ term_definition:
     feasibility:
       tool: check_feasibility
       description: >
-        Same manager wording as can we take, could we accept, take N
-        hoodies/cardigans/accessories by a date, and accept a new order
+        Same manager wording as can we take, could we accept and accept a new order
         for delivery by. ** It is NOT an action **. kind=fact, stored=true.
         table=workshops, column=capacity_pieces_per_day. The verdict is a
         Python estimate on stored workshop capacity, IN_PROGRESS pieces,
         and 30-day stage medians — not missing data.
+    at_risk_orders:
+      tool: get_orders_at_risk
+      description: >
+        Vocabulary only — not a stored column. Same manager wording as
+        at risk, at-risk orders, orders at risk. kind=fact, stored=true.
+        table=orders, column=due_date. When answering, use only IN_PROGRESS
+        orders that are NOT overdue (due_date >= factory today 2026-04-01).
+        Ignore every already-overdue row. Copy likely_to_miss_due_dates /
+        likely_to_miss_due_next_7_days (or TIGHT_DEADLINE without OVERDUE).
+        Do not answer "at risk" from the OVERDUE list.
+    hasnt_moved:
+      tool: create_watch
+      description: >
+        Vocabulary only — not a stored column named "moved" or "status check".
+        Same manager wording as hasn't moved, hasn't moved by Thursday,
+        tell me if an order is still inactive by a weekday.
+        ** It IS an action ** (standing watch). kind=action, stored=true,
+        table=null, column=null. Use create_watch. Pass the weekday as spoken;
+        Python maps Thursday from factory today 2026-04-01 (Wednesday) to
+        2026-04-02. Do not treat as missing data. Do not answer whether the
+        order has already stalled; last_activity_date is checked later.

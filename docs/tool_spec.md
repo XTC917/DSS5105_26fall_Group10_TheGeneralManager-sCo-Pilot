@@ -166,14 +166,14 @@ If the manager asks *how* "the TrendCart order" is doing, keep using
 
 ---
 
-## `discover_factory_issues` (ranked discovery, V1)
+## `discover_factory_issues` (production_log issues, V1)
 
-Proactive, **read-only**. Python finds and sorts issues that already have a
-defined rule. The LLM only explains the JSON. No generated SQL. No writes.
+Proactive, **read-only**. Python finds stage output below `0.70` × the 30-day
+median and returns the factory-wide `production` snapshot. The LLM only
+explains the JSON. No generated SQL. No writes.
 
-**Not** `find_orders`. `find_orders` is user-directed filtering.
-**Not** a general anomaly detector. It cannot discover problems the CSVs
-cannot define.
+**Not** `find_orders`. **Not** `get_today_priority` (order-priority buckets).
+**Not** a general anomaly detector.
 
 **Inputs:** `limit` (integer, default 5, max 20).
 
@@ -181,29 +181,39 @@ cannot define.
 
 | Type | Source rule | Priority | Severity |
 |---|---|---|---|
-| `ORDER_OVERDUE` | `assess_order_risk` flag `OVERDUE` | P1 | high |
-| `ORDER_STALLED` | flag `STALLED` (and not overdue) | P2 | medium |
-| `ORDER_TIGHT_DUE` | flag `TIGHT_DEADLINE` (and not overdue) | P2 | medium |
 | `STAGE_BELOW_BASELINE` | briefing heuristic: last working-day pieces < `0.70` × 30-day median | P3 | low |
 
-One issue per at-risk order. Multiple flags stay on that issue's `evidence`.
-Primary type: OVERDUE wins, else TIGHT (same weight as existing `rank_score`), else STALLED.
+**Sort (deterministic):** priority ascending, then ratio ascending, then `issue_id`.
 
-**Sort (deterministic):** priority ascending, then existing `rank_score`
-descending (orders) or ratio ascending (stages), then `issue_id`.
+**Output:** `issues`, `production`, `total_found`, `returned_count`,
+`counts_by_type`, `factory_today` / `as_of`, `limitations`.
 
-**Output:** `issues`, `total_found`, `returned_count`, `counts_by_type`,
-`factory_today` / `as_of`, `limitations`. Each issue has `rule`, `inputs`,
-`result`, `source_file`, and `evidence`. Empty → `issues: []` plus a message.
-Do not invent issues.
+Each issue has `rule`, `inputs`, `result`, `source_file`, and `evidence`.
+Empty → `issues: []` plus a message. Do not invent issues.
 
-Top-N may omit P3 stage issues when many P1 overdue orders exist; see
-`counts_by_type`.
+**Example questions:** "Are there any unusual production issues I should know
+about today?"
 
-**Example questions:** "What should I be concerned about right now?" /
-"Find the top 5 factory issues."
+**Unsupported:** revenue; dumping the whole factory; LLM-invented severity;
+today's order-priority list.
 
-**Unsupported:** revenue; dumping the whole factory; LLM-invented severity.
+---
+
+## `get_today_priority`
+
+Read-only Python grouping of IN_PROGRESS orders into 1st / 2nd / 3rd
+priority buckets. Copy `data.today_priority`. Do not rerank.
+
+**Inputs:** none.
+
+**Output:** `today_priority` (`1st_priority`, `2nd_priority`, `3rd_priority`,
+`days_left_formula`, `rule`), `factory_today` / `as_of`, `limitations`.
+
+Rows include **`days_left`**: `sum over remaining stages of (pieces / 30-day median of that stage)`.
+Copy it; do not recompute. Factory today 2026-04-01 examples: ORD-120 = 6.3,
+ORD-108 / ORD-103 = 8.4.
+
+**Example questions:** "What should we prioritize today?"
 
 ---
 

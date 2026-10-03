@@ -1,7 +1,7 @@
-"""Ranked factory-issue discovery. All ranking is deterministic Python.
+"""Ranked factory-issue discovery from production_log. All ranking is deterministic Python.
 
-Reuses assess_order_risk and the briefing stage-drop heuristic.
-Does not invent new risk formulas. Read-only: no writes to copilot_state.db.
+Reuses the briefing stage-drop heuristic. Order-priority buckets live on
+get_today_priority. Read-only: no writes to copilot_state.db.
 """
 
 from __future__ import annotations
@@ -11,9 +11,14 @@ from typing import Any
 
 from backend.config import FACTORY_TODAY, PRODUCTION_DROP_RATIO
 from backend.services.briefing import unusual_stage_output
-from backend.services.calculations import assess_order_risk
+from backend.services.calculations import assess_order_risk, remaining_stages
 from backend.services.database import FactoryDB
-from backend.services.pace import production_attention, today_priority
+from backend.services.pace import (
+    estimated_remaining_working_days,
+    production_attention,
+    stage_medians,
+    today_priority,
+)
 
 DEFAULT_LIMIT = 5
 MAX_LIMIT = 20
@@ -33,17 +38,16 @@ PRIORITY_BY_TYPE = {
 SEVERITY_BY_PRIORITY = {1: "high", 2: "medium", 3: "low"}
 
 LIMITATIONS = [
-    "V1 flags defined order-risk rules (OVERDUE / STALLED / TIGHT_DEADLINE) "
-    "and stage output below 0.70 × the 30-day median.",
-    "today_priority is the grouping for 'what should we prioritize today?'. "
-    "Do not use issues[].priority (those are all P1 for overdue).",
-    "production is the factory-wide queue and last-day vs 30-day median picture. "
-    "Use it for unusual production issues; do not answer that with the order list.",
+    "V1 flags stage output below 0.70 × the 30-day median from production_log.",
+    "production is the factory-wide queue and last-day vs 30-day median picture.",
     "Not a general anomaly detector. Issues the CSVs cannot define are omitted.",
-    "One issue per at-risk order; multiple flags stay on that issue's evidence.",
     "production_log.csv is factory-wide (date × stage), not per order.",
-    "Priority and sort order are computed in Python. The model must not rerank.",
-    "Top-N may omit lower-priority issues; see counts_by_type and total_found.",
+    "Sort order is computed in Python. The model must not rerank.",
+]
+
+TODAY_PRIORITY_LIMITATIONS = [
+    "1st/2nd/3rd buckets are Python grouping. Copy days_left; do not recompute.",
+    "days_left = sum over remaining stages of pieces / 30-day stage median.",
 ]
 
 
@@ -60,6 +64,7 @@ def primary_issue_type(flags: list[str]) -> str:
 
 def collect_order_risk_issues(db: FactoryDB) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
+    medians = stage_medians(db)
     for order in db.in_progress_orders():
         risk = assess_order_risk(order)
         if not risk["at_risk"]:
@@ -69,6 +74,10 @@ def collect_order_risk_issues(db: FactoryDB) -> list[dict[str, Any]]:
         priority = PRIORITY_BY_TYPE[issue_type]
         computed = risk["computed"]
         oid = order["order_id"]
+        stages_left = remaining_stages(order.get("current_stage") or "")
+        days_left = estimated_remaining_working_days(
+            int(order.get("pieces") or 0), stages_left, medians
+        )
         issues.append(
             {
                 "issue_id": f"order:{oid}",
@@ -113,6 +122,7 @@ def collect_order_risk_issues(db: FactoryDB) -> list[dict[str, Any]]:
                             "working_days_since_last_activity"
                         ],
                         "remaining_stage_count": computed["remaining_stage_count"],
+                        "days_left": days_left,
                     },
                     "calculations": risk["calculations"],
                 },
@@ -180,14 +190,14 @@ def sort_issues(issues: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def discover_factory_issues(db: FactoryDB, limit: int = DEFAULT_LIMIT) -> dict[str, Any]:
     if limit < 1 or limit > MAX_LIMIT:
         raise ValueError(f"limit must be an integer from 1 to {MAX_LIMIT}.")
-    collected = sort_issues(collect_order_risk_issues(db) + collect_stage_issues(db))
+    collected = sort_issues(collect_stage_issues(db))
     returned = collected[:limit]
     counts = Counter(item["issue_type"] for item in collected)
     empty_message = None
     if not collected:
         empty_message = (
-            "No issues matched the V1 discovery rules (order risk flags and "
-            "stage output below 0.70 × 30-day median)."
+            "No issues matched the V1 discovery rules "
+            "(stage output below 0.70 × 30-day median)."
         )
     return {
         "factory_today": FACTORY_TODAY.isoformat(),
@@ -196,16 +206,22 @@ def discover_factory_issues(db: FactoryDB, limit: int = DEFAULT_LIMIT) -> dict[s
         "total_found": len(collected),
         "returned_count": len(returned),
         "counts_by_type": {
-            ISSUE_ORDER_OVERDUE: int(counts.get(ISSUE_ORDER_OVERDUE, 0)),
-            ISSUE_ORDER_STALLED: int(counts.get(ISSUE_ORDER_STALLED, 0)),
-            ISSUE_ORDER_TIGHT_DUE: int(counts.get(ISSUE_ORDER_TIGHT_DUE, 0)),
             ISSUE_STAGE_BELOW_BASELINE: int(counts.get(ISSUE_STAGE_BELOW_BASELINE, 0)),
         },
-        "today_priority": today_priority(db),
         "production": production_attention(db),
         "issues": returned,
         "message": empty_message,
         "limitations": list(LIMITATIONS),
+    }
+
+
+def get_today_priority(db: FactoryDB) -> dict[str, Any]:
+    buckets = today_priority(db)
+    return {
+        "factory_today": FACTORY_TODAY.isoformat(),
+        "as_of": FACTORY_TODAY.isoformat(),
+        "today_priority": buckets,
+        "limitations": list(TODAY_PRIORITY_LIMITATIONS),
     }
 
 

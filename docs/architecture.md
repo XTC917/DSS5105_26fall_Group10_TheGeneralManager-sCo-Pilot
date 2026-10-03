@@ -31,7 +31,8 @@ Manager (React UI)
         ├── get_orders_at_risk    (retrieval)
         ├── get_morning_briefing  (structured briefing)
         ├── find_orders           (user-directed discovery)
-        ├── discover_factory_issues (ranked discovery)
+        ├── discover_factory_issues (production_log issues)
+        ├── get_today_priority     (1st/2nd/3rd order buckets)
         ├── trace_order           (tracing)
         ├── check_feasibility     (judgement)
         ├── draft_chase_email / send_email / add_order_note / create_reminder
@@ -106,10 +107,11 @@ V1 only has `LocalWatchNotifier`. Email would plug in later without changing
 the condition.
 
 **Ranked vs filtered discovery:** `find_orders` only applies the manager's
-filters. `discover_factory_issues` walks defined Python rules (order risk +
-stage-below-baseline), assigns priority, and returns Top N. It is read-only
-and is not a general anomaly detector. `GET /api/discovery?limit=5` exposes
-the same service as the tool.
+filters. `discover_factory_issues` walks production_log stage-below-baseline
+rules and returns Top N plus the `production` snapshot. `get_today_priority`
+returns the 1st/2nd/3rd order buckets. Both are read-only and not general
+anomaly detectors. `GET /api/discovery?limit=5` exposes the same service as
+`discover_factory_issues`.
 
 ## What is intentionally missing
 

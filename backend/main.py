@@ -99,7 +99,11 @@ def chat(request: ChatRequest) -> ChatResponse:
             ),
         )
     try:
-        result = run_agent(request.message, request.conversation_id)
+        result = run_agent(
+            request.message,
+            request.conversation_id,
+            clarification_reply=request.clarification_reply,
+        )
     except Exception as exc:  # noqa: BLE001
         logger.exception("chat failed")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -114,7 +118,7 @@ def briefing() -> dict:
 
 @app.get("/api/discovery")
 def discovery(limit: int = DEFAULT_LIMIT) -> dict:
-    """Ranked factory issues from defined Python rules (no LLM)."""
+    """Production-log issues from defined Python rules (no LLM)."""
     if limit < 1 or limit > MAX_LIMIT:
         raise HTTPException(
             status_code=400,

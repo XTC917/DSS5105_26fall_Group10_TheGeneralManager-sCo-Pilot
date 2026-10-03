@@ -1,11 +1,15 @@
 """Pace estimates and snapshot timeline. No LLM."""
 
-from backend.services.discovery import discover_factory_issues as run_discover
+from backend.services.discovery import (
+    discover_factory_issues as run_discover,
+    get_today_priority as run_today_priority,
+)
 from backend.services.pace import (
     likely_to_miss_due_dates,
     likely_to_miss_due_next_n_days,
     today_priority,
 )
+from backend.tools.discovery import get_today_priority
 from backend.tools.retrieval import get_orders_at_risk
 from backend.tools.tracing import trace_order
 from tests.conftest import parse_tool
@@ -52,12 +56,25 @@ def test_today_priority_matches_q005(db):
         "ORD-002",
     ]
     assert [r["order_id"] for r in buckets["3rd_priority"]] == ["ORD-108", "ORD-103"]
+    ord120 = next(r for r in buckets["2nd_priority"] if r["order_id"] == "ORD-120")
+    assert ord120["days_left"] == 6.3
+    scarf = {r["order_id"]: r["days_left"] for r in buckets["3rd_priority"]}
+    assert scarf == {"ORD-108": 8.4, "ORD-103": 8.4}
 
 
 def test_discover_includes_priority_and_production(db):
-    data = run_discover(db, limit=5)
-    assert data["today_priority"]["1st_priority"][0]["order_id"] == "ORD-107"
-    prod = data["production"]
+    buckets = run_today_priority(db)["today_priority"]
+    assert buckets["1st_priority"][0]["order_id"] == "ORD-107"
+    assert "days_left" in buckets["1st_priority"][0]
+    payload = parse_tool(get_today_priority.invoke({}))
+    assert payload["data"]["today_priority"]["2nd_priority"]
+    overdue = next(
+        item
+        for item in payload["data"]["today_priority"]["2nd_priority"]
+        if item["order_id"] == "ORD-120"
+    )
+    assert overdue["days_left"] == 6.3
+    prod = run_discover(db, limit=5)["production"]
     assert prod["in_progress_order_count"] == 34
     assert prod["in_progress_by_stage"] == {
         "KNITTING": 12,

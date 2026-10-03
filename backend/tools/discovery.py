@@ -1,7 +1,8 @@
 """Read-only discovery tools.
 
 find_orders: user-directed filters on orders.csv.
-discover_factory_issues: ranked issues from defined Python rules.
+discover_factory_issues: production_log stage issues and the production snapshot.
+get_today_priority: 1st/2nd/3rd order-priority buckets.
 No generated SQL. No side effects.
 """
 
@@ -19,6 +20,7 @@ from backend.services.discovery import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
     discover_factory_issues as run_discover_factory_issues,
+    get_today_priority as run_get_today_priority,
 )
 from backend.services.feasibility import match_known_products
 from backend.tools.common import tool_error, tool_json
@@ -33,7 +35,7 @@ MAX_ROWS = 60
 class FindOrdersInput(BaseModel):
     customer: Optional[str] = Field(
         default=None,
-        description="Customer name as in orders.csv, e.g. TrendCart. Case-insensitive exact match.",
+        description="Customer name as written by the manager. Case-insensitive exact match.",
     )
     product: Optional[str] = Field(
         default=None,
@@ -75,9 +77,9 @@ def find_orders(
     """List orders matching customer, product, status, and/or stage.
 
     Use to find order ids or list several orders. Always return every match.
-    Never pick one order silently. If the manager asks how a named customer
-    or product is doing (status of "the TrendCart order"), use get_order_status
-    instead — that tool returns AMBIGUOUS when several rows match.
+    Never pick one order silently. If the manager asks how one customer's
+    or product's order is doing, use get_order_status instead — that tool
+    returns AMBIGUOUS when several rows match.
 
     Do not use this tool for revenue, workers, or feasibility.
     """
@@ -174,19 +176,16 @@ def find_orders(
 class DiscoverFactoryIssuesInput(BaseModel):
     limit: int = Field(
         default=DEFAULT_LIMIT,
-        description="Maximum number of ranked issues to return (1–20). Default 5.",
+        description="Maximum number of ranked stage issues to return (1–20). Default 5.",
     )
 
 
 @tool(args_schema=DiscoverFactoryIssuesInput)
 def discover_factory_issues(limit: int = DEFAULT_LIMIT) -> str:
-    """Ranked issues plus today's order-priority buckets and a production snapshot.
+    """Production snapshot and ranked production_log stage issues.
 
-    For "what should we prioritize today?" copy data.today_priority (1st/2nd/3rd).
-    Do not use issues[].priority — overdue rows are all P1 there.
-    For unusual production / stage bottlenecks copy data.production
-    (queue by stage, last working day vs 30-day median). Do not answer that
-    with the at-risk order list.
+    Copy data.production (queue by stage, last working day vs 30-day median)
+    and data.issues. Do not answer with an order-priority list.
     """
     tool_name = "discover_factory_issues"
     try:
@@ -217,7 +216,7 @@ def discover_factory_issues(limit: int = DEFAULT_LIMIT) -> str:
                 "data": data,
                 "trace": {
                     "tool": tool_name,
-                    "source_file": "orders.csv, production_log.csv",
+                    "source_file": "production_log.csv",
                     "filter": {
                         "factory_today": data["factory_today"],
                         "limit": limit,
@@ -243,9 +242,8 @@ def discover_factory_issues(limit: int = DEFAULT_LIMIT) -> str:
                         },
                     ],
                     "basis": (
-                        "Order issues reuse assess_order_risk. Stage issues reuse "
-                        "the briefing last-day vs 0.70 × 30-day-median rule. "
-                        "Sorted by priority, then existing rank_score / ratio, then id."
+                        "Stage issues reuse the briefing last-day vs "
+                        "0.70 × 30-day-median rule on production_log.csv."
                     ),
                 },
             }
@@ -254,4 +252,69 @@ def discover_factory_issues(limit: int = DEFAULT_LIMIT) -> str:
         return tool_error(tool_name, "INVALID_INPUT", str(exc))
     except Exception as exc:  # noqa: BLE001
         logger.exception("discover_factory_issues failed")
+        return tool_error(tool_name, "INTERNAL", str(exc))
+
+
+class GetTodayPriorityInput(BaseModel):
+    unused: Optional[str] = Field(
+        default=None,
+        description="Leave empty. This tool takes no filters.",
+    )
+
+
+@tool(args_schema=GetTodayPriorityInput)
+def get_today_priority(unused: Optional[str] = None) -> str:
+    """Today's order-priority buckets (1st/2nd/3rd) with days_left.
+
+    Copy data.today_priority. days_left is Python: sum over remaining stages
+    of pieces / 30-day stage median. Do not recompute or rerank.
+    """
+    tool_name = "get_today_priority"
+    try:
+        data = run_get_today_priority(get_db())
+        buckets = data["today_priority"]
+        logger.info(
+            "get_today_priority 1st=%s 2nd=%s 3rd=%s",
+            len(buckets.get("1st_priority") or []),
+            len(buckets.get("2nd_priority") or []),
+            len(buckets.get("3rd_priority") or []),
+        )
+        rows = []
+        for rank, key in (
+            (1, "1st_priority"),
+            (2, "2nd_priority"),
+            (3, "3rd_priority"),
+        ):
+            for item in buckets.get(key) or []:
+                rows.append(
+                    {
+                        "order_id": item.get("order_id"),
+                        "bucket": key,
+                        "rank": rank,
+                        "days_left": item.get("days_left"),
+                    }
+                )
+        return tool_json(
+            {
+                "ok": True,
+                "tool": tool_name,
+                "data": data,
+                "trace": {
+                    "tool": tool_name,
+                    "source_file": "orders.csv, production_log.csv",
+                    "filter": {"factory_today": data["factory_today"]},
+                    "rows": rows,
+                    "calculations": [
+                        {
+                            "name": "days_left",
+                            "formula": buckets.get("days_left_formula"),
+                            "result": "per-order field on today_priority",
+                        },
+                    ],
+                    "basis": buckets.get("rule"),
+                },
+            }
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("get_today_priority failed")
         return tool_error(tool_name, "INTERNAL", str(exc))

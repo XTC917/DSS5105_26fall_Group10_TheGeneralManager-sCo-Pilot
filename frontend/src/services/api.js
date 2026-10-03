@@ -87,13 +87,14 @@ export async function declineAction(action) {
   return body;
 }
 
-export async function sendChat(message, conversationId) {
+export async function sendChat(message, conversationId, clarificationReply = false) {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({
       message,
       conversation_id: conversationId,
+      clarification_reply: clarificationReply,
     }),
   });
   if (res.status === 401) {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from backend.tools.common import reset_manager_text, set_manager_text
 from backend.tools.judgement import check_feasibility
 from backend.tools.retrieval import get_order_status, get_orders_at_risk
 from backend.tools.tracing import trace_order
@@ -22,6 +23,29 @@ def test_get_order_status_by_id(db):
     assert payload["data"]["computed"]["is_overdue"] is True
     assert payload["data"]["computed"]["is_stalled"] is False
     assert payload["trace"]["source_file"] == "orders.csv"
+
+
+def test_order_id_not_in_the_question_is_refused(db):
+    token = set_manager_text("How is the TrendCart order doing?")
+    try:
+        payload = parse_tool(get_order_status.invoke({"order_id": "ORD-120"}))
+    finally:
+        reset_manager_text(token)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "UNGROUNDED_ID"
+    assert "data" not in payload
+
+
+def test_unnamed_product_filter_is_refused(db):
+    token = set_manager_text("How is the TrendCart order doing?")
+    try:
+        payload = parse_tool(
+            get_order_status.invoke({"customer": "TrendCart", "product": "Vest"})
+        )
+    finally:
+        reset_manager_text(token)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "UNGROUNDED_ID"
 
 
 def test_get_order_status_ambiguous_customer(db):

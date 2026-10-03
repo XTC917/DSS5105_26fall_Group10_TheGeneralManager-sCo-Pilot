@@ -22,11 +22,13 @@ function actionLabel(action) {
   return "Confirm this action";
 }
 
-export default function MessageBubble({ message, onConfirm, onDismiss, busy }) {
+export default function MessageBubble({ message, onConfirm, onDismiss, onClarify, busy }) {
   const isUser = message.role === "user";
   const [open, setOpen] = useState(false);
+  const [other, setOther] = useState("");
   const traces = message.traces || [];
   const proposed = message.proposedActions || [];
+  const clarification = message.clarification;
   const decision = message.decision;
 
   return (
@@ -41,6 +43,48 @@ export default function MessageBubble({ message, onConfirm, onDismiss, busy }) {
           <p className="mt-2 text-[11px] uppercase tracking-wide text-ink/45">
             Tools: {message.toolsUsed.join(" → ")}
           </p>
+        )}
+        {!isUser && clarification?.options?.length > 0 && (
+          <div className="mt-2">
+            <div className="flex flex-wrap gap-2">
+              {clarification.options.map((option) => (
+                <button
+                  key={option.message}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onClarify?.(option.message)}
+                  className="rounded-full border border-ink/20 bg-white px-3 py-1 text-left text-xs text-ink hover:border-brass disabled:opacity-50"
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <form
+              className="mt-2 flex gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const text = other.trim();
+                if (!text) return;
+                setOther("");
+                onClarify?.(text);
+              }}
+            >
+              <input
+                value={other}
+                onChange={(event) => setOther(event.target.value)}
+                disabled={busy}
+                placeholder={clarification.other_placeholder || "Other"}
+                className="min-w-0 flex-1 rounded border border-ink/15 px-2 py-1 text-xs outline-none focus:border-brass"
+              />
+              <button
+                type="submit"
+                disabled={busy || !other.trim()}
+                className="rounded bg-ink px-3 py-1 text-xs font-medium text-paper disabled:opacity-50"
+              >
+                {clarification.other_submit || "Send"}
+              </button>
+            </form>
+          </div>
         )}
         {!isUser && proposed.length > 0 && !decision && (
           <div className="mt-2 space-y-2 rounded border border-ink/10 bg-white px-2 py-2">

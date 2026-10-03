@@ -39,7 +39,8 @@ shipped vs still open is listed below.
 | Judgement | `check_feasibility` | Capacity estimate for a new order, with stated assumptions |
 | Tracing | `trace_order` | Source `orders.csv` row + computed fields + risk flags |
 | Discovery (filter) | `find_orders` | List **all** matches by customer / product / stage / status. Does not rank “unusual” issues |
-| Discovery (ranked) | `discover_factory_issues` | Top-N issues from defined order-risk + stage-below-baseline rules. Python sorts |
+| Discovery (ranked) | `discover_factory_issues` | Top-N production_log stage issues + production snapshot. Python sorts |
+| Priority | `get_today_priority` | Today's 1st/2nd/3rd order buckets + `days_left`. Python grouping |
 | Briefing | `get_morning_briefing` | Structured ops facts (reuses at-risk rules, last-day output vs 30-day median, suspended workshops) |
 | Action | `draft_chase_email` | Local draft from order fields. Never sent |
 | Action | `send_email` | Proposal → confirm → **simulated** audit row. Still `sent: false` (no SMTP) |

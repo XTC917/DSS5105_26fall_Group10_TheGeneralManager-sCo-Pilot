@@ -31,7 +31,8 @@ def get_morning_briefing(unused: Optional[str] = None) -> str:
     Reuses get_orders_at_risk for risk flags. Do not invent extra facts.
     Summarize the JSON; do not treat it as a script.
     For only the at-risk list, get_orders_at_risk is enough.
-    For ranked "what should I be concerned about", use discover_factory_issues.
+    For ranked production issues, use discover_factory_issues.
+    For today's order-priority buckets, use get_today_priority.
     """
     tool_name = "get_morning_briefing"
     try:

@@ -10,13 +10,13 @@ from pydantic import BaseModel, Field
 from backend.services.calculations import assess_order_risk, order_computed_fields
 from backend.services.database import get_db
 from backend.services.pace import pace_fields, snapshot_timeline, stage_medians
-from backend.tools.common import tool_error, tool_json
+from backend.tools.common import order_id_named_by_manager, tool_error, tool_json, ungrounded_order_error
 
 logger = logging.getLogger(__name__)
 
 
 class TraceOrderInput(BaseModel):
-    order_id: str = Field(..., description="Exact order id such as ORD-120")
+    order_id: str = Field(..., description="Order id the manager wrote.")
 
 
 @tool(args_schema=TraceOrderInput)
@@ -29,6 +29,8 @@ def trace_order(order_id: str) -> str:
     """
     tool_name = "trace_order"
     try:
+        if not order_id_named_by_manager(order_id):
+            return ungrounded_order_error(tool_name, order_id)
         db = get_db()
         order = db.get_order_by_id(order_id)
         if order is None:

@@ -15,7 +15,14 @@ from pydantic import BaseModel, Field
 from backend.services.calculations import assess_order_risk, order_computed_fields
 from backend.services.database import get_db
 from backend.services.pace import likely_to_miss_due_dates, likely_to_miss_due_next_n_days, pace_fields, stage_medians
-from backend.tools.common import tool_error, tool_json
+from backend.tools.common import (
+    order_id_named_by_manager,
+    several_orders_message,
+    tool_error,
+    tool_json,
+    ungrounded_order_error,
+    value_named_by_manager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +30,11 @@ logger = logging.getLogger(__name__)
 class GetOrderStatusInput(BaseModel):
     order_id: Optional[str] = Field(
         default=None,
-        description="Exact order id such as ORD-120. Prefer this when known.",
+        description="Order id the manager wrote. Omit when they did not write one.",
     )
     customer: Optional[str] = Field(
         default=None,
-        description="Customer name as in orders.csv, e.g. TrendCart. Case-insensitive exact match.",
+        description="Customer name as written by the manager. Case-insensitive exact match.",
     )
     product: Optional[str] = Field(
         default=None,
@@ -51,14 +58,20 @@ def get_order_status(
     customer: Optional[str] = None,
     product: Optional[str] = None,
 ) -> str:
-    """Look up order status from orders.csv.
+    """Look up one order from orders.csv.
 
-    Use for questions like "how is ORD-120 doing?" or "what is the TrendCart hoodie status?".
-    If several rows match, the result is AMBIGUOUS — ask the manager to pick an order_id.
-    Do not guess which order they mean.
+    Pass order_id only when the manager wrote that id.
+    Otherwise pass the customer and/or product they named.
+    If several rows match, the result is AMBIGUOUS — ask which order_id.
+    Do not choose an id from an example or an answer template.
     """
     tool_name = "get_order_status"
     try:
+        if order_id and not order_id_named_by_manager(order_id):
+            return ungrounded_order_error(tool_name, order_id)
+        for spoken in (customer, product):
+            if spoken and not value_named_by_manager(spoken):
+                return ungrounded_order_error(tool_name, spoken)
         if not order_id and not customer and not product:
             return tool_error(
                 tool_name,
@@ -101,10 +114,7 @@ def get_order_status(
                     "tool": tool_name,
                     "error": {
                         "code": "AMBIGUOUS",
-                        "message": (
-                            f"{len(rows)} orders match. Ask the manager to specify an order_id. "
-                            "Do not pick one yourself."
-                        ),
+                        "message": several_orders_message(len(rows)),
                         "filter": filters,
                         "candidates": candidates,
                     },

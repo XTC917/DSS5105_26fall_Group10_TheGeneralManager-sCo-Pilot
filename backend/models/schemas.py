@@ -13,6 +13,10 @@ class ChatRequest(BaseModel):
         default="default",
         description="Stable id so the agent can keep multi-turn context",
     )
+    clarification_reply: bool = Field(
+        default=False,
+        description="True when this message is the manager's answer to a clarification card.",
+    )
 
 
 class ToolTrace(BaseModel):
@@ -47,5 +51,6 @@ class ChatResponse(BaseModel):
     tools_used: list[str] = Field(default_factory=list)
     traces: list[dict[str, Any]] = Field(default_factory=list)
     proposed_actions: list[dict[str, Any]] = Field(default_factory=list)
+    clarification: dict[str, Any] | None = None
     limitation: str | None = None
     routing_intent: str | None = None
