@@ -56,22 +56,17 @@ Do not invent numbers. Do not add names the manager did not write.
 The language rule in the user message overrides every other language. Do not translate into French or Spanish.
 """
 
-_TOOL_SYSTEM = """You only decide whether a registered tool's JSON can return the field from step 1.
+_TOOL_SYSTEM = """You only decide whether this question needs a tool, then whether that tool exists.
 
 Reply with one JSON object, no markdown:
-{"has_tool":true|false,"tool":string|null,"readings":[{"tool":string,"label":string,"message":string}],"reason":string}
+{"needs_tool":true|false,"has_tool":true|false,"tool":string|null,"reason":string}
 
-readings lists different answers to this question.
-One row and the list of those same rows are one answer: name only one of those tools.
-Status, due-date risk, today's priority, production output, and spare capacity are different answers.
-If the question picks one answer, readings has that one object and has_tool is true.
-If the question fits several answers, has_tool is false, tool is null, and readings has one object per answer.
-label: a short button, in the manager's language, about the subject they actually named.
-message: the full next question, in the manager's language, asking only that answer about the same subject.
-Do not swap in a generic customer, product, stage, or example question.
+needs_tool=false when Previous tool JSON already has the facts and this question only changes how to say them, such as language or a shorter wording. Then has_tool=false and tool=null.
+needs_tool=true when a new fact must be looked up or computed.
+When needs_tool is true, has_tool=true only if a registered tool returns that fact. Otherwise has_tool=false and tool=null.
 A tool that merely mentions another table as a side effect does not count.
-If kind is action, pick the matching action tool.
-reason: one or two sentences in the same language as the manager. Do not translate.
+If kind is action, needs_tool=true and pick the matching action tool.
+reason: one or two sentences in the manager's language. Do not translate.
 Do not invent numbers. Do not add names the manager did not write.
 """
 
@@ -90,6 +85,7 @@ class ToolVerdict:
     has_tool: bool = False
     tool: str | None = None
     reason: str = ""
+    needs_tool: bool = True
     readings: list[str] = field(default_factory=list)
     options: list[dict[str, str]] = field(default_factory=list)
 
@@ -104,6 +100,7 @@ class AnswerabilityGate:
     traces: list[dict[str, Any]] = field(default_factory=list)
     clarification: dict[str, Any] | None = None
     explain_prior: bool = False
+    reuse_prior: bool = False
 
 
 _HAN = re.compile(r"[\u4e00-\u9fff]")
@@ -367,13 +364,15 @@ def _tools_from_payload(payload: dict[str, Any]) -> ToolVerdict:
     if tool and tool not in readings:
         readings.insert(0, tool)
     has_tool = bool(payload.get("has_tool")) or bool(payload.get("ambiguous") is False and tool)
-    if payload.get("ambiguous") is True:
+    needs_tool = True if "needs_tool" not in payload else bool(payload.get("needs_tool"))
+    if payload.get("ambiguous") is True or not needs_tool:
         has_tool = False
         tool = None
     return ToolVerdict(
         has_tool=has_tool,
         tool=tool,
         reason=str(payload.get("reason") or "").strip(),
+        needs_tool=needs_tool,
         readings=readings,
         options=options,
     )
@@ -402,10 +401,11 @@ def _ask_tool_coverage(model: Any, data: DataVerdict, question: str) -> ToolVerd
         + tool_names
         + "\n\nWhat each tool looks up:\n"
         + TOOL_LOOKUP_TABLE
-        + "\n\nhas_tool=true only if one of those tools returns the step-1 field "
-        "for this question. A list tool that filters on that column counts "
-        "(including an empty list). Do not treat a side-effect mention of another "
-        "table as coverage. If none do, has_tool=false and tool=null.\n\n"
+        + "\n\nFirst decide needs_tool. False only when Previous tool JSON already "
+        "holds the facts and this question only changes the wording. "
+        "If needs_tool is true, has_tool=true only if one registered tool returns "
+        "the step-1 field. A list tool that filters on that column counts. "
+        "If none do, has_tool=false and tool=null.\n\n"
         "Manager question:\n"
         + (question or "")
     )
@@ -589,22 +589,28 @@ def assess_answerability(
         ),
         _trace(
             "assess_tool_coverage",
-            {"has_tool": tools.has_tool, "tool": tools.tool},
+            {"needs_tool": tools.needs_tool, "has_tool": tools.has_tool, "tool": tools.tool},
             tools.reason,
         ),
     ]
 
-    if (data.kind == "action" or data.stored) and tools.has_tool:
+    covered = (not tools.needs_tool) or tools.has_tool
+    if (data.kind == "action" or data.stored) and covered:
         logger.info(
-            "answerability proceed kind=%s stored=%s table=%s column=%s tool=%s",
+            "answerability proceed kind=%s stored=%s needs_tool=%s table=%s column=%s tool=%s",
             data.kind,
             data.stored,
+            tools.needs_tool,
             data.table,
             data.column,
             tools.tool,
         )
         return AnswerabilityGate(
-            proceed=True, data=data, tools=tools, traces=traces
+            proceed=True,
+            data=data,
+            tools=tools,
+            traces=traces,
+            reuse_prior=not tools.needs_tool,
         )
 
     answer, limitation = _compose_answer(data, tools)

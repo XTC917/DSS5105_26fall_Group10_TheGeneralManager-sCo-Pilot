@@ -33,6 +33,7 @@ _AGENT = None
 _CHECKPOINTER = MemorySaver()
 _TEMPLATE_QUERY: ContextVar[str] = ContextVar("template_query", default="")
 _EXPLAIN_PRIOR: ContextVar[bool] = ContextVar("explain_prior", default=False)
+_REUSE_PRIOR: ContextVar[bool] = ContextVar("reuse_prior", default=False)
 _PRIOR_ORDER_IDS: ContextVar[str] = ContextVar("prior_order_ids", default="")
 
 # ---------------------------------------------------------------------------
@@ -115,6 +116,11 @@ def _react_prompt(state: dict[str, Any]):
             "\n\nThe manager is asking how a figure already in the previous tool "
             "result was calculated. Explain that formula from the previous tool "
             "JSON in this conversation. Do not call any tool."
+        )
+    if _REUSE_PRIOR.get():
+        system += (
+            "\n\nThe previous tool JSON already has the facts. "
+            "Restate that result as the manager asked. Do not call any tool."
         )
     prior_ids = _PRIOR_ORDER_IDS.get()
     if prior_ids:
@@ -300,8 +306,14 @@ def run_agent(
 
     token = _TEMPLATE_QUERY.set(message)
     explain = _EXPLAIN_PRIOR.set(gate.explain_prior)
+    reuse = _REUSE_PRIOR.set(gate.reuse_prior)
     prior_ids = ""
-    if gate.proceed and not gate.explain_prior and continues_prior_rows(message, _prior_tool_json(conversation_id)):
+    if (
+        gate.proceed
+        and not gate.explain_prior
+        and not gate.reuse_prior
+        and continues_prior_rows(message, _prior_tool_json(conversation_id))
+    ):
         prior_ids = " ".join(_previous_turn_order_ids(conversation_id))
     held_ids = _PRIOR_ORDER_IDS.set(prior_ids)
     spoken = _manager_text(conversation_id, message)
@@ -317,6 +329,7 @@ def run_agent(
     finally:
         _TEMPLATE_QUERY.reset(token)
         _EXPLAIN_PRIOR.reset(explain)
+        _REUSE_PRIOR.reset(reuse)
         _PRIOR_ORDER_IDS.reset(held_ids)
         reset_manager_text(manager)
     parsed = parse_agent_result(result, conversation_id)

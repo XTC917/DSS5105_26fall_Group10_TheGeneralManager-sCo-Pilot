@@ -93,6 +93,22 @@ def test_named_customer_is_an_order_field(db):
     assert named_order_field("How is the sales doing?") is None
 
 
+def test_wording_change_does_not_need_a_tool():
+    from backend.agent.answerability import _tools_from_payload
+
+    verdict = _tools_from_payload(
+        {
+            "needs_tool": False,
+            "has_tool": False,
+            "tool": None,
+            "reason": "The previous result only needs to be restated.",
+        }
+    )
+    assert verdict.needs_tool is False
+    assert verdict.has_tool is False
+    assert verdict.tool is None
+
+
 def test_different_answers_keep_the_models_wording():
     from backend.agent.answerability import interpretation_clarification
 
