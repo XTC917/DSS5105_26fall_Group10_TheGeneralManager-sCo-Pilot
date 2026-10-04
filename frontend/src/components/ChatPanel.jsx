@@ -41,6 +41,8 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
           traces: result.traces || [],
           limitation: result.limitation,
           proposedActions: result.proposed_actions || [],
+          charts: result.charts || [],
+          tables: result.tables || [],
         },
       ]);
     } catch (err) {

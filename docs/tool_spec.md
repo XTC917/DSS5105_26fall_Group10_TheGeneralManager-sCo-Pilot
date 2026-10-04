@@ -164,6 +164,66 @@ If the manager asks *how* "the TrendCart order" is doing, keep using
 
 ---
 
+## `draw` (chart rendering)
+
+Creates a structured chart specification from values already returned by a
+factory data tool. The chat API returns the specification separately from the
+answer text, and the React chat renders the chart below the answer.
+
+**Inputs:**
+
+| Field | Meaning |
+|---|---|
+| `chart_type` | `bar`, `pie`, `line`, `area`, or `combo` |
+| `title` | Chart title (1–100 characters) |
+| `data` | 1–40 rows containing the category and numeric series values |
+| `category_key` | Row key used for the category axis or pie labels |
+| `value_keys` | 1–5 numeric series keys |
+| `stacked` | Optional boolean; only valid with `chart_type=bar` |
+| `percentage` | Optional boolean; requires a stacked bar and normalizes each category to 100% |
+| `series_types` | Combo only: map every `value_key` to `bar` or `line` |
+
+Every row must include `category_key` and all `value_keys`. Values must be
+finite numbers. Percentage-stacked values must also be non-negative, and each
+category must have a positive total. Pie charts require exactly one value key.
+Combo charts require a series type for every value key and reject this mapping
+for other chart types.
+
+**Output:** `data.chart` contains `type`, `title`, `data`, `category_key`,
+`value_keys`, `stacked`, `percentage`, and `series_types`.
+
+**Agent rules:** retrieve source values before calling `draw`; pass values from
+the tool result only. Never invent or calculate chart data. Use a chart when a
+comparison, composition, or trend is useful. A request for a chart does not
+implicitly request a table.
+
+**Example questions:** “Show orders by stage as a bar chart.” / “Compare output
+to the 30-day median with bars and an overlaid line.” / “Show stage composition
+as a 100% stacked bar chart.”
+
+---
+
+## `render_table` (explicit tabular output)
+
+Formats rows retrieved from a factory data tool as a structured table. The chat
+API returns the table separately from answer text, and the React chat renders
+it below the answer with horizontal scrolling when needed.
+
+**Inputs:** `title`, 1–12 `{key, label}` column definitions, and 1–100 rows.
+Column keys must be unique; every row must contain each selected column key;
+cells must be finite scalar values (`string`, `number`, `boolean`, or `null`).
+Only selected columns are returned in `data.table`.
+
+**Agent rules:** call `render_table` only when the manager explicitly asks for a
+table or tabular view. Lists, summaries, comparisons, and chart requests alone
+must not produce a table automatically. Retrieve rows first and use only their
+values; do not invent, calculate, aggregate, or repeat table rows in prose.
+
+**Example questions:** “List at-risk orders in a table.” / “Show the matching
+orders as a tabular view.”
+
+---
+
 ## `discover_factory_issues` (ranked discovery, V1)
 
 Proactive, **read-only**. Python finds and sorts issues that already have a

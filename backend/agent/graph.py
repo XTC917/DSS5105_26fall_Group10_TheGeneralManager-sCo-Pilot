@@ -180,6 +180,8 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
     tools_used: list[str] = []
     traces: list[dict[str, Any]] = []
     proposed_actions: list[dict[str, Any]] = []
+    charts: list[dict[str, Any]] = []
+    tables: list[dict[str, Any]] = []
     limitation = None
 
     for msg in turn:
@@ -193,6 +195,12 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
             if payload.get("trace"):
                 traces.append(payload["trace"])
             data = payload.get("data") or {}
+            chart = data.get("chart")
+            if isinstance(chart, dict):
+                charts.append(chart)
+            table = data.get("table")
+            if isinstance(table, dict):
+                tables.append(table)
             proposal = data.get("proposed_action")
             if isinstance(proposal, dict):
                 proposed_actions.append(proposal)
@@ -219,6 +227,8 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
         "tools_used": tools_used,
         "traces": traces,
         "proposed_actions": proposed_actions,
+        "charts": charts,
+        "tables": tables,
         "limitation": limitation,
         "routing_intent": "proceed",
     }

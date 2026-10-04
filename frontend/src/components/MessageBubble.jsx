@@ -1,4 +1,6 @@
 import { useState } from "react";
+import ChartView from "./ChartView.jsx";
+import TableView from "./TableView.jsx";
 import TracePanel from "./TracePanel.jsx";
 
 function actionLabel(action) {
@@ -27,6 +29,8 @@ export default function MessageBubble({ message, onConfirm, onDismiss, busy }) {
   const [open, setOpen] = useState(false);
   const traces = message.traces || [];
   const proposed = message.proposedActions || [];
+  const charts = message.charts || [];
+  const tables = message.tables || [];
   const decision = message.decision;
 
   return (
@@ -37,6 +41,12 @@ export default function MessageBubble({ message, onConfirm, onDismiss, busy }) {
         }`}
       >
         <p className="whitespace-pre-wrap">{message.content}</p>
+        {!isUser && charts.map((chart, idx) => (
+          <ChartView key={`${chart.type}-${idx}`} chart={chart} />
+        ))}
+        {!isUser && tables.map((table, idx) => (
+          <TableView key={`${table.title}-${idx}`} table={table} />
+        ))}
         {!isUser && message.toolsUsed?.length > 0 && (
           <p className="mt-2 text-[11px] uppercase tracking-wide text-ink/45">
             Tools: {message.toolsUsed.join(" → ")}

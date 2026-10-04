@@ -19,6 +19,8 @@ def test_health():
         assert "get_morning_briefing" in body["tools"]
         assert "find_orders" in body["tools"]
         assert "discover_factory_issues" in body["tools"]
+        assert "draw" in body["tools"]
+        assert "render_table" in body["tools"]
 
 
 def test_chat_without_key_is_503(monkeypatch):

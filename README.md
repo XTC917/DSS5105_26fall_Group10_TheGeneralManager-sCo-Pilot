@@ -40,6 +40,8 @@ shipped vs still open is listed below.
 | Discovery (filter) | `find_orders` | List **all** matches by customer / product / stage / status. Does not rank “unusual” issues |
 | Discovery (ranked) | `discover_factory_issues` | Top-N issues from defined order-risk + stage-below-baseline rules. Python sorts |
 | Briefing | `get_morning_briefing` | Structured ops facts (reuses at-risk rules, last-day output vs 30-day median, suspended workshops) |
+| Visualization | `draw` | Grounded bar, pie, line, area, stacked / 100% stacked, and bar-line combo charts |
+| Visualization | `render_table` | Structured table from retrieved rows; only when the manager explicitly asks for one |
 | Action | `draft_chase_email` | Local draft from order fields. Never sent |
 | Action | `send_email` | Proposal → confirm → **simulated** audit row. Still `sent: false` (no SMTP) |
 | Action | `add_order_note` / `create_reminder` | Proposal → confirm → persist locally. Reminder is a calendar note; it does **not** auto-fire |
@@ -52,6 +54,7 @@ inside briefing and feasibility, not as a separate lookup tool.
 ### Interface
 
 - React UI: chat + sidebar snapshot of briefing / **top issues** / **triggered alerts** / **active watches** / recent actions
+- Chat answers can include grounded charts and explicitly requested structured tables
 - Answer + **“Why?”** traces (source rows and calculations; fired watches expand snapshot evidence)
 - Confirmation is a **UI click** (Confirm / Dismiss on the proposal). Chat “yes” still works as a fallback.
 
