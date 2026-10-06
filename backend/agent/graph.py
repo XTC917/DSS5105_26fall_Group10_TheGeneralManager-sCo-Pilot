@@ -15,7 +15,12 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
 from backend.config import PROJECT_ROOT
-from backend.agent.answerability import assess_answerability, continues_prior_rows
+from backend.agent.answerability import (
+    ambiguous_clarification,
+    assess_answerability,
+    continues_prior_rows,
+    reply_language,
+)
 from backend.agent.language import align_visible_payload
 from backend.agent.prompts import build_system_prompt, format_retrieved_templates
 from backend.agent.routing import route_query
@@ -34,6 +39,13 @@ logger = logging.getLogger(__name__)
 
 _AGENT = None
 _CHECKPOINTER = MemorySaver()
+
+
+def set_checkpointer(checkpointer: Any | None) -> None:
+    """Swap the stored thread. Tests keep MemorySaver; the API uses Postgres."""
+    global _AGENT, _CHECKPOINTER
+    _AGENT = None
+    _CHECKPOINTER = checkpointer if checkpointer is not None else MemorySaver()
 _TEMPLATE_QUERY: ContextVar[str] = ContextVar("template_query", default="")
 _EXPLAIN_PRIOR: ContextVar[bool] = ContextVar("explain_prior", default=False)
 _REUSE_PRIOR: ContextVar[bool] = ContextVar("reuse_prior", default=False)
@@ -275,17 +287,33 @@ def _prior_tool_json(conversation_id: str) -> str:
     return "\n\n".join(chunks[-2:])
 
 
+def _model_turn(message: str, *, clarification_reply: bool) -> str:
+    """The answering model sees a chosen clarification as a lookup, not a new offer."""
+    if not clarification_reply:
+        return message
+    if reply_language(message) == "zh":
+        lead = "这是经理在澄清里已经选好的读法。按这句话去查，不要把它当成经理要自己提供数据。"
+    else:
+        lead = (
+            "This is the reading the manager already chose. Look that up. "
+            "Do not treat it as the manager offering to supply the data."
+        )
+    return f"{lead}\n{message}"
+
+
 def run_agent(
     message: str,
     conversation_id: str,
     *,
     clarification_reply: bool = False,
+    thread_id: str | None = None,
 ) -> dict[str, Any]:
     """Entry point used by /api/chat.
 
     Unsupported / not-implemented questions are answered here without an LLM
     call, so no unrelated tool can fire.
     """
+    memory_thread = thread_id or conversation_id
     decision = route_query(message)
     if decision.short_circuit:
         logger.info(
@@ -309,7 +337,7 @@ def run_agent(
 
     gate = assess_answerability(
         message,
-        prior_tool_json=_prior_tool_json(conversation_id),
+        prior_tool_json=_prior_tool_json(memory_thread),
         clarification_reply=clarification_reply,
     )
     if not gate.proceed:
@@ -340,11 +368,11 @@ def run_agent(
         gate.proceed
         and not gate.explain_prior
         and not gate.reuse_prior
-        and continues_prior_rows(message, _prior_tool_json(conversation_id))
+        and continues_prior_rows(message, _prior_tool_json(memory_thread))
     ):
-        prior_ids = " ".join(_previous_turn_order_ids(conversation_id))
+        prior_ids = " ".join(_previous_turn_order_ids(memory_thread))
     held_ids = _PRIOR_ORDER_IDS.set(prior_ids)
-    spoken = _manager_text(conversation_id, message)
+    spoken = _manager_text(memory_thread, message)
     if prior_ids:
         spoken = spoken + "\n" + prior_ids
     manager = set_manager_text(spoken)
@@ -353,8 +381,8 @@ def run_agent(
     try:
         agent = get_agent()
         result = agent.invoke(
-            {"messages": [{"role": "user", "content": message}]},
-            config={"configurable": {"thread_id": conversation_id}},
+            {"messages": [{"role": "user", "content": _model_turn(message, clarification_reply=clarification_reply)}]},
+            config={"configurable": {"thread_id": memory_thread}},
         )
     finally:
         charts = take_frontend_charts(held_charts)
@@ -415,6 +443,28 @@ def _latest_turn(messages: list[Any]) -> list[Any]:
     return messages[last_human:]
 
 
+_DISPLAY_TOOLS = frozenset({"draw", "render_table"})
+
+
+def _ambiguous_tool_payload(turn: list[Any]) -> dict[str, Any] | None:
+    """The latest lookup that stopped on several rows, if a later lookup did not resolve it."""
+    found: dict[str, Any] | None = None
+    for msg in turn:
+        if not isinstance(msg, ToolMessage):
+            continue
+        payload = _parse_json(msg.content)
+        if not payload:
+            continue
+        tool_name = str(payload.get("tool") or getattr(msg, "name", "") or "")
+        error = payload.get("error") or {}
+        if error.get("code") == "AMBIGUOUS":
+            found = payload
+            continue
+        if payload.get("ok") and tool_name not in _DISPLAY_TOOLS:
+            found = None
+    return found
+
+
 def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str, Any]:
     messages: list[BaseMessage] = result.get("messages") or []
     # MemorySaver returns the whole thread. The UI must only show tools from
@@ -466,6 +516,33 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
                 break
         if not answer and turn:
             answer = _content_to_text(getattr(turn[-1], "content", ""))
+
+    question = ""
+    for msg in turn:
+        if _is_human(msg):
+            question = _content_to_text(getattr(msg, "content", ""))
+            break
+    ambiguous = _ambiguous_tool_payload(turn)
+    card = ambiguous_clarification(question, (ambiguous or {}).get("error") or {}) if ambiguous else None
+    if card:
+        tool_name = str(ambiguous.get("tool") or "") if ambiguous else ""
+        logger.info(
+            "agent done conversation=%s tools=%s clarification=ambiguous",
+            conversation_id,
+            [tool_name] if tool_name else tools_used,
+        )
+        return {
+            "answer": card["prompt"],
+            "conversation_id": conversation_id,
+            "tools_used": [tool_name] if tool_name else tools_used,
+            "traces": traces,
+            "proposed_actions": [],
+            "charts": [],
+            "tables": [],
+            "clarification": card,
+            "limitation": "needs_clarification",
+            "routing_intent": "proceed",
+        }
 
     logger.info(
         "agent done conversation=%s tools=%s",

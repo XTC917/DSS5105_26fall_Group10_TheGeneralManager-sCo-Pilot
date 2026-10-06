@@ -88,6 +88,22 @@ def pace_fields(order: dict[str, Any], medians: dict[str, float]) -> dict[str, A
     }
 
 
+def pace_tight_deadline(row: dict[str, Any]) -> bool:
+    """Not overdue, due within 3 calendar days, and days_left exceeds working days left."""
+    cal = row["calendar_days_until_due"]
+    if cal is None or cal < 0 or cal > MISS_DUE_CALENDAR_HORIZON:
+        return False
+    return _is_pace_miss(row, min_slack=0.0)
+
+
+def flags_with_pace_tight(flags: list[str], pace_row: dict[str, Any]) -> list[str]:
+    """TIGHT_DEADLINE is the pace rule. Stage-count tight from assess_order_risk is dropped."""
+    kept = [flag for flag in flags if flag != "TIGHT_DEADLINE"]
+    if pace_tight_deadline(pace_row):
+        kept.append("TIGHT_DEADLINE")
+    return kept
+
+
 def _is_pace_miss(row: dict[str, Any], *, min_slack: float = 0.0) -> bool:
     est = row["estimated_remaining_working_days"]
     working = row["working_days_until_due_inclusive"]
@@ -104,10 +120,7 @@ def likely_to_miss_due_dates(db: FactoryDB) -> list[dict[str, Any]]:
     rows = []
     for order in db.in_progress_orders():
         row = pace_fields(order, medians)
-        cal = row["calendar_days_until_due"]
-        if cal is None or cal < 0 or cal > MISS_DUE_CALENDAR_HORIZON:
-            continue
-        if _is_pace_miss(row, min_slack=0.0):
+        if pace_tight_deadline(row):
             rows.append(row)
     rows.sort(key=lambda r: (r["calendar_days_until_due"], -r["estimated_remaining_working_days"]))
     return rows

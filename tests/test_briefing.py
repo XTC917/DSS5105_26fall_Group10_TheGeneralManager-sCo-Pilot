@@ -16,7 +16,7 @@ def test_briefing_reuses_at_risk_set(db):
     briefing_ids = {row["order_id"] for row in data["at_risk"]["orders"]}
     risk_ids = {row["order_id"] for row in risk["data"]["orders"]}
     assert briefing_ids == risk_ids
-    assert data["at_risk"]["count"] == 10
+    assert data["at_risk"]["count"] == 3
     assert data["in_progress_order_count"] == 34
     assert set(data["in_progress_by_stage"]) == {
         "ORDERED",

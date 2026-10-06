@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { confirmAction, declineAction, sendChat } from "../services/api.js";
 import MessageBubble from "./MessageBubble.jsx";
 
@@ -15,12 +15,23 @@ const STARTERS = [
   "Cancel the watch on ORD-005",
 ];
 
-export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) {
+export default function ChatPanel({
+  conversationId,
+  llmReady,
+  onBoardChanged,
+  onConversationUpdated,
+  onBusyChange,
+  initialMessages = [],
+}) {
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(initialMessages);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const listRef = useRef(null);
+
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
 
   async function submit(text, clarificationReply = false) {
     const content = (text ?? input).trim();
@@ -46,6 +57,7 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
           clarification: result.clarification || null,
         },
       ]);
+      onConversationUpdated?.();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -143,6 +155,7 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
               );
               submit(text, true);
             }}
+            clarificationOpen={idx === messages.length - 1}
           />
         ))}
         {busy && <p className="text-xs text-ink/45">Consulting factory tools…</p>}

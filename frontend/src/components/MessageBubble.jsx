@@ -35,7 +35,14 @@ function stripEmbeddedImages(text) {
     .trim();
 }
 
-export default function MessageBubble({ message, onConfirm, onDismiss, onClarify, busy }) {
+export default function MessageBubble({
+  message,
+  onConfirm,
+  onDismiss,
+  onClarify,
+  busy,
+  clarificationOpen = false,
+}) {
   const isUser = message.role === "user";
   const [open, setOpen] = useState(false);
   const [other, setOther] = useState("");
@@ -82,7 +89,7 @@ export default function MessageBubble({ message, onConfirm, onDismiss, onClarify
             Tools: {message.toolsUsed.join(" → ")}
           </p>
         )}
-        {!isUser && clarification?.options?.length > 0 && (
+        {!isUser && clarificationOpen && clarification?.options?.length > 0 && (
           <div className="mt-2">
             <div className="flex flex-col gap-2">
               {clarification.options.map((option, index) => (

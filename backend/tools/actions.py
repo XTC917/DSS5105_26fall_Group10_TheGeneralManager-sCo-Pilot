@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from backend.config import FACTORY_TODAY
 from backend.services.audit import add_note, add_reminder, list_audit, record_event
 from backend.services.calculations import assess_order_risk, parse_iso_date
+from backend.services.pace import flags_with_pace_tight, pace_fields, stage_medians
 from backend.services.database import get_db
 from backend.services.request_context import get_current_user_id
 from backend.tools.common import order_id_named_by_manager, tool_error, tool_json, ungrounded_order_error
@@ -71,7 +72,10 @@ def _lookup_order(order_id: str) -> dict | None:
 
 def _compose_chase_email(order: dict) -> dict:
     risk = assess_order_risk(order)
-    flags = ", ".join(risk["flags"]) if risk["flags"] else "none recorded"
+    db = get_db()
+    pace = pace_fields(order, stage_medians(db))
+    flags = flags_with_pace_tight(list(risk["flags"]), pace)
+    flag_text = ", ".join(flags) if flags else "none recorded"
     return {
         "to": (
             f"{order['customer']} — customer email is not in orders.csv; "
@@ -83,11 +87,11 @@ def _compose_chase_email(order: dict) -> dict:
             f"{order['pieces']} {order['product']}, status {order['status']}, "
             f"stage {order['current_stage']}, due {order['due_date']}, "
             f"last activity {order['last_activity_date']}. "
-            f"Risk flags from factory rules: {flags}."
+            f"Risk flags from factory rules: {flag_text}."
         ),
         "order_id": order["order_id"],
         "customer": order["customer"],
-        "risk_flags": risk["flags"],
+        "risk_flags": flags,
     }
 
 

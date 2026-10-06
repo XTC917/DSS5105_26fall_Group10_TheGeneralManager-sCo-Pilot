@@ -72,30 +72,17 @@ def test_get_order_status_requires_filter(db):
     assert payload["error"]["code"] == "INVALID_INPUT"
 
 
-def test_get_orders_at_risk_includes_known_overdue(db):
+def test_get_orders_at_risk_default_is_pace_miss(db):
     payload = parse_tool(get_orders_at_risk.invoke({}))
     assert payload["ok"] is True
-    ids = {row["order_id"] for row in payload["data"]["orders"]}
-    assert ids == {
-        "ORD-002",
-        "ORD-005",
-        "ORD-020",
-        "ORD-029",
-        "ORD-055",
-        "ORD-083",
-        "ORD-093",
-        "ORD-107",
-        "ORD-114",
-        "ORD-120",
-    }
-    assert payload["data"]["count"] == 10
+    ids = [row["order_id"] for row in payload["data"]["orders"]]
+    assert ids == ["ORD-029", "ORD-108", "ORD-103"]
+    assert payload["data"]["count"] == 3
+    assert payload["data"]["likely_to_miss_due_dates"]["order_ids"] == ids
     by_id = {row["order_id"]: row["flags"] for row in payload["data"]["orders"]}
-    assert by_id["ORD-120"] == ["OVERDUE"]
-    assert by_id["ORD-005"] == ["STALLED"]
     assert by_id["ORD-029"] == ["TIGHT_DEADLINE"]
-    assert "OVERDUE" in by_id["ORD-002"] and "STALLED" in by_id["ORD-002"]
-    for row in payload["data"]["orders"]:
-        assert set(row["flags"]) <= {"OVERDUE", "STALLED", "TIGHT_DEADLINE"}
+    assert "OVERDUE" not in by_id["ORD-029"]
+    assert "STALLED" not in by_id["ORD-029"]
 
 
 def test_get_orders_at_risk_flag_filter(db):
@@ -103,6 +90,9 @@ def test_get_orders_at_risk_flag_filter(db):
     assert payload["ok"] is True
     assert payload["data"]["orders"]
     assert all("OVERDUE" in row["flags"] for row in payload["data"]["orders"])
+    assert any(row["order_id"] == "ORD-120" for row in payload["data"]["orders"])
+    stalled = parse_tool(get_orders_at_risk.invoke({"flag": "STALLED"}))
+    assert any(row["order_id"] == "ORD-005" for row in stalled["data"]["orders"])
 
 
 def test_trace_order(db):

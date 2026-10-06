@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from backend.services.calculations import assess_order_risk, order_computed_fields
 from backend.services.database import get_db
-from backend.services.pace import pace_fields, snapshot_timeline, stage_medians
+from backend.services.pace import flags_with_pace_tight, pace_fields, snapshot_timeline, stage_medians
 from backend.tools.common import order_id_named_by_manager, tool_error, tool_json, ungrounded_order_error
 
 logger = logging.getLogger(__name__)
@@ -44,6 +44,7 @@ def trace_order(order_id: str) -> str:
         risk = assess_order_risk(order)
         medians = stage_medians(db)
         pace = pace_fields(order, medians)
+        flags = flags_with_pace_tight(list(risk["flags"]), pace)
         snap = snapshot_timeline(db, order["order_id"])
         consider_workshop = bool(
             computed.get("is_overdue")
@@ -53,7 +54,7 @@ def trace_order(order_id: str) -> str:
         production = db.production_log()
         last_date = max((row["date"] for row in production), default=None)
 
-        logger.info("trace_order %s flags=%s", order["order_id"], risk["flags"])
+        logger.info("trace_order %s flags=%s", order["order_id"], flags)
         return tool_json(
             {
                 "ok": True,
@@ -65,9 +66,14 @@ def trace_order(order_id: str) -> str:
                     "snapshot": snap,
                     "consider_external_workshop": consider_workshop,
                     "risk": {
-                        "at_risk": risk["at_risk"],
-                        "flags": risk["flags"],
-                        "basis": risk["basis"],
+                        "at_risk": bool(flags),
+                        "flags": flags,
+                        "basis": (
+                            "OVERDUE: due_date < 2026-04-01. "
+                            "STALLED: idle >= 3 working days. "
+                            "TIGHT_DEADLINE: not overdue, due within 3 calendar days, "
+                            "and days_left exceeds working days until due."
+                        ),
                     },
                     "limitations": [
                         "production_log.csv is factory-wide daily output by stage, "
@@ -81,7 +87,11 @@ def trace_order(order_id: str) -> str:
                     "source_file": "orders.csv",
                     "filter": {"order_id": order["order_id"]},
                     "rows": [order],
-                    "calculations": risk["calculations"]
+                    "calculations": [
+                        row
+                        for row in risk["calculations"]
+                        if row.get("name") != "tight_deadline"
+                    ]
                     + [
                         {
                             "name": name,
@@ -107,7 +117,13 @@ def trace_order(order_id: str) -> str:
                             "result": snap["calendar_days_order_to_first_production"],
                         },
                     ],
-                    "basis": risk["basis"],
+                    "basis": (
+                        "OVERDUE: due_date < 2026-04-01. "
+                        "STALLED: idle >= 3 working days. "
+                        "TIGHT_DEADLINE: not overdue, due within 3 calendar days, "
+                        "and days_left exceeds working days until due. "
+                        "days_left = sum over remaining stages of pieces / 30-day stage median."
+                    ),
                 },
             }
         )

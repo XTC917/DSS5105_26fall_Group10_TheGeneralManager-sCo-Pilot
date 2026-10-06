@@ -1,15 +1,38 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar.jsx";
 import ChatPanel from "../components/ChatPanel.jsx";
+import ConversationList from "../components/ConversationList.jsx";
 import DataManagement from "./DataManagement.jsx";
 import UserManagement from "./UserManagement.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { fetchHealth } from "../services/api.js";
 import { deactivateMe } from "../services/authApi.js";
 import { friendlyAuthError } from "../services/authErrors.js";
+import {
+  createConversation,
+  fetchConversationHistory,
+  listConversations,
+} from "../services/conversationsApi.js";
 
-function newConversationId() {
-  return `gm-${Date.now()}`;
+function turnsToMessages(turns) {
+  const messages = [];
+  for (const turn of turns || []) {
+    const meta = turn.response_json || {};
+    messages.push({ role: "user", content: turn.question });
+    messages.push({
+      role: "assistant",
+      content: turn.answer,
+      toolsUsed: meta.tools_used || [],
+      traces: meta.traces || [],
+      limitation: meta.limitation,
+      proposedActions: meta.proposed_actions || [],
+      charts: meta.charts || [],
+      tables: meta.tables || [],
+      clarification: meta.clarification || null,
+      decision: meta.decision || null,
+    });
+  }
+  return messages;
 }
 
 export default function Home() {
@@ -21,7 +44,25 @@ export default function Home() {
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const [deactivateBusy, setDeactivateBusy] = useState(false);
   const [deactivateError, setDeactivateError] = useState("");
-  const conversationId = useMemo(newConversationId, []);
+  const [conversations, setConversations] = useState([]);
+  const [conversationId, setConversationId] = useState(null);
+  const [historyMessages, setHistoryMessages] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState("");
+  const [createBusy, setCreateBusy] = useState(false);
+  const [chatBusy, setChatBusy] = useState(false);
+
+  const refreshConversations = useCallback(async () => {
+    const items = await listConversations();
+    setConversations(items);
+    return items;
+  }, []);
+
+  const openConversation = useCallback(async (id) => {
+    const history = await fetchConversationHistory(id);
+    setConversationId(id);
+    setHistoryMessages(turnsToMessages(history.turns));
+  }, []);
 
   const isAdmin = user?.role === "ADMIN";
 
@@ -30,6 +71,58 @@ export default function Home() {
       .then(setHealth)
       .catch((err) => setHealthError(err.message));
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setHistoryLoading(true);
+    refreshConversations()
+      .then(async (items) => {
+        if (cancelled) return;
+        if (items.length === 0) {
+          const created = await createConversation();
+          if (cancelled) return;
+          setConversations([created]);
+          setConversationId(created.id);
+          setHistoryMessages([]);
+        } else {
+          await openConversation(items[0].id);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setHistoryError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshConversations, openConversation]);
+
+  async function handleCreateConversation() {
+    setCreateBusy(true);
+    setHistoryError("");
+    try {
+      const created = await createConversation();
+      setConversations((prev) => [created, ...prev]);
+      setConversationId(created.id);
+      setHistoryMessages([]);
+    } catch (err) {
+      setHistoryError(err.message);
+    } finally {
+      setCreateBusy(false);
+    }
+  }
+
+  async function handleSelectConversation(id) {
+    if (id === conversationId) return;
+    setHistoryError("");
+    try {
+      await openConversation(id);
+    } catch (err) {
+      setHistoryError(err.message);
+    }
+  }
 
   // Route protection: only ADMIN may view data/users; EMPLOYEE is bounced back.
   useEffect(() => {
@@ -120,6 +213,18 @@ export default function Home() {
               </div>
             )}
           </nav>
+          {activeView === "copilot" && (
+            <ConversationList
+              conversations={conversations}
+              activeConversationId={conversationId}
+              loading={historyLoading}
+              createBusy={createBusy}
+              error={historyError}
+              onSelect={handleSelectConversation}
+              onCreate={handleCreateConversation}
+              interactionDisabled={chatBusy}
+            />
+          )}
           {activeView === "copilot" && <Sidebar refreshToken={boardTick} />}
           <div className="rounded-lg border border-ink/10 bg-white p-3 shadow-sm">
             <p className="text-xs font-medium text-ink/70">Account</p>
@@ -160,11 +265,17 @@ export default function Home() {
           </div>
         </div>
         {activeView === "copilot" ? (
-          <ChatPanel
-            conversationId={conversationId}
-            llmReady={Boolean(health?.llm_configured)}
-            onBoardChanged={() => setBoardTick((n) => n + 1)}
-          />
+          conversationId && (
+            <ChatPanel
+              key={conversationId}
+              conversationId={conversationId}
+              llmReady={Boolean(health?.llm_configured)}
+              onBoardChanged={() => setBoardTick((n) => n + 1)}
+              onConversationUpdated={() => refreshConversations().catch(() => {})}
+              onBusyChange={setChatBusy}
+              initialMessages={historyMessages}
+            />
+          )
         ) : activeView === "data" && isAdmin ? (
           <DataManagement />
         ) : activeView === "users" && isAdmin ? (

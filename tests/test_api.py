@@ -24,14 +24,10 @@ def test_health():
         assert "render_table" in body["tools"]
 
 
-def test_chat_without_key_is_503(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    import backend.main as main_mod
-
-    monkeypatch.setattr(main_mod, "llm_is_configured", lambda: False)
+def test_chat_requires_login():
     with TestClient(app) as client:
         res = client.post("/api/chat", json={"message": "How is ORD-120?"})
-        assert res.status_code == 503
+        assert res.status_code == 401
 
 
 def test_briefing_endpoint():
@@ -40,7 +36,7 @@ def test_briefing_endpoint():
         assert res.status_code == 200
         body = res.json()
         assert body["factory_today"] == "2026-04-01"
-        assert body["at_risk"]["count"] == 10
+        assert body["at_risk"]["count"] == 3
 
 
 def test_discovery_endpoint():
