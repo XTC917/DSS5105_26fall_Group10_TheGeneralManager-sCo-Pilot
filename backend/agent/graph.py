@@ -141,6 +141,7 @@ def run_agent(message: str, conversation_id: str) -> dict[str, Any]:
             "proposed_actions": [],
             "limitation": decision.reason,
             "routing_intent": decision.intent,
+            "presentations": [],
         }
         _audit_turn(message, conversation_id, parsed, short_circuit=True)
         return parsed
@@ -180,6 +181,7 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
     tools_used: list[str] = []
     traces: list[dict[str, Any]] = []
     proposed_actions: list[dict[str, Any]] = []
+    tool_results: list[dict[str, Any]] = []
     limitation = None
 
     for msg in turn:
@@ -193,6 +195,8 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
             if payload.get("trace"):
                 traces.append(payload["trace"])
             data = payload.get("data") or {}
+            if payload.get("ok") and tool_name and isinstance(data, dict):
+                tool_results.append({"tool": tool_name, "data": data})
             proposal = data.get("proposed_action")
             if isinstance(proposal, dict):
                 proposed_actions.append(proposal)
@@ -208,6 +212,7 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
     if not answer and turn:
         answer = _content_to_text(getattr(turn[-1], "content", ""))
 
+    answer, llm_intents = _extract_llm_intents(answer)
     logger.info(
         "agent done conversation=%s tools=%s",
         conversation_id,
@@ -221,7 +226,89 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
         "proposed_actions": proposed_actions,
         "limitation": limitation,
         "routing_intent": "proceed",
+        "presentations": _build_presentations(messages, tool_results, llm_intents),
     }
+
+
+_INTENT_FENCE_RE = None
+
+
+def _intent_fence_re():
+    global _INTENT_FENCE_RE
+    if _INTENT_FENCE_RE is None:
+        import re
+        _INTENT_FENCE_RE = re.compile(
+            r"```(?:presentation-intents|json)?\s*\n?\s*(\{\s*\"presentation_intents\".*?\})\s*```",
+            re.DOTALL | re.IGNORECASE,
+        )
+    return _INTENT_FENCE_RE
+
+
+def _extract_llm_intents(answer: str) -> tuple[str, list[dict[str, Any]]]:
+    """Split the fenced presentation-intents block off the narrative.
+
+    The block references (intent, source_tool, source_path, title) only — no
+    business data — so this is plan extraction, not prose data-mining. Any
+    parse/validation failure yields [] and the narrative still renders.
+    """
+    if "presentation_intents" not in (answer or ""):
+        return answer, []
+    try:
+        m = _intent_fence_re().search(answer)
+        if not m:
+            return answer, []
+        raw = json.loads(m.group(1))
+        intents = raw.get("presentation_intents") if isinstance(raw, dict) else None
+        if not isinstance(intents, list):
+            return answer, []
+        from backend.presentation.engine import CANON
+        valid: list[dict[str, Any]] = []
+        for item in intents[:4]:
+            if not isinstance(item, dict):
+                continue
+            intent = CANON.get(str(item.get("intent", "")).lower(), "")
+            src_tool = str(item.get("source_tool", "") or "")
+            if not intent or not src_tool or len(src_tool) > 64:
+                continue
+            valid.append({
+                "intent": intent,
+                "source_tool": src_tool,
+                "source_path": str(item.get("source_path", "") or "")[:128],
+                "title": str(item.get("title", "") or "")[:120],
+                "emphasis": str(item.get("emphasis", "") or "")[:64] or None,
+            })
+        stripped = (answer[:m.start()] + answer[m.end():]).rstrip()
+        return stripped, valid
+    except Exception:  # noqa: BLE001
+        logger.exception("LLM intent extraction failed; falling back")
+        return answer, []
+
+
+def _build_presentations(messages: list[Any], tool_results: list[dict[str, Any]], llm_intents: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """LLM plan first; deterministic heuristic only as conservative fallback.
+
+    A valid LLM plan (builds >=1 spec via the deterministic engine) always
+    wins. The heuristic never overrides it. If the LLM emitted nothing usable,
+    fall back to the heuristic planner; if that also yields nothing, []."""
+    try:
+        from backend.presentation.engine import build_presentations, plan_intents
+        if llm_intents:
+            specs = build_presentations(tool_results, llm_intents)
+            if specs:
+                logger.info("presentations from LLM plan n=%d", len(specs))
+                return specs
+            logger.info("LLM plan built 0 specs; trying heuristic fallback")
+        question = ""
+        for msg in reversed(messages):
+            if _is_human(msg):
+                c = getattr(msg, "content", "")
+                question = c if isinstance(c, str) else str(c)
+                break
+        intents = plan_intents(question, tool_results)
+        return build_presentations(tool_results, intents)
+    except Exception:  # noqa: BLE001
+        logger.exception("presentation build failed; falling back to []")
+        return []
 
 
 def _audit_turn(

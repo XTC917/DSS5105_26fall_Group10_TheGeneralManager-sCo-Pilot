@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchAudit, fetchBriefing, fetchDiscovery, fetchWatches } from "../services/api.js";
+import BriefingCard from "./briefing/BriefingCard.jsx";
+import BriefingModal from "./briefing/BriefingModal.jsx";
 
 function Card({ title, children }) {
   return (
@@ -111,6 +113,7 @@ export default function Sidebar({ refreshToken = 0 }) {
   const [watches, setWatches] = useState({ fired: [], active: [], cancelled: [] });
   const [discovery, setDiscovery] = useState({ issues: [] });
   const [error, setError] = useState("");
+  const [briefingOpen, setBriefingOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,25 +144,20 @@ export default function Sidebar({ refreshToken = 0 }) {
 
   return (
     <aside className="space-y-3">
-      <Card title="Morning briefing">
-        {error && <p>API offline — ask in chat once the backend is running.</p>}
-        {!error && !briefing && <p>Loading structured facts…</p>}
-        {briefing && (
-          <ul className="space-y-1">
-            <li>Factory date {briefing.factory_today}</li>
-            <li>
-              {briefing.at_risk?.count} orders need attention (overdue {flags.OVERDUE || 0},
-              stalled {flags.STALLED || 0}, tight {flags.TIGHT_DEADLINE || 0})
-            </li>
-            <li>IN_PROGRESS: {briefing.in_progress_order_count}</li>
-            {briefing.suspended_workshops?.length > 0 && (
-              <li>
-                Suspended: {briefing.suspended_workshops.map((w) => w.name).join(", ")}
-              </li>
-            )}
-          </ul>
-        )}
-      </Card>
+      <BriefingCard
+        briefing={briefing}
+        loading={!error && !briefing}
+        error={error}
+        onOpen={() => briefing && setBriefingOpen(true)}
+      />
+      {briefingOpen && briefing && (
+        <BriefingModal
+          briefing={briefing}
+          discovery={discovery}
+          audit={audit}
+          onClose={() => setBriefingOpen(false)}
+        />
+      )}
       <Card title="Top issues">
         {(discovery.issues || []).length === 0 && (
           <p>

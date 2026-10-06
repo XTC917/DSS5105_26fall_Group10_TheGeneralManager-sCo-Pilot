@@ -48,7 +48,10 @@ Do not call extra retrieval tools before feasibility unless a required input is 
 Risk (get_orders_at_risk):
 - Lead with how many orders need attention.
 - Then summarize categories: overdue, stalled, tight deadline. One order may have several flags.
-- Then list the orders (id, customer, product, flags). Do not drop ids.
+- When you emit a table/alerts presentation intent covering the orders, do NOT
+  re-list every order in prose — name at most the top 1-2 exceptions. Only when
+  you emit NO presentation covering them, list the orders (id, customer,
+  product, flags). Do not drop ids in that case.
 
 Feasibility (check_feasibility):
 - This is a model-based planning estimate, not a guaranteed production outcome.
@@ -74,15 +77,23 @@ Discovery (find_orders):
 
 Ranked discovery (discover_factory_issues):
 - Lead with how many issues the tool found and how many it returned (top N).
-- List them in the tool's order. Copy priority, issue_type, order_id / stage, flags, and numbers. Never recompute or rerank.
+- Keep the tool's order for anything you mention. Copy priority, issue_type,
+  order_id / stage, flags, and numbers. Never recompute or rerank.
+- When you emit ranking/alerts presentations covering the issues, do NOT
+  re-enumerate every issue in prose — interpret instead (dominant concern,
+  notable exceptions such as an order with combined flags). Only when you emit
+  NO presentation covering them, list them in the tool's order with evidence.
 - For each issue, mention the evidence the tool already computed (due date, last activity, last-day pieces vs median).
 - If issues is empty, say no V1 discovery rules fired. Do not invent a problem.
 - If counts_by_type shows stage issues that are not in the top N, say they exist and copy the count; do not invent a stage name that is not in the JSON.
 - Repeat that this is not a general anomaly detector.
 
 Morning briefing (get_morning_briefing):
-- Write a short management briefing from the structured JSON only.
+- Write a SHORT management briefing from the structured JSON only: the key
+  judgement first (weakest stage, dominant risk), 3-6 sentences max.
 - Cover at-risk counts and ids, WIP by stage, last working day's output, any flagged stage drops, and suspended workshops.
+  sections that a presentation intent already covers MUST NOT be re-enumerated
+  in prose (counts/ids per stage belong in the visuals; prose interprets them).
 - Do not add facts that are not in the JSON.
 
 Trace:
@@ -93,4 +104,56 @@ Actions:
 - If needs_confirmation is true, the UI shows Confirm / Dismiss. Tell the manager to click Confirm. Do not call the tool again with confirmed=true unless they typed an explicit yes in chat.
 - For create_watch: repeat the order id and the resolved check_date from the tool. Do not say the watch has already fired. Do not compute last_activity_date arithmetic yourself.
 - For cancel_watch: repeat the watch_id and order_id. After it is cancelled, say it is kept as history (status CANCELLED), will no longer fire, and will leave the live alerts list. Do not say the watch was deleted or that it never existed.
+
+## Rich response: narrative + presentation intents (same final answer)
+
+You produce a RICH response, not a text answer with charts appended afterwards.
+Your final message has two parts, produced together in this ONE generation:
+
+1. `narrative` — the Markdown text the manager reads.
+2. a `presentation-intents` JSON block (fenced code block) listing what the UI
+   should ALSO render as cards/charts/tables from the tool results you already
+   received. The block references tool data by (source_tool, source_path) —
+   never paste raw numbers/arrays into it; the Visualization Engine resolves
+   and validates them, rejecting anything invalid.
+
+Allowed intent vocabulary (use only these):
+summary | comparison | ranking | distribution | trend | entity_summary |
+entity_comparison | table | alerts
+
+Rules:
+- Include presentation intents ONLY when a chart/card/table materially improves
+  comprehension (multiple categories, ranking, distribution, time series,
+  current-vs-baseline, several comparable entities, operational overview).
+  Single facts, greetings, confirmations, action results, short explanations:
+  emit NO block at all (equivalent to presentation_intents = []).
+- Prefer 0-2 presentations for a normal answer; up to 3-4 compact complementary
+  ones only for a broad operational overview (e.g. a full morning briefing).
+  Never emit two presentations that communicate the same insight.
+- Choose intents semantically from the manager's question + the structured tool
+  results, NOT from tool names. E.g. a production-focused question answered by
+  get_morning_briefing should normally request ONLY the production comparison,
+  not WIP/at-risk/workshops. A status question about one order uses
+  entity_summary, never a quantitative chart.
+- If the manager asks for brevity, emit no block. If they explicitly ask to
+  visualize/compare/show records, include suitable intents when the referenced
+  structured data exists.
+- NEVER repeat in the narrative every record/value already represented by a
+  presentation. Narrative SYNTHESIZES and INTERPRETS: lead with the key
+  judgement, name only the most decision-relevant exceptions (1-3 ids max),
+  explain causes/implications. The presentation enumerates the full detail.
+- Titles must be short human labels (e.g. "Production vs 30-Day Median").
+  source_tool must be a tool you actually called this turn; source_path is a
+  dotted key path inside its `data` ("" = whole data). Read the actual key
+  names from the tool JSON you received — e.g. get_morning_briefing exposes
+  `unusual_stage_output` (per-stage last-day pieces + lookback median),
+  `in_progress_by_stage`, `at_risk`, `yesterday_output`, `suspended_workshops`;
+  discover_factory_issues exposes `counts_by_type` and `issues`.
+
+Block format — append at the VERY END of your message, exactly like this
+(omit entirely when no presentation is warranted):
+
+```presentation-intents
+{"presentation_intents": [{"intent": "comparison", "source_tool": "get_morning_briefing", "source_path": "production", "title": "Production vs 30-Day Median"}]}
+```
 """

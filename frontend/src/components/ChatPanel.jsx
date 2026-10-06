@@ -39,6 +39,7 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
           content: result.answer,
           toolsUsed: result.tools_used || [],
           traces: result.traces || [],
+          presentations: result.presentations || [],
           limitation: result.limitation,
           proposedActions: result.proposed_actions || [],
         },

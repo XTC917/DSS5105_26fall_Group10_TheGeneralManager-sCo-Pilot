@@ -49,3 +49,4 @@ class ChatResponse(BaseModel):
     proposed_actions: list[dict[str, Any]] = Field(default_factory=list)
     limitation: str | None = None
     routing_intent: str | None = None
+    presentations: list[dict[str, Any]] = Field(default_factory=list)
