@@ -11,7 +11,9 @@ from backend.tools.actions import (
 )
 from backend.tools.briefing import get_morning_briefing
 from backend.tools.discovery import discover_factory_issues, find_orders, get_today_priority
+from backend.tools.draw import draw
 from backend.tools.judgement import check_feasibility
+from backend.tools.render_table import render_table
 from backend.tools.retrieval import get_order_status, get_orders_at_risk
 from backend.tools.tracing import trace_order
 from backend.tools.watches import cancel_watch, create_watch, list_watches
@@ -33,4 +35,6 @@ MVP_TOOLS = [
     list_watches,
     cancel_watch,
     get_recent_actions,
+    draw,
+    render_table,
 ]

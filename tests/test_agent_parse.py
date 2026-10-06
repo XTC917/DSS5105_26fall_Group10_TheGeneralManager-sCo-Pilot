@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
+
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from backend.agent.graph import parse_agent_result
+from backend.agent.graph import _drop_superseded_error_tables, parse_agent_result
 
 
 def _tool(name: str, call_id: str) -> ToolMessage:
@@ -143,3 +145,53 @@ def test_list_all_orders_does_not_offer_buttons():
     parsed = parse_agent_result(result, "thread-1")
     assert parsed["clarification"] is None
     assert "I found 2" in parsed["answer"]
+
+
+def test_parse_agent_result_returns_chart_and_table_from_latest_turn():
+    chart = {
+        "type": "bar",
+        "title": "Orders by stage",
+        "data": [{"stage": "KNITTING", "count": 3}],
+        "category_key": "stage",
+        "value_keys": ["count"],
+    }
+    table = {
+        "title": "At-risk orders",
+        "columns": [{"key": "order_id", "label": "Order"}],
+        "rows": [{"order_id": "ORD-120"}],
+    }
+    result = {
+        "messages": [
+            HumanMessage(content="Show the stage comparison as a chart and a table"),
+            ToolMessage(
+                content=json.dumps({"ok": True, "tool": "draw", "data": {"chart": chart}}),
+                tool_call_id="chart-1",
+                name="draw",
+            ),
+            ToolMessage(
+                content=json.dumps({"ok": True, "tool": "render_table", "data": {"table": table}}),
+                tool_call_id="table-1",
+                name="render_table",
+            ),
+            AIMessage(content="Here is the stage comparison."),
+        ]
+    }
+    parsed = parse_agent_result(result, "thread-1")
+    assert parsed["charts"] == [chart]
+    assert parsed["tables"] == [table]
+    assert parsed["tools_used"] == ["draw", "render_table"]
+
+
+def test_a_later_table_hides_the_failed_call_table():
+    error = {
+        "title": "Order lookup error",
+        "columns": [{"key": "code", "label": "Code"}, {"key": "message", "label": "Message"}],
+        "rows": [{"code": "INVALID_INPUT", "message": "Provide at least one filter."}],
+    }
+    orders = {
+        "title": "All orders",
+        "columns": [{"key": "customer", "label": "Customer"}],
+        "rows": [{"customer": "TrendCart"}],
+    }
+    assert _drop_superseded_error_tables([error, orders], []) == [orders]
+    assert _drop_superseded_error_tables([error], []) == [error]

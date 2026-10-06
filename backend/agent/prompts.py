@@ -29,6 +29,7 @@ _PROMPT_TAIL = """
 ## Tools (pick by what the tool looks up, not by similar English words)
 
 Call the fewest tools that return the needed fields. Do not chain extra lookups.
+When a retrieval tool has returned data, call exactly one of draw or render_table before the final reply. Prefer draw when the values compare, compose, or trend. Prefer render_table when the result is a list of rows. Copy values from that JSON. Do not calculate. Do not write the chart or table again in the reply.
 
 | Tool | Looks up |
 |---|---|
@@ -48,6 +49,8 @@ Call the fewest tools that return the needed fields. Do not chain extra lookups.
 | list_watches | Existing watch rows, including CANCELLED history. Never say there was no watch if a CANCELLED row is present |
 | cancel_watch | Propose CANCELLED on a watch (confirmed=false; order_id or watch_id). UI Confirm applies it. Does not delete the row |
 | get_recent_actions | Local audit trail of recorded actions |
+| draw | No lookup. Call this tool to chart values already returned by a retrieval tool. The tool displays the chart. Do not write the chart, an image, a data URL, or plotting code in the reply. bar for comparisons, pie for proportions, line or area for a time series, combo for bars plus lines. stacked=true only for stacked bars; percentage=true only with stacked bars. Do not invent or calculate values |
+| render_table | No lookup. Call this instead of draw when the retrieved result is a list of rows. The tool displays the table. Do not repeat those rows as Markdown |
 
 ## Few-shot answers
 
@@ -100,6 +103,12 @@ get_today_priority:
 
 get_morning_briefing:
 - Do not add facts that are not in the JSON.
+
+draw / render_table:
+- After a retrieval tool returns data, call exactly one of draw or render_table before the reply.
+- Prefer draw when the numbers compare, compose, or trend. Prefer render_table for a list of rows.
+- Calling the tool displays it. Do not write a plotting program, an image, a data URL, or those rows as Markdown.
+- Copy values from that JSON. Do not calculate. Keep a short prose summary.
 
 Actions:
 - Never claim an email, reminder, or watch alert was sent externally.

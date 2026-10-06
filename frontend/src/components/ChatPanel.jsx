@@ -41,6 +41,8 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
           traces: result.traces || [],
           limitation: result.limitation,
           proposedActions: result.proposed_actions || [],
+          charts: result.charts || [],
+          tables: result.tables || [],
           clarification: result.clarification || null,
         },
       ]);
@@ -122,7 +124,7 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
         ))}
       </div>
 
-      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      <div ref={listRef} className="min-w-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto px-4 py-4">
         {messages.length === 0 && (
           <p className="text-sm text-ink/45">
             Try a starter above, or ask for a specific order id such as ORD-120.

@@ -33,9 +33,24 @@ A question about an order, a customer, or a product already in the tables is sto
 Use orders.order_id, orders.customer, orders.product, or orders.status. "How is it doing" is that row's status.
 stored=true only if that column exists (or an equivalent stored column).
 stored=false only when no table holds the fact (revenue, selling price, and terms marked not a stored column).
-reason: one or two sentences in the same language as the manager.
+reason: one or two sentences.
 Do not invent numbers. Do not add names the manager did not write.
+The language rule in the user message overrides every other language. Do not translate into French or Spanish.
 """
+
+_CHOSEN_READING = (
+    "This message is the reading the manager already chose. "
+    "The subject is the lookup that sentence says it will show. "
+    "A clause that only says why they chose it is not the subject. "
+    "Do not mark that lookup missing because the reason names a fact the tables do not hold."
+)
+
+
+def _data_system(clarification_reply: bool) -> str:
+    if not clarification_reply:
+        return _DATA_SYSTEM
+    return _DATA_SYSTEM + "\n" + _CHOSEN_READING
+
 
 _AMBIGUITY_SYSTEM = """You only decide whether the manager's question has one answer or several.
 
@@ -48,10 +63,10 @@ ambiguous=false when one answer method fits. readings has that one object.
 ambiguous=true when more than one answer method fits. readings has one object per method.
 One row and the list of those same rows are one method: name only one tool.
 A further fact about rows already in Previous tool JSON is one method when the question asks that fact.
-label: a short button about the subject they actually named.
-message: the full next question, asking only that answer about the same subject.
+label: one complete sentence the manager can read as this choice. Say what they will be told, in everyday words. Not a short title, and not "could mean".
+message: the exact same sentence as label. Do not rephrase it, and do not turn it into a yes/no question.
 Do not swap in a generic customer, product, stage, or example question.
-reason: one or two sentences.
+reason: one short question asking which choice they want, such as "Which of these did you mean?" Do not describe the choices in reason.
 Do not invent numbers. Do not add names the manager did not write.
 The language rule in the user message overrides every other language. Do not translate into French or Spanish.
 """
@@ -66,8 +81,9 @@ needs_tool=true when a new fact must be looked up or computed.
 When needs_tool is true, has_tool=true only if a registered tool returns that fact. Otherwise has_tool=false and tool=null.
 A tool that merely mentions another table as a side effect does not count.
 If kind is action, needs_tool=true and pick the matching action tool.
-reason: one or two sentences in the manager's language. Do not translate.
+reason: one or two sentences.
 Do not invent numbers. Do not add names the manager did not write.
+The language rule in the user message overrides every other language. Do not translate into French or Spanish.
 """
 
 
@@ -107,14 +123,14 @@ _HAN = re.compile(r"[\u4e00-\u9fff]")
 
 SCOPE_OPTIONS = {
     "zh": (
-        {"label": "订单", "message": "订单的状态和交期怎么样？"},
-        {"label": "产量", "message": "各阶段完成件数怎么样？"},
-        {"label": "车间产能", "message": "车间每天的产能怎么样？"},
+        {"label": "看看各订单现在的状态和交期。", "message": "订单的状态和交期怎么样？"},
+        {"label": "看看各阶段完成了多少件。", "message": "各阶段完成件数怎么样？"},
+        {"label": "看看每个车间每天能做多少。", "message": "车间每天的产能怎么样？"},
     ),
     "en": (
-        {"label": "Orders", "message": "How are order status and due dates?"},
-        {"label": "Output", "message": "How many pieces were completed at each stage?"},
-        {"label": "Workshop capacity", "message": "What is each workshop's daily capacity?"},
+        {"label": "Look at how each order is doing, including status and due date.", "message": "How are order status and due dates?"},
+        {"label": "Look at how many pieces each stage finished.", "message": "How many pieces were completed at each stage?"},
+        {"label": "Look at how much each workshop can make in a day.", "message": "What is each workshop's daily capacity?"},
     ),
 }
 
@@ -184,7 +200,7 @@ def interpretation_clarification(
         if key in seen:
             continue
         seen.add(key)
-        kept.append({"label": label, "message": message})
+        kept.append({"label": label, "message": label})
     if len(kept) < 2:
         return None
     return attach_other(
@@ -390,12 +406,15 @@ _ACTION_TOOLS = {
 }
 
 
-def _ask_tool_coverage(model: Any, data: DataVerdict, question: str) -> ToolVerdict:
+def _ask_tool_coverage(
+    model: Any, data: DataVerdict, question: str, *, chosen_reading: bool = False
+) -> ToolVerdict:
     from backend.tools.registry import MVP_TOOLS
 
     tool_names = ", ".join(getattr(t, "name", str(t)) for t in MVP_TOOLS)
     tool_user = (
-        "Step 1 JSON:\n"
+        language_rule(question)
+        + "\n\nStep 1 JSON:\n"
         + json.dumps(data.__dict__, ensure_ascii=False)
         + "\n\nRegistered tools:\n"
         + tool_names
@@ -405,30 +424,37 @@ def _ask_tool_coverage(model: Any, data: DataVerdict, question: str) -> ToolVerd
         "holds the facts and this question only changes the wording. "
         "If needs_tool is true, has_tool=true only if one registered tool returns "
         "the step-1 field. A list tool that filters on that column counts. "
+        "draw and render_table do not return that field. "
         "If none do, has_tool=false and tool=null.\n\n"
         "Manager question:\n"
         + (question or "")
     )
-    tools = _tools_from_payload(_ask_json(model, _TOOL_SYSTEM, tool_user))
+    system = _TOOL_SYSTEM + ("\n" + _CHOSEN_READING if chosen_reading else "")
+    tools = _tools_from_payload(_ask_json(model, system, tool_user))
     if not tools.has_tool and data.reason:
         tools.reason = data.reason
     return tools
 
 
-def _compose_answer(data: DataVerdict, tools: ToolVerdict) -> tuple[str, str]:
+_STOP_TEXT = {
+    "missing_data": {
+        "en": "That isn't recorded in our database, so I can't answer this.",
+        "zh": "这项没有记录在我们的数据库里，所以我回答不了。",
+    },
+    "no_tool": {
+        "en": "I can't get the data required based on the tools I have, so I can't answer this.",
+        "zh": "抱歉，现有的工具不支持我对这个问题的回答。",
+    },
+}
+
+
+def _compose_answer(data: DataVerdict, _tools: ToolVerdict, question: str) -> tuple[str, str]:
+    """Customer wording only. The stop reason is still missing_data or no_tool."""
     if data.kind != "action" and not data.stored:
-        text = data.reason or (
-            "That fact is not in the factory tables, so the data is missing."
-        )
-        return text, "missing_data"
-    loc = f"{data.table}.{data.column}" if data.table and data.column else "the tables"
-    text = tools.reason or (
-        f"The fact is stored in {loc}, but no registered tool returns that field, "
-        "so I cannot fetch it."
-    )
-    if data.table and data.column and loc not in text:
-        text = f"{loc} exists in the data. {text}"
-    return text, "no_tool"
+        kind = "missing_data"
+    else:
+        kind = "no_tool"
+    return _STOP_TEXT[kind][reply_language(question)], kind
 
 
 def _trace(name: str, payload: dict[str, Any], basis: str) -> dict[str, Any]:
@@ -488,15 +514,17 @@ def assess_answerability(
                 clarification=card,
             )
 
+    data_system = _data_system(clarification_reply)
     data_user = (
-        "Semantic layer:\n"
+        language_rule(question)
+        + "\n\nSemantic layer:\n"
         + render_semantic_prompt()
         + "\nPrevious tool JSON:\n"
         + (prior or "(none)")
         + "\nManager question:\n"
         + (question or "")
     )
-    data = _data_from_payload(_ask_json(model, _DATA_SYSTEM, data_user))
+    data = _data_from_payload(_ask_json(model, data_system, data_user))
     if data.kind == "follow_up" and prior:
         traces = [
             _trace(
@@ -517,7 +545,7 @@ def assess_answerability(
         data = _data_from_payload(
             _ask_json(
                 model,
-                _DATA_SYSTEM
+                data_system
                 + "\nPrevious tool JSON is empty. kind must be fact or action, not follow_up.",
                 data_user,
             )
@@ -526,12 +554,14 @@ def assess_answerability(
             data.kind = "fact"
             data.stored = False
 
-    tools = _ask_tool_coverage(model, data, question)
+    tools = _ask_tool_coverage(
+        model, data, question, chosen_reading=clarification_reply
+    )
     if data.kind == "action" and (tools.tool or "") not in _ACTION_TOOLS:
         data = _data_from_payload(
             _ask_json(
                 model,
-                _DATA_SYSTEM
+                data_system
                 + "\nThis is not an email, note, reminder, watch, or audit. "
                 "kind must be fact. Name the stored table and column.",
                 data_user,
@@ -541,7 +571,9 @@ def assess_answerability(
             data.kind = "fact"
             if not data.column:
                 data.stored = False
-        tools = _ask_tool_coverage(model, data, question)
+        tools = _ask_tool_coverage(
+            model, data, question, chosen_reading=clarification_reply
+        )
     data, tools = apply_catalog(data, tools)
     if data.kind != "action" and not data.stored:
         named = named_order_field(question)
@@ -562,7 +594,7 @@ def assess_answerability(
         data = _data_from_payload(
             _ask_json(
                 model,
-                _DATA_SYSTEM
+                data_system
                 + "\nPrevious tool JSON already listed the rows. This question asks a "
                 "further fact about those rows. If that fact is in the tables, "
                 "kind=fact and stored=true. Do not use follow_up. "
@@ -573,7 +605,9 @@ def assess_answerability(
         if data.kind == "follow_up":
             data.kind = "fact"
             data.stored = True
-        tools = _ask_tool_coverage(model, data, question)
+        tools = _ask_tool_coverage(
+            model, data, question, chosen_reading=clarification_reply
+        )
         data, tools = apply_catalog(data, tools)
 
     traces = [
@@ -613,7 +647,7 @@ def assess_answerability(
             reuse_prior=not tools.needs_tool,
         )
 
-    answer, limitation = _compose_answer(data, tools)
+    answer, limitation = _compose_answer(data, tools, question)
     logger.info("answerability stop limitation=%s", limitation)
     return AnswerabilityGate(
         proceed=False,

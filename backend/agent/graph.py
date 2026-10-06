@@ -16,6 +16,7 @@ from langgraph.prebuilt import create_react_agent
 
 from backend.config import PROJECT_ROOT
 from backend.agent.answerability import assess_answerability, continues_prior_rows
+from backend.agent.language import align_visible_payload
 from backend.agent.prompts import build_system_prompt, format_retrieved_templates
 from backend.agent.routing import route_query
 from backend.services.question_templates import (
@@ -24,6 +25,8 @@ from backend.services.question_templates import (
     without_foreign_order_templates,
 )
 from backend.tools.common import reset_manager_text, set_manager_text
+from backend.tools.draw import bind_frontend_charts, take_frontend_charts
+from backend.tools.render_table import bind_frontend_tables, take_frontend_tables
 from backend.tools.registry import MVP_TOOLS
 
 load_dotenv(PROJECT_ROOT / ".env", override=True)
@@ -101,6 +104,9 @@ def build_model():
     kwargs: dict[str, Any] = {
         "model": os.getenv("LLM_MODEL", "gpt-4o-mini"),
         "temperature": 0,
+        # gpt-5.6 rejects function tools on /v1/chat/completions when reasoning
+        # is on. /v1/responses accepts that combination.
+        "use_responses_api": True,
     }
     base_url = os.getenv("OPENAI_BASE_URL")
     if base_url:
@@ -134,13 +140,33 @@ def _react_prompt(state: dict[str, Any]):
     messages = state.get("messages") or []
     turn = _latest_turn(messages)
     if any(isinstance(msg, ToolMessage) for msg in turn):
-        query = _TEMPLATE_QUERY.get()
-        hits = retrieve_answer_templates(query)
-        hits = supplement_templates_for_tools(query, hits, _tools_from_turn(turn))
-        hits = without_foreign_order_templates(query, hits)
-        extra = format_retrieved_templates(hits)
-        if extra:
-            system = system + "\n\n" + extra
+        called = set(_tools_from_turn(turn))
+        charted = bool(called & {"draw", "render_table"})
+        hold_for_chart = not charted and not _EXPLAIN_PRIOR.get() and not _REUSE_PRIOR.get()
+        if hold_for_chart:
+            system += (
+                "\n\nA retrieval tool already returned the data. "
+                "Your next message MUST be exactly one tool call, draw or render_table, not prose. "
+                "Prefer draw when the values compare, compose, or trend. "
+                "Prefer render_table when the result is a list of rows. "
+                "Copy only values already in that JSON. Do not calculate. "
+                "Do not answer in text on this step."
+            )
+        else:
+            query = _TEMPLATE_QUERY.get()
+            hits = retrieve_answer_templates(query)
+            hits = supplement_templates_for_tools(query, hits, _tools_from_turn(turn))
+            hits = without_foreign_order_templates(query, hits)
+            extra = format_retrieved_templates(hits)
+            if extra:
+                system = system + "\n\n" + extra
+            if charted:
+                system += (
+                    "\n\nA chart or table tool already ran this turn. "
+                    "Write the reply from the tool JSON now. Do not call another tool. "
+                    "The chart or table is already shown. Do not write it again, "
+                    "and do not write a plotting program, an image, or a data:image URL."
+                )
     return [SystemMessage(content=system), *messages]
 
 
@@ -277,6 +303,7 @@ def run_agent(
             "limitation": decision.reason,
             "routing_intent": decision.intent,
         }
+        align_visible_payload(parsed, message)
         _audit_turn(message, conversation_id, parsed, short_circuit=True)
         return parsed
 
@@ -301,6 +328,7 @@ def run_agent(
             "limitation": gate.limitation,
             "routing_intent": decision.intent,
         }
+        align_visible_payload(parsed, message)
         _audit_turn(message, conversation_id, parsed, short_circuit=False)
         return parsed
 
@@ -320,6 +348,8 @@ def run_agent(
     if prior_ids:
         spoken = spoken + "\n" + prior_ids
     manager = set_manager_text(spoken)
+    held_charts = bind_frontend_charts()
+    held_tables = bind_frontend_tables()
     try:
         agent = get_agent()
         result = agent.invoke(
@@ -327,16 +357,47 @@ def run_agent(
             config={"configurable": {"thread_id": conversation_id}},
         )
     finally:
+        charts = take_frontend_charts(held_charts)
+        tables = take_frontend_tables(held_tables)
         _TEMPLATE_QUERY.reset(token)
         _EXPLAIN_PRIOR.reset(explain)
         _REUSE_PRIOR.reset(reuse)
         _PRIOR_ORDER_IDS.reset(held_ids)
         reset_manager_text(manager)
     parsed = parse_agent_result(result, conversation_id)
+    if charts:
+        parsed["charts"] = list(parsed.get("charts") or []) + charts
+    if tables:
+        parsed["tables"] = list(parsed.get("tables") or []) + tables
+    parsed["tables"] = _drop_superseded_error_tables(
+        parsed.get("tables") or [], parsed.get("charts") or []
+    )
     parsed["routing_intent"] = decision.intent
     parsed["traces"] = list(gate.traces) + list(parsed.get("traces") or [])
+    align_visible_payload(parsed, message)
     _audit_turn(message, conversation_id, parsed, short_circuit=False)
     return parsed
+
+
+def _error_echo_table(table: dict[str, Any]) -> bool:
+    """A table whose only cells are a failed tool's code and message."""
+    keys = [str((column or {}).get("key") or "") for column in table.get("columns") or []]
+    if not keys or any(key not in {"code", "message"} for key in keys):
+        return False
+    if "code" not in keys or "message" not in keys:
+        return False
+    return any(str((row or {}).get("code") or "").strip() for row in table.get("rows") or [])
+
+
+def _drop_superseded_error_tables(
+    tables: list[dict[str, Any]], charts: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Hide a failed call once a later call produced the chart or table."""
+    if not any(_error_echo_table(table) for table in tables):
+        return tables
+    if not charts and all(_error_echo_table(table) for table in tables):
+        return tables
+    return [table for table in tables if not _error_echo_table(table)]
 
 
 def _is_human(msg: Any) -> bool:
@@ -363,6 +424,8 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
     tools_used: list[str] = []
     traces: list[dict[str, Any]] = []
     proposed_actions: list[dict[str, Any]] = []
+    charts: list[dict[str, Any]] = []
+    tables: list[dict[str, Any]] = []
     limitation = None
     ungrounded_message = None
 
@@ -380,6 +443,12 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
             proposal = data.get("proposed_action")
             if isinstance(proposal, dict):
                 proposed_actions.append(proposal)
+            chart = data.get("chart")
+            if isinstance(chart, dict):
+                charts.append(chart)
+            table = data.get("table")
+            if isinstance(table, dict):
+                tables.append(table)
             error = payload.get("error") or {}
             if error.get("code") in {"UNSUPPORTED", "NOT_IMPLEMENTED"}:
                 limitation = error.get("message")
@@ -409,6 +478,8 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
         "tools_used": tools_used,
         "traces": traces,
         "proposed_actions": proposed_actions,
+        "charts": charts,
+        "tables": tables,
         "clarification": None,
         "limitation": limitation,
         "routing_intent": "proceed",

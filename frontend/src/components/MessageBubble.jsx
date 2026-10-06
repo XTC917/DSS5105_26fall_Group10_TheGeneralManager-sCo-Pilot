@@ -1,4 +1,6 @@
 import { useState } from "react";
+import ChartView from "./ChartView.jsx";
+import TableView from "./TableView.jsx";
 import TracePanel from "./TracePanel.jsx";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -24,31 +26,57 @@ function actionLabel(action) {
   return "Confirm this action";
 }
 
+function stripEmbeddedImages(text) {
+  return String(text || "")
+    .replace(/!\[[^\]]*]\(\s*data:image\/[^)]*\)/g, "")
+    .replace(/\[[^\]]*]\(\s*data:image\/[^)]*\)/g, "")
+    .replace(/data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export default function MessageBubble({ message, onConfirm, onDismiss, onClarify, busy }) {
   const isUser = message.role === "user";
   const [open, setOpen] = useState(false);
   const [other, setOther] = useState("");
   const traces = message.traces || [];
   const proposed = message.proposedActions || [];
+  const charts = message.charts || [];
+  const tables = message.tables || [];
   const clarification = message.clarification;
   const decision = message.decision;
 
+  const content = isUser ? message.content : stripEmbeddedImages(message.content);
+
   return (
-    <article className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <article className={`flex min-w-0 ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+        className={`w-full min-w-0 max-w-[85%] overflow-hidden rounded-lg px-3 py-2 text-sm ${
           isUser ? "bg-ink text-paper" : "bg-paper text-ink"
         }`}
       >
         {isUser ? (
           <p className="whitespace-pre-wrap">{message.content}</p>
         ) : (
-          <div className="space-y-2 overflow-x-auto break-words [&_h1]:text-xl [&_h1]:font-bold [&_h2]:text-lg [&_h2]:font-bold [&_h3]:text-base [&_h3]:font-bold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_blockquote]:border-l-4 [&_blockquote]:border-brass [&_blockquote]:pl-3 [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-ink/20 [&_th]:bg-ink/5 [&_th]:p-2 [&_td]:border [&_td]:border-ink/20 [&_td]:p-2 [&_code]:rounded [&_code]:bg-ink/10 [&_code]:px-1 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-ink [&_pre]:p-3 [&_pre]:text-paper">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {message.content}
+          <div className="space-y-2 break-words [overflow-wrap:anywhere] [&_h1]:text-xl [&_h1]:font-bold [&_h2]:text-lg [&_h2]:font-bold [&_h3]:text-base [&_h3]:font-bold [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_blockquote]:border-l-4 [&_blockquote]:border-brass [&_blockquote]:pl-3 [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-ink/20 [&_th]:bg-ink/5 [&_th]:p-2 [&_td]:border [&_td]:border-ink/20 [&_td]:p-2 [&_code]:rounded [&_code]:bg-ink/10 [&_code]:px-1 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-ink [&_pre]:p-3 [&_pre]:text-paper">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                img: () => null,
+                a: ({ href, children }) =>
+                  String(href || "").startsWith("data:image") ? null : <a href={href}>{children}</a>,
+              }}
+            >
+              {content}
             </ReactMarkdown>
           </div>
         )}
+        {!isUser && charts.map((chart, idx) => (
+          <ChartView key={`${chart.type}-${idx}`} chart={chart} />
+        ))}
+        {!isUser && tables.map((table, idx) => (
+          <TableView key={`${table.title}-${idx}`} table={table} />
+        ))}
         {!isUser && message.toolsUsed?.length > 0 && (
           <p className="mt-2 text-[11px] uppercase tracking-wide text-ink/45">
             Tools: {message.toolsUsed.join(" → ")}
@@ -56,14 +84,14 @@ export default function MessageBubble({ message, onConfirm, onDismiss, onClarify
         )}
         {!isUser && clarification?.options?.length > 0 && (
           <div className="mt-2">
-            <div className="flex flex-wrap gap-2">
-              {clarification.options.map((option) => (
+            <div className="flex flex-col gap-2">
+              {clarification.options.map((option, index) => (
                 <button
-                  key={option.message}
+                  key={`${option.label}-${index}`}
                   type="button"
                   disabled={busy}
-                  onClick={() => onClarify?.(option.message)}
-                  className="rounded-full border border-ink/20 bg-white px-3 py-1 text-left text-xs text-ink hover:border-brass disabled:opacity-50"
+                  onClick={() => onClarify?.(option.label)}
+                  className="rounded border border-ink/20 bg-white px-3 py-2 text-left text-sm text-ink hover:border-brass disabled:opacity-50"
                 >
                   {option.label}
                 </button>

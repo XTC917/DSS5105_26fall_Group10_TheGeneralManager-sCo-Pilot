@@ -20,6 +20,8 @@ def test_health():
         assert "find_orders" in body["tools"]
         assert "discover_factory_issues" in body["tools"]
         assert "get_today_priority" in body["tools"]
+        assert "draw" in body["tools"]
+        assert "render_table" in body["tools"]
 
 
 def test_chat_without_key_is_503(monkeypatch):

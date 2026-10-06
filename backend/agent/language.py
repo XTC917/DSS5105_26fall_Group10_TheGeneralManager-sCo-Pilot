@@ -140,16 +140,27 @@ def align_visible_text(text: str, question: str) -> str:
 
 
 def align_visible_payload(parsed: dict, question: str) -> dict:
-    parsed["answer"] = align_visible_text(parsed.get("answer") or "", question)
+    """Replace non-Chinese, non-English user-visible text with the question's language."""
+    cache: dict[str, str] = {}
+
+    def once(text: str) -> str:
+        if text not in cache:
+            cache[text] = align_visible_text(text, question)
+        return cache[text]
+
+    parsed["answer"] = once(parsed.get("answer") or "")
+    for trace in parsed.get("traces") or []:
+        if isinstance(trace, dict) and trace.get("basis"):
+            trace["basis"] = once(str(trace["basis"]))
     card = parsed.get("clarification")
     if isinstance(card, dict):
         if card.get("prompt"):
-            card["prompt"] = align_visible_text(str(card["prompt"]), question)
+            card["prompt"] = once(str(card["prompt"]))
         for option in card.get("options") or []:
             if not isinstance(option, dict):
                 continue
             if option.get("label"):
-                option["label"] = align_visible_text(str(option["label"]), question)
+                option["label"] = once(str(option["label"]))
             if option.get("message"):
-                option["message"] = align_visible_text(str(option["message"]), question)
+                option["message"] = once(str(option["message"]))
     return parsed

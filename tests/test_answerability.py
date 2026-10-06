@@ -132,7 +132,7 @@ def test_different_answers_keep_the_models_wording():
     assert card["prompt"] == "For TrendCart, which of these did you mean?"
     assert card["other_placeholder"] == "Other"
     assert card["options"][0]["label"] == "TrendCart orders in progress"
-    assert card["options"][0]["message"] == "How are TrendCart's in-progress orders doing?"
+    assert card["options"][0]["message"] == "TrendCart orders in progress"
 
 
 def test_one_row_and_the_list_are_one_answer():
@@ -164,9 +164,9 @@ def test_scope_clarification_offers_real_scopes_and_other():
     assert "stored column" not in card["prompt"]
     assert "Which of these" in card["prompt"]
     assert [row["label"] for row in card["options"]] == [
-        "Orders",
-        "Output",
-        "Workshop capacity",
+        "Look at how each order is doing, including status and due date.",
+        "Look at how many pieces each stage finished.",
+        "Look at how much each workshop can make in a day.",
     ]
     assert card["other_placeholder"] == "Other"
     assert card["other_submit"] == "Send"
@@ -175,9 +175,20 @@ def test_scope_clarification_offers_real_scopes_and_other():
 
 def test_scope_clarification_uses_chinese_for_chinese_questions():
     card = scope_clarification("销售不在表里。", "销售怎么样？")
-    assert [row["label"] for row in card["options"]] == ["订单", "产量", "车间产能"]
+    assert [row["label"] for row in card["options"]] == [
+        "看看各订单现在的状态和交期。",
+        "看看各阶段完成了多少件。",
+        "看看每个车间每天能做多少。",
+    ]
     assert card["other_placeholder"] == "其他"
     assert card["other_submit"] == "发送"
+
+
+def test_clarification_reply_judges_the_chosen_lookup():
+    from backend.agent.answerability import _CHOSEN_READING, _data_system
+
+    assert "already chose" not in _data_system(False)
+    assert _CHOSEN_READING in _data_system(True)
 
 
 def test_tool_lookup_table_marks_find_orders_as_list_lookup():
