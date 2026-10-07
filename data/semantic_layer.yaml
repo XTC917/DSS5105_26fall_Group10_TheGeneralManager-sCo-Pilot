@@ -316,10 +316,10 @@ term_definition:
     overdue:
       tool: get_orders_at_risk
       description: >
-        Same manager wording as due date, miss due date, likely to miss
-        due dates. stored=true. table=orders, column=due_date.
-        The CSV stores due_date; overdue / pace-miss are Python flags on
-        that date, not missing data.
+        Same manager wording as already overdue, past the due date, how many
+        days late. stored=true. table=orders, column=due_date.
+        Answer from flag=OVERDUE (due_date < 2026-04-01). This is not the
+        "likely to miss" list.
     prioritize:
       tool: get_today_priority
       description: >
@@ -349,12 +349,13 @@ term_definition:
       tool: get_orders_at_risk
       description: >
         Vocabulary only — not a stored column. Same manager wording as
-        at risk, at-risk orders, orders at risk. kind=fact, stored=true.
-        table=orders, column=due_date. When answering, use only IN_PROGRESS
-        orders that are NOT overdue (due_date >= factory today 2026-04-01).
-        Ignore every already-overdue row. Copy likely_to_miss_due_dates /
-        likely_to_miss_due_next_7_days (or TIGHT_DEADLINE without OVERDUE).
-        Do not answer "at risk" from the OVERDUE list.
+        at risk, at-risk orders, likely to miss their due dates.
+        kind=fact, stored=true. table=orders, column=due_date.
+        Copy data.orders / likely_to_miss_due_dates: not overdue, due today
+        through +3 calendar days, and days_left (pieces / 30-day stage median,
+        summed over remaining stages) exceeds working days until due.
+        Do not answer this from OVERDUE or STALLED.
+        "Next 7 days" uses likely_to_miss_due_next_7_days on the same tool.
     hasnt_moved:
       tool: create_watch
       description: >

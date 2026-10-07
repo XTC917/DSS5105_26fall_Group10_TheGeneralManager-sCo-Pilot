@@ -14,7 +14,13 @@ from pydantic import BaseModel, Field
 
 from backend.services.calculations import assess_order_risk, order_computed_fields
 from backend.services.database import get_db
-from backend.services.pace import likely_to_miss_due_dates, likely_to_miss_due_next_n_days, pace_fields, stage_medians
+from backend.services.pace import (
+    flags_with_pace_tight,
+    likely_to_miss_due_dates,
+    likely_to_miss_due_next_n_days,
+    pace_fields,
+    stage_medians,
+)
 from backend.tools.common import (
     order_id_named_by_manager,
     several_orders_message,
@@ -46,8 +52,8 @@ class GetOrdersAtRiskInput(BaseModel):
     flag: Optional[str] = Field(
         default=None,
         description=(
-            "Optional: OVERDUE, STALLED, or TIGHT_DEADLINE for the legacy flag list. "
-            "Omit to return that list plus the pace-based miss-due groups."
+            "Optional: OVERDUE or STALLED for those flags only. "
+            "TIGHT_DEADLINE or omit for orders likely to miss a due date still ahead."
         ),
     )
 
@@ -160,15 +166,15 @@ def get_order_status(
 
 @tool(args_schema=GetOrdersAtRiskInput)
 def get_orders_at_risk(flag: Optional[str] = None) -> str:
-    """List operational risk. Python computes flags and pace estimates.
+    """List orders likely to miss a due date, plus separate overdue and stalled flags.
 
-    data.orders — OVERDUE / STALLED / TIGHT_DEADLINE (stage-count heuristic).
-    data.likely_to_miss_due_dates — not overdue; due today..+3 calendar days;
-      estimated remaining working days = sum_stage pieces / 30-day median.
-      Use this for "which orders are likely to miss their due dates".
+    data.orders with no flag — same rows as likely_to_miss_due_dates.
+      Not overdue. Due today through +3 calendar days.
+      days_left = sum over remaining stages of pieces / 30-day median.
+      Included when days_left exceeds working days until due.
+    flag=OVERDUE or flag=STALLED — that flag only. Not the miss-due list.
     data.likely_to_miss_due_next_7_days — due in 1–7 calendar days and at least
-      one working day short at current pace. Use for "next 7 days at current pace".
-    Do not answer miss-due questions from OVERDUE/STALLED rows.
+      one working day short at the same pace. Use for "next 7 days".
     """
     tool_name = "get_orders_at_risk"
     try:
@@ -184,14 +190,14 @@ def get_orders_at_risk(flag: Optional[str] = None) -> str:
         db = get_db()
         medians = stage_medians(db)
         in_progress = db.in_progress_orders()
-        assessed: list[dict[str, Any]] = []
+        flagged: list[dict[str, Any]] = []
         for order in in_progress:
             risk = assess_order_risk(order)
-            if not risk["at_risk"]:
+            pace = pace_fields(order, medians)
+            flags = flags_with_pace_tight(list(risk["flags"]), pace)
+            if not flags:
                 continue
-            if flag_norm and flag_norm not in risk["flags"]:
-                continue
-            assessed.append(
+            flagged.append(
                 {
                     "order_id": order["order_id"],
                     "customer": order["customer"],
@@ -200,16 +206,21 @@ def get_orders_at_risk(flag: Optional[str] = None) -> str:
                     "due_date": order["due_date"],
                     "current_stage": order["current_stage"],
                     "last_activity_date": order["last_activity_date"],
-                    "flags": risk["flags"],
+                    "flags": flags,
                     "rank_score": risk["rank_score"],
                     "computed": risk["computed"],
-                    "pace": pace_fields(order, medians),
+                    "pace": pace,
                 }
             )
 
-        assessed.sort(key=lambda r: r["rank_score"], reverse=True)
         miss_due = likely_to_miss_due_dates(db)
         miss_week = likely_to_miss_due_next_n_days(db)
+        by_id = {row["order_id"]: row for row in flagged}
+        if flag_norm is None or flag_norm == "TIGHT_DEADLINE":
+            assessed = [by_id[row["order_id"]] for row in miss_due if row["order_id"] in by_id]
+        else:
+            assessed = [row for row in flagged if flag_norm in row["flags"]]
+            assessed.sort(key=lambda r: r["rank_score"], reverse=True)
         logger.info("get_orders_at_risk returned %s rows (flag=%s)", len(assessed), flag_norm)
         return tool_json(
             {
@@ -224,10 +235,11 @@ def get_orders_at_risk(flag: Optional[str] = None) -> str:
                         "order_ids": [r["order_id"] for r in miss_due],
                         "orders": miss_due,
                         "basis": (
+                            "Same rows as data.orders when flag is omitted. "
                             "Not overdue. Due today through +3 calendar days. "
-                            "estimated_remaining_working_days = sum over remaining "
-                            "stages of pieces / 30-day median pieces_completed. "
-                            "Flagged when that estimate exceeds working days until due."
+                            "days_left = sum over remaining stages of pieces / "
+                            "30-day median pieces_completed. "
+                            "Included when days_left exceeds working days until due."
                         ),
                     },
                     "likely_to_miss_due_next_7_days": {
@@ -240,12 +252,14 @@ def get_orders_at_risk(flag: Optional[str] = None) -> str:
                         ),
                     },
                     "basis": (
-                        "OVERDUE: due_date < 2026-04-01. "
-                        "STALLED: working days since last_activity_date >= 3. "
-                        "TIGHT_DEADLINE: working days until due < remaining stage count. "
-                        "For 'likely to miss due dates' copy likely_to_miss_due_dates, "
-                        "not the OVERDUE/STALLED list. "
-                        "Only IN_PROGRESS orders. Ranked overdue first."
+                        "data.orders with no flag is the miss-due list: not overdue, "
+                        "due today through +3 calendar days, and days_left "
+                        "(sum of pieces / 30-day stage median over remaining stages) "
+                        "exceeds working days until due. "
+                        "flag=OVERDUE is due_date < 2026-04-01. "
+                        "flag=STALLED is idle >= 3 working days. "
+                        "Those two flags are not the miss-due list. "
+                        "Next 7 days is data.likely_to_miss_due_next_7_days."
                     ),
                 },
                 "trace": {

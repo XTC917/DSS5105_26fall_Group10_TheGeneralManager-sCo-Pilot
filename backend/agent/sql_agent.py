@@ -51,7 +51,7 @@ get_order_status — one order
   SELECT order_id,customer,product,pieces,due_date,status,current_stage,last_activity_date FROM {PG_SCHEMA}.orders WHERE order_id='ORD-120'
 find_orders — list
   SELECT order_id,customer,product,status,current_stage FROM {PG_SCHEMA}.orders WHERE customer='TrendCart'
-get_orders_at_risk — in progress, not yet overdue (due_date>='2026-04-01') if they said at-risk; overdue uses due_date<'2026-04-01'
+get_orders_at_risk — miss-due list is Python (pieces / 30-day stage median), not this SQL. Overdue is due_date < '2026-04-01'.
   SELECT order_id,due_date,current_stage,pieces FROM {PG_SCHEMA}.orders WHERE status='IN_PROGRESS' AND due_date>='2026-04-01'
 trace_order — stage history
   SELECT stage,date FROM {PG_SCHEMA}.snapshot WHERE order_id='ORD-120' ORDER BY date

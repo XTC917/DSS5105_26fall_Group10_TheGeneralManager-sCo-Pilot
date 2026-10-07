@@ -40,7 +40,7 @@ def test_briefing_endpoint():
         assert res.status_code == 200
         body = res.json()
         assert body["factory_today"] == "2026-04-01"
-        assert body["at_risk"]["count"] == 10
+        assert body["at_risk"]["count"] == 3
 
 
 def test_discovery_endpoint():

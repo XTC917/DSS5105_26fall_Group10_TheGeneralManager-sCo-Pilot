@@ -38,22 +38,24 @@ Factory today = **2026-04-01**. Working day = Monday–Saturday.
 
 ## `get_orders_at_risk` (retrieval + inspectable flags)
 
-Only `status = IN_PROGRESS`. An order is at risk if any flag below is true.
+Only `status = IN_PROGRESS`.
 
-| Flag | Definition |
+With no `flag`, `data.orders` is the miss-due list. It is the same rows as `likely_to_miss_due_dates`.
+
+| Rule | Definition |
 |---|---|
-| `OVERDUE` | `due_date < 2026-04-01` |
-| `STALLED` | working days since `last_activity_date` ≥ **3** (`STALL_WORKING_DAYS`) |
-| `TIGHT_DEADLINE` | not overdue, and `working_days_until_due_inclusive < remaining_stage_count` |
+| Miss-due / `TIGHT_DEADLINE` | not overdue, due today through +3 calendar days, and `days_left` > working days until due |
+| `days_left` | sum over remaining stages of `pieces / 30-day median pieces_completed` for that stage |
+| `OVERDUE` | `flag=OVERDUE`: `due_date < 2026-04-01`. Not included in the default list |
+| `STALLED` | `flag=STALLED`: working days since `last_activity_date` ≥ **3**. Not included in the default list |
 
-`TIGHT_DEADLINE` is a **heuristic**. The dataset does not tell us how many pieces
-are left at the current stage, so we require at least one working day per remaining stage.
+`likely_to_miss_due_next_7_days` is a separate list: due in 1–7 calendar days and at least one working day short on the same formula.
 
-Optional input `flag` filters to one of the three names.
+The stage-count check (`working days until due < remaining stage count`) is not the miss-due rule.
 
-Ranking: overdue first (more calendar days late = higher), then tight, then stalled.
+Optional input `flag` is `OVERDUE`, `STALLED`, or `TIGHT_DEADLINE`.
 
-COMPLETE orders are never at risk.
+COMPLETE orders are never included.
 
 ---
 
@@ -125,7 +127,7 @@ this model…”. Always keep the `limitations` list from the tool.
 
 No inputs. Returns JSON facts for the LLM to turn into a short briefing.
 
-Reuses `get_orders_at_risk` for overdue / stalled / tight-deadline orders.
+Reuses `get_orders_at_risk` for the miss-due list (not the overdue or stalled flags).
 Also includes IN_PROGRESS counts by stage, last working day's factory-wide
 output from `production_log.csv`, stages whose last-day output is below
 `PRODUCTION_DROP_RATIO` (0.70) × the same 30-day median used by feasibility,

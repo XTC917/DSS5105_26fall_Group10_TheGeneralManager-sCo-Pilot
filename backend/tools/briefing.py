@@ -28,7 +28,7 @@ def get_morning_briefing(unused: Optional[str] = None) -> str:
     """Structured morning operations briefing from factory tables.
 
     Use when the manager asks for this morning's briefing or a daily ops summary.
-    Reuses get_orders_at_risk for risk flags. Do not invent extra facts.
+    Reuses get_orders_at_risk for the miss-due list (days_left), not overdue or stalled rows. Do not invent extra facts.
     Summarize the JSON; do not treat it as a script.
     For only the at-risk list, get_orders_at_risk is enough.
     For ranked production issues, use discover_factory_issues.

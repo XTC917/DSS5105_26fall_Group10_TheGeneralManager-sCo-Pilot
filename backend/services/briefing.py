@@ -80,7 +80,7 @@ def build_morning_briefing(db: FactoryDB) -> dict[str, Any]:
         "unusual_stage_output": unusual,
         "suspended_workshops": suspended,
         "limitations": [
-            "Risk flags reuse get_orders_at_risk / assess_order_risk. COMPLETE orders are excluded.",
+            "The at_risk list is get_orders_at_risk with no flag: not-yet-overdue orders whose days_left exceeds working days until due. OVERDUE and STALLED are separate flags.",
             "production_log.csv is factory-wide by stage, not per order.",
             "Unusual output uses last working day vs the same 30-day stage median as feasibility.",
             "No worker names, selling prices, or revenue are included because they are not in the data.",

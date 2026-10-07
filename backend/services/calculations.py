@@ -144,11 +144,10 @@ def assess_order_risk(order: dict[str, Any], today: date = FACTORY_TODAY) -> dic
     * OVERDUE — status is IN_PROGRESS and due_date < factory today.
     * STALLED — status is IN_PROGRESS and working days since last_activity_date
       (excluding that date, including today) >= STALL_WORKING_DAYS.
-    * TIGHT_DEADLINE — status is IN_PROGRESS, not yet overdue, and
+    * TIGHT_DEADLINE on this object — not yet overdue, and
       working_days_until_due_inclusive < remaining_stage_count.
-      This is a conservative heuristic: we do not know pieces remaining at
-      the current stage, so we require at least one working day per remaining
-      stage.
+      get_orders_at_risk does not use this flag. Its miss-due list uses
+      days_left (pieces / 30-day stage median) instead.
 
     COMPLETE orders are never flagged.
     """

@@ -129,11 +129,15 @@ def test_discover_is_production_log_only(db):
     assert payload["trace"]["source_file"] == "production_log.csv"
 
 
-def test_order_risk_issues_match_at_risk_set(db):
+def test_order_risk_collector_still_includes_overdue(db):
     risk = parse_tool(get_orders_at_risk.invoke({}))
-    risk_ids = {row["order_id"] for row in risk["data"]["orders"]}
+    assert [row["order_id"] for row in risk["data"]["orders"]] == [
+        "ORD-029",
+        "ORD-108",
+        "ORD-103",
+    ]
     discovered_orders = {item["order_id"] for item in _order_issues(db)}
-    assert discovered_orders == risk_ids
+    assert "ORD-120" in discovered_orders
     types = {item["issue_type"] for item in _order_issues(db)}
     assert ISSUE_ORDER_OVERDUE in types
 
