@@ -51,4 +51,3 @@ def postgres_checkpointer() -> Generator[PostgresSaver, None, None]:
         yield PostgresSaver(pool)
     finally:
         pool.close()
-
