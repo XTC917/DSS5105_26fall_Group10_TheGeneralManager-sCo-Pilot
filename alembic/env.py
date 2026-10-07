@@ -3,9 +3,14 @@ from __future__ import annotations
 
 import os
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(PROJECT_ROOT / ".env", override=False)
 
 config = context.config
 if config.config_file_name is not None:
@@ -15,9 +20,9 @@ if config.config_file_name is not None:
 def database_url() -> str:
     url = os.getenv("DATABASE_URL")
     if url:
-        return url
-    user = os.getenv("PGUSER", "factory_admin")
-    password = os.getenv("PGPASSWORD", "")
+        return url.replace("postgresql://", "postgresql+psycopg://", 1)
+    user = os.getenv("PG_ADMIN_USER", "factory_admin")
+    password = os.getenv("PG_ADMIN_PASSWORD", "")
     host = os.getenv("PGHOST", "localhost")
     port = os.getenv("PGPORT", "5432")
     database = os.getenv("PGDATABASE", "factory_copilot_db")

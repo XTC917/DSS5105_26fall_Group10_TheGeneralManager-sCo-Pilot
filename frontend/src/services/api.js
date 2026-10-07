@@ -14,14 +14,14 @@ function notifyUnauthorized() {
   }
 }
 
-async function authed(path) {
-  const res = await fetch(path, { headers: authHeaders() });
+export async function authed(path, options = {}) {
+  const res = await fetch(path, { ...options, headers: authHeaders(options.headers || {}) });
   if (res.status === 401) {
     notifyUnauthorized();
     throw new Error("Session expired. Please log in again.");
   }
   if (!res.ok) {
-    throw new Error(`Request failed (${res.status})`);
+    throw new Error(await readError(res, `Request failed (${res.status})`));
   }
   return res.json();
 }
@@ -98,6 +98,7 @@ export async function sendChat(message, conversationId, clarificationReply = fal
     }),
   });
   if (res.status === 401) {
+    notifyUnauthorized();
     throw new Error("Session expired. Please log in again.");
   }
   const body = await res.json().catch(() => ({}));

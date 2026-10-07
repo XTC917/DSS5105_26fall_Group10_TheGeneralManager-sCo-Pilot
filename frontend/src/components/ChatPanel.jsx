@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { confirmAction, declineAction, sendChat } from "../services/api.js";
 import MessageBubble from "./MessageBubble.jsx";
+import { assistantMessage } from "../services/conversationsApi.js";
 
 const STARTERS = [
   "How is ORD-120 doing?",
@@ -15,12 +16,28 @@ const STARTERS = [
   "Cancel the watch on ORD-005",
 ];
 
-export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) {
+export default function ChatPanel({
+  conversationId,
+  llmReady,
+  onBoardChanged,
+  onConversationUpdated,
+  onBusyChange,
+  initialMessages = [],
+  onMessagesChange,
+}) {
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(initialMessages);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const listRef = useRef(null);
+
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
+
+  useEffect(() => {
+    onMessagesChange?.(messages);
+  }, [messages, onMessagesChange]);
 
   async function submit(text, clarificationReply = false) {
     const content = (text ?? input).trim();
@@ -34,19 +51,13 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
       const result = await sendChat(content, conversationId, clarificationReply);
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content: result.answer,
-          toolsUsed: result.tools_used || [],
-          traces: result.traces || [],
-          limitation: result.limitation,
-          proposedActions: result.proposed_actions || [],
-          charts: result.charts || [],
-          tables: result.tables || [],
-          clarification: result.clarification || null,
-        },
+        assistantMessage(result.answer, result),
       ]);
+      onConversationUpdated?.();
     } catch (err) {
+      // A failed send is not a persisted message. Keep the input for retry.
+      setMessages((prev) => prev.slice(0, -1));
+      setInput(content);
       setError(err.message);
     } finally {
       setBusy(false);
@@ -116,6 +127,7 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
           <button
             key={q}
             type="button"
+            disabled={busy}
             onClick={() => submit(q)}
             className="rounded-full border border-ink/15 px-3 py-1 text-left text-xs text-ink/80 hover:border-brass hover:bg-paper"
           >

@@ -3,7 +3,7 @@ import Home from "./pages/Home.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 
 function Shell() {
-  const { isAuthenticated, authLoading } = useAuth();
+  const { user, isAuthenticated, authLoading } = useAuth();
 
   if (authLoading) {
     return (
@@ -14,7 +14,7 @@ function Shell() {
   }
 
   if (!isAuthenticated) return <LoginPage />;
-  return <Home />;
+  return <Home key={user.id} />;
 }
 
 export default function App() {

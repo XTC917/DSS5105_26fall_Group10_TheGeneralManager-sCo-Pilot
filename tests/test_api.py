@@ -24,14 +24,21 @@ def test_health():
         assert "render_table" in body["tools"]
 
 
-def test_chat_without_key_is_503(monkeypatch):
+def test_chat_without_key_is_503(monkeypatch, employee_auth_headers):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     import backend.main as main_mod
 
     monkeypatch.setattr(main_mod, "llm_is_configured", lambda: False)
     with TestClient(app) as client:
-        res = client.post("/api/chat", json={"message": "How is ORD-120?"})
-        assert res.status_code == 503
+        conversation = client.post("/api/conversations", headers=employee_auth_headers).json()
+        try:
+            res = client.post("/api/chat", headers=employee_auth_headers,
+                              json={"message": "How is ORD-120?", "conversation_id": conversation["id"]})
+            assert res.status_code == 503
+        finally:
+            from backend.services.pg_database import connect
+            with connect(admin=True) as conn:
+                conn.execute("DELETE FROM copilot.conversations WHERE id=%s AND user_id=2", (conversation["id"],))
 
 
 def test_briefing_endpoint():

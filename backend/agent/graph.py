@@ -39,6 +39,13 @@ logger = logging.getLogger(__name__)
 
 _AGENT = None
 _CHECKPOINTER = MemorySaver()
+
+
+def set_checkpointer(checkpointer: Any | None) -> None:
+    """Swap the stored thread. Tests keep MemorySaver; the API uses Postgres."""
+    global _AGENT, _CHECKPOINTER
+    _AGENT = None
+    _CHECKPOINTER = checkpointer if checkpointer is not None else MemorySaver()
 _TEMPLATE_QUERY: ContextVar[str] = ContextVar("template_query", default="")
 _EXPLAIN_PRIOR: ContextVar[bool] = ContextVar("explain_prior", default=False)
 _REUSE_PRIOR: ContextVar[bool] = ContextVar("reuse_prior", default=False)
@@ -222,7 +229,7 @@ def get_agent():
 def _manager_text(conversation_id: str, message: str) -> str:
     """Human wording only. Templates and tool rows are not a source of order ids."""
     parts = [message or ""]
-    if _AGENT is not None and llm_is_configured():
+    if llm_is_configured():
         try:
             state = get_agent().get_state({"configurable": {"thread_id": conversation_id}})
         except Exception:  # noqa: BLE001
@@ -237,7 +244,7 @@ def _manager_text(conversation_id: str, message: str) -> str:
 
 def _previous_turn_order_ids(conversation_id: str) -> list[str]:
     """Order ids returned by tools after the previous manager question."""
-    if _AGENT is None or not llm_is_configured():
+    if not llm_is_configured():
         return []
     try:
         state = get_agent().get_state({"configurable": {"thread_id": conversation_id}})
@@ -262,7 +269,7 @@ def _previous_turn_order_ids(conversation_id: str) -> list[str]:
 
 def _prior_tool_json(conversation_id: str) -> str:
     """Tool payloads already in this thread, for follow-up explanations."""
-    if _AGENT is None or not llm_is_configured():
+    if not llm_is_configured():
         return ""
     try:
         state = get_agent().get_state({"configurable": {"thread_id": conversation_id}})
@@ -299,12 +306,14 @@ def run_agent(
     conversation_id: str,
     *,
     clarification_reply: bool = False,
+    thread_id: str | None = None,
 ) -> dict[str, Any]:
     """Entry point used by /api/chat.
 
     Unsupported / not-implemented questions are answered here without an LLM
     call, so no unrelated tool can fire.
     """
+    memory_thread = thread_id or conversation_id
     decision = route_query(message)
     if decision.short_circuit:
         logger.info(
@@ -328,7 +337,7 @@ def run_agent(
 
     gate = assess_answerability(
         message,
-        prior_tool_json=_prior_tool_json(conversation_id),
+        prior_tool_json=_prior_tool_json(memory_thread),
         clarification_reply=clarification_reply,
     )
     if not gate.proceed:
@@ -359,11 +368,11 @@ def run_agent(
         gate.proceed
         and not gate.explain_prior
         and not gate.reuse_prior
-        and continues_prior_rows(message, _prior_tool_json(conversation_id))
+        and continues_prior_rows(message, _prior_tool_json(memory_thread))
     ):
-        prior_ids = " ".join(_previous_turn_order_ids(conversation_id))
+        prior_ids = " ".join(_previous_turn_order_ids(memory_thread))
     held_ids = _PRIOR_ORDER_IDS.set(prior_ids)
-    spoken = _manager_text(conversation_id, message)
+    spoken = _manager_text(memory_thread, message)
     if prior_ids:
         spoken = spoken + "\n" + prior_ids
     manager = set_manager_text(spoken)
@@ -373,7 +382,7 @@ def run_agent(
         agent = get_agent()
         result = agent.invoke(
             {"messages": [{"role": "user", "content": _model_turn(message, clarification_reply=clarification_reply)}]},
-            config={"configurable": {"thread_id": conversation_id}},
+            config={"configurable": {"thread_id": memory_thread}},
         )
     finally:
         charts = take_frontend_charts(held_charts)
