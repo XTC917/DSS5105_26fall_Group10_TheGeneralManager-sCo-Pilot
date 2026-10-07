@@ -178,6 +178,64 @@ def _answer_key(tool: str) -> str:
     return tool
 
 
+def ambiguous_clarification(question: str, error: dict[str, Any]) -> dict[str, Any] | None:
+    """Several matching rows use the same card as a clarification between answer methods."""
+    rows = error.get("candidates") or error.get("matches") or []
+    if not isinstance(rows, list):
+        return None
+    options: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        label = _candidate_sentence(row, question)
+        if not label or label in seen:
+            continue
+        seen.add(label)
+        options.append({"label": label, "message": label})
+    if len(options) < 2:
+        return None
+    ask = str(error.get("message") or "").strip() or "Which of these did you mean?"
+    return attach_other({"prompt": ask, "options": options}, question)
+
+
+def _candidate_sentence(row: dict[str, Any], question: str) -> str:
+    zh = reply_language(question) == "zh"
+    order_id = str(row.get("order_id") or "").strip()
+    watch_id = row.get("watch_id")
+    product = str(row.get("product") or "").strip()
+    category = str(row.get("category") or "").strip()
+    stage = str(row.get("current_stage") or row.get("stage") or "").strip()
+    customer = str(row.get("customer") or "").strip()
+    pieces = row.get("pieces")
+    if order_id and watch_id not in (None, ""):
+        if zh:
+            return f"取消订单 {order_id} 上的观察 {watch_id}。"
+        return f"Cancel watch {watch_id} on {order_id}."
+    if order_id:
+        detail: list[str] = []
+        if pieces not in (None, "") and product:
+            detail.append(f"{pieces} 件{product}" if zh else f"{pieces} {product}")
+        elif product:
+            detail.append(product)
+        if customer:
+            detail.append(f"客户 {customer}" if zh else customer)
+        if stage:
+            detail.append(f"现在在 {stage}" if zh else f"now at {stage}")
+        if zh:
+            extra = "，".join(detail)
+            return f"看订单 {order_id}" + (f"，{extra}。" if extra else "。")
+        extra = ", ".join(detail)
+        return f"Show me {order_id}" + (f", {extra}." if extra else ".")
+    if product and category:
+        if zh:
+            return f"按 {category} 类别里的 {product} 来查。"
+        return f"Use {product} in the {category} category."
+    if product:
+        return f"看 {product}。" if zh else f"Show me {product}."
+    return ""
+
+
 def interpretation_clarification(
     question: str,
     options: list[dict[str, str]] | tuple[dict[str, str], ...],

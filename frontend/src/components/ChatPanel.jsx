@@ -143,6 +143,7 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
               );
               submit(text, true);
             }}
+            clarificationOpen={idx === messages.length - 1}
           />
         ))}
         {busy && <p className="text-xs text-ink/45">Consulting factory tools…</p>}

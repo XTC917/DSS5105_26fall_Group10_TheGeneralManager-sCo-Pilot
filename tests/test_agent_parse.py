@@ -6,7 +6,7 @@ import json
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from backend.agent.graph import _drop_superseded_error_tables, parse_agent_result
+from backend.agent.graph import _drop_superseded_error_tables, _model_turn, parse_agent_result
 
 
 def _tool(name: str, call_id: str) -> ToolMessage:
@@ -41,7 +41,7 @@ def test_parse_agent_result_keeps_only_latest_turn_tools():
     assert parsed["clarification"] is None
 
 
-def test_several_matching_orders_are_not_a_clarification_card():
+def test_several_matching_orders_become_a_clarification_card():
     payload = {
         "ok": False,
         "tool": "get_order_status",
@@ -49,8 +49,8 @@ def test_several_matching_orders_are_not_a_clarification_card():
             "code": "AMBIGUOUS",
             "message": "17 orders match. Pick one, or type the order you mean.",
             "candidates": [
-                {"order_id": "ORD-005", "product": "Scarf", "current_stage": "KNITTING"},
-                {"order_id": "ORD-120", "product": "Vest", "current_stage": "ASSEMBLY"},
+                {"order_id": "ORD-005", "product": "Scarf", "pieces": 500, "current_stage": "KNITTING"},
+                {"order_id": "ORD-120", "product": "Vest", "pieces": 1500, "current_stage": "ASSEMBLY"},
             ],
         },
     }
@@ -58,13 +58,23 @@ def test_several_matching_orders_are_not_a_clarification_card():
         "messages": [
             HumanMessage(content="How is the TrendCart order doing?"),
             AIMessage(content="", tool_calls=[{"name": "get_order_status", "id": "1", "args": {}}]),
-            ToolMessage(content=__import__("json").dumps(payload), tool_call_id="1", name="get_order_status"),
-            AIMessage(content="I will check ORD-120."),
+            ToolMessage(content=json.dumps(payload), tool_call_id="1", name="get_order_status"),
+            ToolMessage(
+                content=json.dumps({"ok": True, "tool": "render_table", "data": {"table": {"title": "TrendCart"}}}),
+                tool_call_id="2",
+                name="render_table",
+            ),
+            AIMessage(content="TrendCart has 17 orders, so I can't identify one without guessing."),
         ]
     }
     parsed = parse_agent_result(result, "thread-1")
-    assert parsed["clarification"] is None
-    assert parsed["answer"] == "I will check ORD-120."
+    assert parsed["limitation"] == "needs_clarification"
+    assert parsed["tables"] == []
+    assert parsed["answer"] == "17 orders match. Pick one, or type the order you mean."
+    labels = [option["label"] for option in parsed["clarification"]["options"]]
+    assert labels[0].startswith("Show me ORD-005")
+    assert "ORD-120" in labels[1]
+    assert parsed["clarification"]["other_submit"] == "Send"
 
 
 def test_find_orders_list_is_not_a_clarification_card():
@@ -195,3 +205,16 @@ def test_a_later_table_hides_the_failed_call_table():
     }
     assert _drop_superseded_error_tables([error, orders], []) == [orders]
     assert _drop_superseded_error_tables([error], []) == [error]
+
+
+def test_clarification_reply_is_wrapped_only_for_the_model():
+    chosen = "I'll give you today's overall order and production snapshot."
+    wrapped = _model_turn(chosen, clarification_reply=True)
+    assert chosen in wrapped
+    assert wrapped != chosen
+    assert "already chose" in wrapped
+    assert _model_turn(chosen, clarification_reply=False) == chosen
+    chinese = "给我今天的订单和生产快照。"
+    zh = _model_turn(chinese, clarification_reply=True)
+    assert chinese in zh
+    assert "已经选好" in zh

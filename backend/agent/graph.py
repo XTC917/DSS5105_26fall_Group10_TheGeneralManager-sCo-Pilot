@@ -15,7 +15,12 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
 from backend.config import PROJECT_ROOT
-from backend.agent.answerability import assess_answerability, continues_prior_rows
+from backend.agent.answerability import (
+    ambiguous_clarification,
+    assess_answerability,
+    continues_prior_rows,
+    reply_language,
+)
 from backend.agent.language import align_visible_payload
 from backend.agent.prompts import build_system_prompt, format_retrieved_templates
 from backend.agent.routing import route_query
@@ -275,6 +280,20 @@ def _prior_tool_json(conversation_id: str) -> str:
     return "\n\n".join(chunks[-2:])
 
 
+def _model_turn(message: str, *, clarification_reply: bool) -> str:
+    """The answering model sees a chosen clarification as a lookup, not a new offer."""
+    if not clarification_reply:
+        return message
+    if reply_language(message) == "zh":
+        lead = "这是经理在澄清里已经选好的读法。按这句话去查，不要把它当成经理要自己提供数据。"
+    else:
+        lead = (
+            "This is the reading the manager already chose. Look that up. "
+            "Do not treat it as the manager offering to supply the data."
+        )
+    return f"{lead}\n{message}"
+
+
 def run_agent(
     message: str,
     conversation_id: str,
@@ -353,7 +372,7 @@ def run_agent(
     try:
         agent = get_agent()
         result = agent.invoke(
-            {"messages": [{"role": "user", "content": message}]},
+            {"messages": [{"role": "user", "content": _model_turn(message, clarification_reply=clarification_reply)}]},
             config={"configurable": {"thread_id": conversation_id}},
         )
     finally:
@@ -415,6 +434,28 @@ def _latest_turn(messages: list[Any]) -> list[Any]:
     return messages[last_human:]
 
 
+_DISPLAY_TOOLS = frozenset({"draw", "render_table"})
+
+
+def _ambiguous_tool_payload(turn: list[Any]) -> dict[str, Any] | None:
+    """The latest lookup that stopped on several rows, if a later lookup did not resolve it."""
+    found: dict[str, Any] | None = None
+    for msg in turn:
+        if not isinstance(msg, ToolMessage):
+            continue
+        payload = _parse_json(msg.content)
+        if not payload:
+            continue
+        tool_name = str(payload.get("tool") or getattr(msg, "name", "") or "")
+        error = payload.get("error") or {}
+        if error.get("code") == "AMBIGUOUS":
+            found = payload
+            continue
+        if payload.get("ok") and tool_name not in _DISPLAY_TOOLS:
+            found = None
+    return found
+
+
 def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str, Any]:
     messages: list[BaseMessage] = result.get("messages") or []
     # MemorySaver returns the whole thread. The UI must only show tools from
@@ -466,6 +507,33 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
                 break
         if not answer and turn:
             answer = _content_to_text(getattr(turn[-1], "content", ""))
+
+    question = ""
+    for msg in turn:
+        if _is_human(msg):
+            question = _content_to_text(getattr(msg, "content", ""))
+            break
+    ambiguous = _ambiguous_tool_payload(turn)
+    card = ambiguous_clarification(question, (ambiguous or {}).get("error") or {}) if ambiguous else None
+    if card:
+        tool_name = str(ambiguous.get("tool") or "") if ambiguous else ""
+        logger.info(
+            "agent done conversation=%s tools=%s clarification=ambiguous",
+            conversation_id,
+            [tool_name] if tool_name else tools_used,
+        )
+        return {
+            "answer": card["prompt"],
+            "conversation_id": conversation_id,
+            "tools_used": [tool_name] if tool_name else tools_used,
+            "traces": traces,
+            "proposed_actions": [],
+            "charts": [],
+            "tables": [],
+            "clarification": card,
+            "limitation": "needs_clarification",
+            "routing_intent": "proceed",
+        }
 
     logger.info(
         "agent done conversation=%s tools=%s",
