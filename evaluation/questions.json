@@ -321,6 +321,34 @@
         "SUSPENDED workshops",
         "not a delivery guarantee"
       ]
+    },
+    {
+      "id": "Q107",
+      "question": "What is the overall status of TrendCart's orders?",
+      "category": "customer_orders_summary",
+      "expected_behavior": "answer",
+      "relevant_tool": "find_orders",
+      "tool_args": {
+        "customer": "TrendCart"
+      },
+      "expected_answer": "TrendCart has 17 orders in total: 6 are IN_PROGRESS and 11 are COMPLETE. Of the 6 in-progress orders, 4 are in KNITTING (ORD-005, ORD-017, ORD-082 and ORD-096), 1 is in WASHING (ORD-020), and 1 is in ASSEMBLY (ORD-120).",
+      "must_include": [
+        "TrendCart",
+        "17",
+        "6",
+        "IN_PROGRESS",
+        "11",
+        "COMPLETE",
+        "KNITTING",
+        "ORD-005",
+        "ORD-017",
+        "ORD-082",
+        "ORD-096",
+        "WASHING",
+        "ORD-020",
+        "ASSEMBLY",
+        "ORD-120"
+      ]
     }
   ]
 }
