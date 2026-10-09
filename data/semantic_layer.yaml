@@ -352,8 +352,8 @@ term_definition:
         at risk, at-risk orders, likely to miss their due dates.
         kind=fact, stored=true. table=orders, column=due_date.
         Copy data.orders / likely_to_miss_due_dates: not overdue, due today
-        through +3 calendar days, and days_left (pieces / 30-day stage median,
-        summed over remaining stages) exceeds working days until due.
+        through +3 calendar days, and days_left (max of pieces / 30-day stage median
+        summed over remaining stages, and remaining stage count) exceeds working days until due.
         Do not answer this from OVERDUE or STALLED.
         "Next 7 days" uses likely_to_miss_due_next_7_days on the same tool.
     hasnt_moved:

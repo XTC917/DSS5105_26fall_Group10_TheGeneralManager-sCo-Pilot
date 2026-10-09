@@ -47,19 +47,21 @@ def test_today_priority_matches_q005(db):
     assert [r["order_id"] for r in buckets["1st_priority"]] == [
         "ORD-107",
         "ORD-114",
-        "ORD-093",
     ]
     assert [r["order_id"] for r in buckets["2nd_priority"]] == [
         "ORD-029",
         "ORD-120",
         "ORD-083",
         "ORD-002",
+        "ORD-093",
     ]
     assert [r["order_id"] for r in buckets["3rd_priority"]] == ["ORD-108", "ORD-103"]
     ord120 = next(r for r in buckets["2nd_priority"] if r["order_id"] == "ORD-120")
     assert ord120["days_left"] == 6.3
     scarf = {r["order_id"]: r["days_left"] for r in buckets["3rd_priority"]}
     assert scarf == {"ORD-108": 8.4, "ORD-103": 8.4}
+    ord093 = next(r for r in buckets["2nd_priority"] if r["order_id"] == "ORD-093")
+    assert ord093["days_left"] == 2.0
 
 
 def test_discover_includes_priority_and_production(db):
