@@ -170,7 +170,7 @@ def get_orders_at_risk(flag: Optional[str] = None) -> str:
 
     data.orders with no flag — same rows as likely_to_miss_due_dates.
       Not overdue. Due today through +3 calendar days.
-      days_left = max(sum over remaining stages of pieces / 30-day median, remaining stage count).
+      days_left = sum over remaining stages of pieces / 30-day median.
       Included when days_left exceeds working days until due.
     flag=OVERDUE or flag=STALLED — that flag only. Not the miss-due list.
     data.likely_to_miss_due_next_7_days — due in 1–7 calendar days and at least
@@ -237,8 +237,8 @@ def get_orders_at_risk(flag: Optional[str] = None) -> str:
                         "basis": (
                             "Same rows as data.orders when flag is omitted. "
                             "Not overdue. Due today through +3 calendar days. "
-                            "days_left = max(sum over remaining stages of pieces / "
-                            "30-day median pieces_completed, remaining stage count). "
+                            "days_left = sum over remaining stages of pieces / "
+                            "30-day median pieces_completed. "
                             "Included when days_left exceeds working days until due."
                         ),
                     },
@@ -254,8 +254,7 @@ def get_orders_at_risk(flag: Optional[str] = None) -> str:
                     "basis": (
                         "data.orders with no flag is the miss-due list: not overdue, "
                         "due today through +3 calendar days, and days_left "
-                        "(max of pieces / 30-day stage median over remaining stages "
-                        "and remaining stage count) "
+                        "(sum of pieces / 30-day stage median over remaining stages) "
                         "exceeds working days until due. "
                         "flag=OVERDUE is due_date < 2026-04-01. "
                         "flag=STALLED is idle >= 3 working days. "

@@ -263,6 +263,7 @@ def test_get_today_priority_tool(db):
     assert [r["order_id"] for r in buckets["1st_priority"]] == [
         "ORD-107",
         "ORD-114",
+        "ORD-093",
     ]
     assert payload["data"]["factory_today"] == run_today_priority(db)["factory_today"]
     assert buckets["days_left_formula"] == run_today_priority(db)["today_priority"]["days_left_formula"]

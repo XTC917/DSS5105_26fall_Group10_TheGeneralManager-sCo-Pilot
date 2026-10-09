@@ -35,7 +35,7 @@ shipped vs still open is listed below.
 | Kind | Tool | What it does |
 |---|---|---|
 | Retrieval | `get_order_status` | One order; asks for an id if several match (e.g. “the TrendCart order”) |
-| Retrieval | `get_orders_at_risk` | Miss-due list from max(pieces / 30-day stage median, remaining stages). Overdue and stalled are separate flags |
+| Retrieval | `get_orders_at_risk` | Miss-due list from pieces / 30-day stage median. Overdue and stalled are separate flags |
 | Judgement | `check_feasibility` | Capacity estimate for a new order, with stated assumptions |
 | Tracing | `trace_order` | Source `orders.csv` row + computed fields + risk flags |
 | Discovery (filter) | `find_orders` | List **all** matches by customer / product / stage / status. Does not rank “unusual” issues |

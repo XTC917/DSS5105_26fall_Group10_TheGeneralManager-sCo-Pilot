@@ -40,17 +40,18 @@ def estimated_remaining_working_days(
     stages: list[str],
     medians: dict[str, float],
 ) -> float | None:
-    """max(pace estimate, remaining stage count). Each stage takes at least one day."""
-    productive = [stage for stage in stages if stage != STAGE_COMPLETE]
-    if not productive or pieces <= 0:
-        return 0.0 if not productive else None
+    """sum_s pieces / median_s for remaining production stages."""
+    if not stages or pieces <= 0:
+        return 0.0 if stages == [] else None
     total = 0.0
-    for stage in productive:
+    for stage in stages:
+        if stage == STAGE_COMPLETE:
+            continue
         median = medians.get(stage)
         if not median:
             return None
         total += pieces / median
-    return float(max(round(total, 1), len(productive)))
+    return round(total, 1)
 
 
 def pace_fields(order: dict[str, Any], medians: dict[str, float]) -> dict[str, Any]:
@@ -81,8 +82,8 @@ def pace_fields(order: dict[str, Any], medians: dict[str, float]) -> dict[str, A
         "days_left": estimated,
         "pace_slack_working_days": slack,
         "formula": (
-            "days_left = max(sum_over_remaining_stages "
-            "pieces / 30-day_median(stage), remaining_stage_count)"
+            "days_left = sum_over_remaining_stages "
+            "pieces / 30-day_median(stage)"
         ),
     }
 
@@ -174,10 +175,7 @@ def today_priority(db: FactoryDB) -> dict[str, Any]:
         "1st_priority": [_priority_card(r) for r in first],
         "2nd_priority": [_priority_card(r) for r in second],
         "3rd_priority": [_priority_card(r) for r in third],
-        "days_left_formula": (
-            "max(sum over remaining stages of pieces / 30-day stage median, "
-            "remaining stage count)"
-        ),
+        "days_left_formula": "sum over remaining stages of pieces / 30-day stage median",
         "rule": (
             "1st: overdue and close to done (PACKING or estimated remaining days "
             f"< {NEAR_COMPLETE_DAYS}). "

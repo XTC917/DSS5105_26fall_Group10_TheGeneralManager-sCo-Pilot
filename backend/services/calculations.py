@@ -147,7 +147,7 @@ def assess_order_risk(order: dict[str, Any], today: date = FACTORY_TODAY) -> dic
     * TIGHT_DEADLINE on this object — not yet overdue, and
       working_days_until_due_inclusive < remaining_stage_count.
       get_orders_at_risk does not use this flag. Its miss-due list uses
-      days_left (max of pieces / 30-day stage median and remaining stage count) instead.
+      days_left (pieces / 30-day stage median) instead.
 
     COMPLETE orders are never flagged.
     """

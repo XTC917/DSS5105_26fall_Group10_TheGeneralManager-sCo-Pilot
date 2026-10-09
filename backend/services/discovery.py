@@ -47,7 +47,7 @@ LIMITATIONS = [
 
 TODAY_PRIORITY_LIMITATIONS = [
     "1st/2nd/3rd buckets are Python grouping. Copy days_left; do not recompute.",
-    "days_left = max(sum over remaining stages of pieces / 30-day stage median, remaining stage count).",
+    "days_left = sum over remaining stages of pieces / 30-day stage median.",
 ]
 
 

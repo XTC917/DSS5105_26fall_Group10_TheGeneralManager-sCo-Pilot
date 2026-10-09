@@ -45,7 +45,7 @@ With no `flag`, `data.orders` is the miss-due list. It is the same rows as `like
 | Rule | Definition |
 |---|---|
 | Miss-due / `TIGHT_DEADLINE` | not overdue, due today through +3 calendar days, and `days_left` > working days until due |
-| `days_left` | max(sum over remaining stages of `pieces / 30-day median pieces_completed`, remaining stage count). Each remaining stage counts as at least one day |
+| `days_left` | sum over remaining stages of `pieces / 30-day median pieces_completed` for that stage |
 | `OVERDUE` | `flag=OVERDUE`: `due_date < 2026-04-01`. Not included in the default list |
 | `STALLED` | `flag=STALLED`: working days since `last_activity_date` ≥ **3**. Not included in the default list |
 
@@ -211,7 +211,7 @@ priority buckets. Copy `data.today_priority`. Do not rerank.
 **Output:** `today_priority` (`1st_priority`, `2nd_priority`, `3rd_priority`,
 `days_left_formula`, `rule`), `factory_today` / `as_of`, `limitations`.
 
-Rows include **`days_left`**: `max(sum over remaining stages of pieces / 30-day median of that stage, remaining stage count)`.
+Rows include **`days_left`**: `sum over remaining stages of (pieces / 30-day median of that stage)`.
 Copy it; do not recompute. Factory today 2026-04-01 examples: ORD-120 = 6.3,
 ORD-108 / ORD-103 = 8.4.
 
