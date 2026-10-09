@@ -25,7 +25,7 @@ def trace_order(order_id: str) -> str:
 
     Use when the manager asks why an order is risky or to trace its situation.
     Stage history comes from app.snapshot (entry date per stage), not production_log.
-    Remaining work days use pieces / 30-day median per remaining stage.
+    Remaining work days are the max of the pace estimate and the remaining stage count.
     """
     tool_name = "trace_order"
     try:
@@ -122,7 +122,7 @@ def trace_order(order_id: str) -> str:
                         "STALLED: idle >= 3 working days. "
                         "TIGHT_DEADLINE: not overdue, due within 3 calendar days, "
                         "and days_left exceeds working days until due. "
-                        "days_left = sum over remaining stages of pieces / 30-day stage median."
+                        "days_left = max(sum over remaining stages of pieces / 30-day stage median, remaining stage count)."
                     ),
                 },
             }

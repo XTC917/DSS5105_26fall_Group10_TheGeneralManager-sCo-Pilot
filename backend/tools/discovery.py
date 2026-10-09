@@ -266,8 +266,8 @@ class GetTodayPriorityInput(BaseModel):
 def get_today_priority(unused: Optional[str] = None) -> str:
     """Today's order-priority buckets (1st/2nd/3rd) with days_left.
 
-    Copy data.today_priority. days_left is Python: sum over remaining stages
-    of pieces / 30-day stage median. Do not recompute or rerank.
+    Copy data.today_priority. days_left is Python: max of the pace sum
+    and the remaining stage count. Do not recompute or rerank.
     """
     tool_name = "get_today_priority"
     try:

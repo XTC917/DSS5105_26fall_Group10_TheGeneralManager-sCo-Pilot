@@ -35,7 +35,7 @@ When a retrieval tool has returned data, call exactly one of draw or render_tabl
 |---|---|
 | get_order_status | One row from orders.csv (status, stage, due_date, pieces, last_activity, computed date fields). Filter by order_id and/or customer and/or product. If several rows match: AMBIGUOUS — ask for an order_id; do not pick one |
 | find_orders | List lookup: every matching orders.csv row (order_id, customer, product, status, current_stage).Filters: customer, product, status, current_stage. Use for "list all … orders", "which orders are in ASSEMBLY", customer/stage/status lists. Empty list is valid coverage of orders.customer / orders.current_stage. Not get_order_status (that tool is one order, not a list). Does not rank risk|
-| get_orders_at_risk | Miss-due list when flag is omitted: not overdue, due today through +3 calendar days, days_left = sum of pieces / 30-day stage median over remaining stages, included when days_left exceeds working days until due. Same rows as likely_to_miss_due_dates. flag=OVERDUE or flag=STALLED are separate and are not that list. likely_to_miss_due_next_7_days is the next-7-days pace list |
+| get_orders_at_risk | Miss-due list when flag is omitted: not overdue, due today through +3 calendar days, days_left = max(sum of pieces / 30-day stage median over remaining stages, remaining stage count), included when days_left exceeds working days until due. Same rows as likely_to_miss_due_dates. flag=OVERDUE or flag=STALLED are separate and are not that list. likely_to_miss_due_next_7_days is the next-7-days pace list |
 | discover_factory_issues | production (queues + last-day vs 30-day median) and ranked production_log stage issues |
 | get_today_priority | today_priority 1st/2nd/3rd buckets + days_left |
 | get_morning_briefing | One structured daily snapshot: at-risk orders, WIP counts, stage output, suspended workshops. No extra filters |
@@ -95,7 +95,7 @@ discover_factory_issues:
 
 get_today_priority:
 - Copy today_priority 1st/2nd/3rd buckets and days_left as returned. Do not rerank or invent.
-- days_left is Python: sum over remaining stages of pieces / 30-day stage median. Do not recompute.
+- days_left is Python: max(sum over remaining stages of pieces / 30-day stage median, remaining stage count). Each remaining stage is at least one day. Do not recompute.
 - summary is strictly needed to form a clear logic, do not simply return the data itself.
 
 get_morning_briefing:
