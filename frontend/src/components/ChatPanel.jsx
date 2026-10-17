@@ -102,7 +102,7 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
   }
 
   return (
-    <section className="flex min-h-[70vh] flex-col rounded-lg border border-ink/10 bg-white shadow-sm">
+    <section className="flex min-h-[70vh] min-w-0 flex-col rounded-lg border border-ink/10 bg-white shadow-sm">
       <div className="border-b border-ink/10 px-4 py-3">
         <h2 className="text-sm font-semibold">Ask about factory operations</h2>
         <p className="text-xs text-ink/55">

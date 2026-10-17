@@ -56,7 +56,7 @@ export default function MessageBubble({
   const content = isUser ? message.content : stripEmbeddedImages(message.content);
 
   return (
-    <article className={`flex min-w-0 ${isUser ? "justify-end" : "justify-start"}`}>
+    <article className={`flex min-w-0 ${isUser ? "justify-end" : "w-full justify-start"}`}>
       <div
         className={`w-full min-w-0 max-w-[85%] overflow-hidden rounded-lg px-3 py-2 text-sm ${
           isUser ? "bg-ink text-paper" : "bg-paper text-ink"
