@@ -105,7 +105,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-5 px-5 py-5 lg:grid-cols-[260px_1fr]">
+      <main className="mx-auto grid min-w-0 max-w-6xl gap-5 px-5 py-5 lg:grid-cols-[260px_minmax(0,1fr)]">
         <div className="space-y-3">
           <nav className="rounded-lg border border-ink/10 bg-white p-2 shadow-sm">
             {navButton("copilot", "GM Co-Pilot")}
