@@ -105,7 +105,7 @@ function IssueRow({ item }) {
   );
 }
 
-export default function Sidebar({ refreshToken = 0 }) {
+export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
   const [briefing, setBriefing] = useState(null);
   const [audit, setAudit] = useState([]);
   const [watches, setWatches] = useState({ fired: [], active: [], cancelled: [] });
@@ -134,7 +134,7 @@ export default function Sidebar({ refreshToken = 0 }) {
     };
   }, [refreshToken]);
 
-  const flags = briefing?.at_risk?.flag_counts || {};
+  const metrics = briefing?.dashboard?.metrics || {};
   const fired = watches.fired || [];
   const active = watches.active || [];
   const cancelledWatches = watches.cancelled || [];
@@ -142,14 +142,15 @@ export default function Sidebar({ refreshToken = 0 }) {
   return (
     <aside className="space-y-3">
       <Card title="Morning briefing">
+        <button type="button" onClick={onOpenBriefing} className="mb-3 w-full rounded-md bg-ink px-3 py-2 text-sm font-semibold text-paper hover:bg-ink/90">Open morning briefing ↗</button>
         {error && <p>API offline — ask in chat once the backend is running.</p>}
         {!error && !briefing && <p>Loading structured facts…</p>}
         {briefing && (
           <ul className="space-y-1">
             <li>Factory date {briefing.factory_today}</li>
             <li>
-              {briefing.at_risk?.count} orders need attention (overdue {flags.OVERDUE || 0},
-              stalled {flags.STALLED || 0}, tight {flags.TIGHT_DEADLINE || 0})
+              {metrics.attention ?? 0} orders need attention (overdue {metrics.overdue ?? 0},
+              stalled {metrics.stalled ?? 0})
             </li>
             <li>IN_PROGRESS: {briefing.in_progress_order_count}</li>
             {briefing.suspended_workshops?.length > 0 && (

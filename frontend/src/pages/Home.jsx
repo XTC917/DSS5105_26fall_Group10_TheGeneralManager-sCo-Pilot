@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import MorningBriefingModal from "../components/MorningBriefingModal.jsx";
 import Sidebar from "../components/Sidebar.jsx";
 import ChatPanel from "../components/ChatPanel.jsx";
 import DataManagement from "./DataManagement.jsx";
@@ -14,6 +15,7 @@ function newConversationId() {
 
 export default function Home() {
   const { user, logout } = useAuth();
+  const [briefingOpen, setBriefingOpen] = useState(false);
   const [health, setHealth] = useState(null);
   const [healthError, setHealthError] = useState("");
   const [boardTick, setBoardTick] = useState(0);
@@ -120,7 +122,7 @@ export default function Home() {
               </div>
             )}
           </nav>
-          {activeView === "copilot" && <Sidebar refreshToken={boardTick} />}
+          {activeView === "copilot" && <Sidebar refreshToken={boardTick} onOpenBriefing={() => setBriefingOpen(true)} />}
           <div className="rounded-lg border border-ink/10 bg-white p-3 shadow-sm">
             <p className="text-xs font-medium text-ink/70">Account</p>
             {confirmDeactivate ? (
@@ -177,6 +179,7 @@ export default function Home() {
           />
         )}
       </main>
+      {briefingOpen && <MorningBriefingModal onClose={() => setBriefingOpen(false)} refreshToken={boardTick} />}
     </div>
   );
 }

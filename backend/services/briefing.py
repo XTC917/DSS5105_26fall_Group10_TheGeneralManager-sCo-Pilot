@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from datetime import timedelta
 from typing import Any
 
 from backend.config import (
@@ -12,7 +13,8 @@ from backend.config import (
     PRODUCTION_DROP_RATIO,
     PRODUCTION_STAGES_IN_ORDER,
 )
-from backend.services.calculations import is_working_day, parse_iso_date
+from backend.services.calculations import assess_order_risk, is_working_day, parse_iso_date
+from backend.services.pace import flags_with_pace_tight, pace_fields, stage_medians
 from backend.services.database import FactoryDB
 from backend.services.feasibility import stage_throughput_medians
 from backend.tools.retrieval import get_orders_at_risk
@@ -49,6 +51,7 @@ def build_morning_briefing(db: FactoryDB) -> dict[str, Any]:
 
     return {
         "factory_today": FACTORY_TODAY.isoformat(),
+        "dashboard": build_dashboard(db),
         "in_progress_order_count": len(in_progress),
         "in_progress_by_stage": by_stage,
         "at_risk": {
@@ -137,3 +140,61 @@ def unusual_stage_output(db: FactoryDB) -> list[dict[str, Any]]:
                 }
             )
     return unusual
+
+
+def build_dashboard(db: FactoryDB) -> dict[str, Any]:
+    """Full active-order coverage; deadline buckets are mutually exclusive."""
+    previous = FACTORY_TODAY - timedelta(days=1)
+    while not is_working_day(previous):
+        previous -= timedelta(days=1)
+    medians = stage_medians(db)
+    active = []
+    buckets = Counter()
+    for order in db.in_progress_orders():
+        risk = assess_order_risk(order)
+        pace = pace_fields(order, medians)
+        days = risk["computed"]["calendar_days_until_due"]
+        bucket = ("UNKNOWN" if days is None else "OVERDUE" if days < 0 else
+                  "TODAY" if days == 0 else "TWO_DAYS" if days <= 2 else
+                  "WEEK" if days <= 7 else "LATER")
+        flags = flags_with_pace_tight(risk["flags"], pace)
+        buckets[bucket] += 1
+        active.append({
+            **{key: order.get(key) for key in (
+                "order_id", "customer", "product", "pieces", "due_date",
+                "current_stage", "last_activity_date")},
+            "bucket": bucket, "flags": flags, "computed": risk["computed"],
+            "estimated_remaining_working_days": pace["estimated_remaining_working_days"],
+        })
+    active.sort(key=lambda row: (
+        row["computed"]["calendar_days_until_due"] is None,
+        row["computed"]["calendar_days_until_due"] or 0, row["order_id"]))
+    completed = []
+    for order in db.find_orders(status="COMPLETE"):
+        done = parse_iso_date(order.get("completed_date"))
+        if done != previous:
+            continue
+        due = parse_iso_date(order.get("due_date"))
+        completed.append({
+            **{key: order.get(key) for key in (
+                "order_id", "customer", "product", "pieces", "due_date", "completed_date")},
+            "days_late": (done - due).days if due else None,
+        })
+    return {
+        "completion_date": previous.isoformat(),
+        "completed_orders": completed,
+        "orders": active,
+        "deadline_buckets": dict(buckets),
+        "metrics": {
+            "active": len(active),
+            "overdue": buckets["OVERDUE"],
+            "due_soon": buckets["TODAY"] + buckets["TWO_DAYS"],
+            "stalled": sum("STALLED" in row["flags"] for row in active),
+            "attention": sum(bool(row["flags"]) for row in active),
+        },
+        "basis": {
+            "deadlines": "Calendar days relative to factory_today; due soon includes today through +2 days.",
+            "stalled": "No activity for at least 3 working days; Sundays excluded. Flags can overlap.",
+            "pace": "Factory stage throughput estimate, not a committed delivery date or a capacity allocation.",
+        },
+    }
