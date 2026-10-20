@@ -109,3 +109,18 @@ export async function sendChat(message, conversationId, clarificationReply = fal
 }
 
 export { readError };
+
+export async function sendChatStream(message, conversationId, clarificationReply = false, onProgress) {
+  const res = await fetch("/api/chat/stream", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ message, conversation_id: conversationId, clarification_reply: clarificationReply }),
+  });
+  if (res.status === 401) {
+    notifyUnauthorized();
+    throw new Error("Session expired. Please log in again.");
+  }
+  if (!res.ok) throw new Error(await readError(res, `Request failed (${res.status})`));
+  const { readChatStream } = await import("./chatStream.js");
+  return readChatStream(res.body, onProgress);
+}

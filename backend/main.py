@@ -7,11 +7,15 @@ Run from the project root:
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from backend.services.why import build_why
 
 from backend.config import FACTORY_TODAY
 from backend.agent.graph import llm_is_configured, run_agent
@@ -40,6 +44,7 @@ from backend.tools.registry import MVP_TOOLS
 from backend.routers.auth import router as auth_router, users_router
 
 logger = logging.getLogger(__name__)
+_CHAT_WORKERS: set[asyncio.Task] = set()
 
 
 @asynccontextmanager
@@ -86,28 +91,78 @@ def health() -> dict:
     }
 
 
-@app.post("/api/chat", response_model=ChatResponse)
-def chat(request: ChatRequest) -> ChatResponse:
+def _execute_chat(request: ChatRequest, user: CurrentUser, *, progress=None) -> ChatResponse:
+    # Keep the existing in-memory conversation model. Namespace sessions by the
+    # authenticated user so the new stream cannot share another user's context.
+    session_id = f"user:{user.id}:conversation:{request.conversation_id}"
     if not llm_is_configured():
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "LLM key is not set. For Gemini set GOOGLE_API_KEY "
-                "(LLM_PROVIDER=gemini); for GPT set OPENAI_API_KEY. "
-                "Tools still work (run pytest). Copy .env.example to .env "
-                "to enable the agent."
-            ),
-        )
+        raise HTTPException(status_code=503, detail="Chat is not configured.")
+    set_current_user(user)
     try:
-        result = run_agent(
-            request.message,
-            request.conversation_id,
-            clarification_reply=request.clarification_reply,
-        )
-    except Exception as exc:  # noqa: BLE001
+        progress_args = {"progress": progress} if progress else {}
+        result = run_agent(request.message, session_id,
+                           clarification_reply=request.clarification_reply, **progress_args)
+        result["conversation_id"] = request.conversation_id
+        result["why"] = build_why(request.message, result)
+        return ChatResponse(**result)
+    except Exception as exc:
         logger.exception("chat failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return ChatResponse(**result)
+        raise HTTPException(status_code=500, detail="Chat failed. Please try again.") from exc
+    finally:
+        set_current_user(None)
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+def chat(request: ChatRequest, user: CurrentUser = Depends(get_current_user)) -> ChatResponse:
+    return _execute_chat(request, user)
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(request: ChatRequest, user: CurrentUser = Depends(get_current_user)):
+    # Authentication is resolved before the first event or tool invocation.
+    if not llm_is_configured():
+        raise HTTPException(status_code=503, detail="Chat is not configured.")
+
+    async def events():
+        queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+
+        def progress(text):
+            # Worker callbacks never touch asyncio objects from their thread.
+            loop.call_soon_threadsafe(queue.put_nowait, ("progress", {"message": text}))
+
+        async def produce():
+            try:
+                response = await asyncio.to_thread(_execute_chat, request, user, progress=progress)
+                await queue.put(("done", response.model_dump(mode="json")))
+            except HTTPException as exc:
+                await queue.put(("error", {"message": exc.detail}))
+            except Exception:
+                logger.exception("chat stream failed")
+                await queue.put(("error", {"message": "Chat failed. Please try again."}))
+
+        worker = asyncio.create_task(produce())
+        _CHAT_WORKERS.add(worker)
+        worker.add_done_callback(_CHAT_WORKERS.discard)
+        try:
+            yield 'event: progress\ndata: {"message":"Checking the question…"}\n\n'
+            while True:
+                try:
+                    event, data = await asyncio.wait_for(queue.get(), timeout=10)
+                except asyncio.TimeoutError:
+                    yield ": keep-alive\n\n"
+                    continue
+                yield f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+                if event in {"done", "error"}:
+                    break
+        finally:
+            # Let in-flight generation finish without automatically retrying
+            # tools when the client disconnects. No history store is used.
+            if not worker.done():
+                worker.add_done_callback(lambda task: task.exception() if not task.cancelled() else None)
+
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.get("/api/briefing")

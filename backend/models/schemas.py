@@ -56,3 +56,5 @@ class ChatResponse(BaseModel):
     clarification: dict[str, Any] | None = None
     limitation: str | None = None
     routing_intent: str | None = None
+    why: dict[str, Any] | None = None
+    reasoning_summary: list[str] = Field(default_factory=list)

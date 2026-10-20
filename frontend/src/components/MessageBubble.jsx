@@ -84,7 +84,7 @@ export default function MessageBubble({
         {!isUser && tables.map((table, idx) => (
           <TableView key={`${table.title}-${idx}`} table={table} />
         ))}
-        {!isUser && message.toolsUsed?.length > 0 && (
+        {!isUser && !message.why && message.toolsUsed?.length > 0 && (
           <p className="mt-2 text-[11px] uppercase tracking-wide text-ink/45">
             Tools: {message.toolsUsed.join(" → ")}
           </p>
@@ -166,16 +166,17 @@ export default function MessageBubble({
         {!isUser && decision?.status === "dismissed" && (
           <p className="mt-2 text-xs text-ink/55">Dismissed. Nothing was saved.</p>
         )}
-        {!isUser && traces.length > 0 && (
+        {!isUser && (message.why || traces.length > 0) && (
           <div className="mt-2">
             <button
               type="button"
+              aria-expanded={open}
               onClick={() => setOpen((v) => !v)}
               className="text-xs font-medium text-ink underline decoration-brass underline-offset-2"
             >
-              {open ? "Hide evidence" : "Why? Show source rows"}
+              {open ? "Hide explanation" : "Why? Explain this answer"}
             </button>
-            {open && <TracePanel traces={traces} />}
+            {open && <TracePanel traces={traces} why={message.why} reasoningSummary={message.reasoningSummary} />}
           </div>
         )}
       </div>

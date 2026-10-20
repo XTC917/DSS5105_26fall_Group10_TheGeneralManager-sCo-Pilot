@@ -1,44 +1,58 @@
-function Block({ title, children }) {
+function SourceRows({ source, zh }) {
+  const rows = (source.rows || []).filter((row) => Object.keys(row).length);
+  const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
   return (
-    <div className="mt-2">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-ink/50">{title}</p>
-      {children}
-    </div>
+    <details className="rounded border border-ink/10 bg-white p-3">
+      <summary className="cursor-pointer text-xs font-medium">
+        {source.name} · {source.row_count ?? rows.length} {zh ? "条来源记录" : "source records"}
+      </summary>
+      {rows.length > 0 ? (
+        <div className="mt-2 max-h-64 overflow-auto" tabIndex={0} role="region" aria-label={source.name}>
+          <table className="w-full border-collapse text-left text-xs">
+            <thead><tr>{columns.map((key) => <th className="whitespace-nowrap border-b p-2" key={key}>{key}</th>)}</tr></thead>
+            <tbody>{rows.map((row, i) => <tr key={i}>{columns.map((key) => <td className="whitespace-nowrap border-b border-ink/5 p-2" key={key}>{String(row[key] ?? "—")}</td>)}</tr>)}</tbody>
+          </table>
+        </div>
+      ) : <p className="mt-2 text-xs text-ink/60">{zh ? "没有可展示的来源行。" : "No displayable source rows attached."}</p>}
+    </details>
   );
 }
 
-export default function TracePanel({ traces }) {
+export default function TracePanel({ traces = [], why, reasoningSummary = [] }) {
+  const zh = why?.language === "zh";
+  // Older API responses can have traces without a structured explanation.
+  // Do not invent a retrospective narrative or display internal JSON.
+  const sources = why?.sources || traces.filter((t) => t.source_file).map((t) => ({
+    name: t.source_file, row_count: t.rows?.length || 0,
+    rows: (t.rows || []).map((row) => Object.fromEntries(
+      ["order_id", "customer", "product", "pieces", "status", "current_stage", "due_date", "date", "stage", "pieces_completed"]
+        .filter((key) => row[key] != null).map((key) => [key.replaceAll("_", " "), row[key]]),
+    )),
+  }));
   return (
-    <div className="mt-2 space-y-3 rounded border border-ink/10 bg-white p-2">
-      {traces.map((trace, idx) => (
-        <section key={`${trace.tool}-${idx}`}>
-          <p className="text-xs font-medium">
-            {trace.tool || "tool"} · {trace.source_file || "source"}
-          </p>
-          {trace.basis && <p className="mt-1 text-xs text-ink/70">{trace.basis}</p>}
-          {trace.filter && (
-            <Block title="Filter">
-              <pre className="trace-pre overflow-x-auto text-ink/80">
-                {JSON.stringify(trace.filter, null, 2)}
-              </pre>
-            </Block>
-          )}
-          {trace.rows?.length > 0 && (
-            <Block title={`Rows (${trace.rows.length})`}>
-              <pre className="trace-pre max-h-48 overflow-auto text-ink/80">
-                {JSON.stringify(trace.rows, null, 2)}
-              </pre>
-            </Block>
-          )}
-          {trace.calculations?.length > 0 && (
-            <Block title="Calculations">
-              <pre className="trace-pre max-h-48 overflow-auto text-ink/80">
-                {JSON.stringify(trace.calculations, null, 2)}
-              </pre>
-            </Block>
-          )}
-        </section>
-      ))}
-    </div>
+    <section className="mt-3 space-y-3 rounded-lg border border-brass/30 bg-white p-4" aria-label={zh ? "结论依据" : "Explanation"}>
+      <p className="text-[11px] font-semibold uppercase tracking-widest text-ink/50">{zh ? "结论的依据" : "The path to this answer"}</p>
+      {why?.source_context && <p className="rounded bg-paper p-2 text-xs text-ink/70">{why.source_context}</p>}
+      {why?.steps ? <ol className="space-y-4">
+        {why.steps.map((step, i) => (
+          <li key={i} className="flex gap-3">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink text-xs text-paper">{i + 1}</span>
+            <div className="min-w-0"><h3 className="text-sm font-semibold">{step.title}</h3>
+              {step.items.map((item, j) => <p key={j} className="mt-1 whitespace-pre-wrap break-words text-xs leading-relaxed text-ink/75">{item}</p>)}
+            </div>
+          </li>
+        ))}
+      </ol> : <p className="text-xs text-ink/70">This response has source records only. A four-step explanation was not attached.</p>}
+      {why?.limitations?.length > 0 && <div className="rounded bg-amber-50 p-3 text-xs text-amber-950">
+        <h3 className="font-semibold">{zh ? "适用范围与限制" : "Scope and limitations"}</h3>
+        {why.limitations.map((item, i) => <p className="mt-1" key={i}>{item}</p>)}
+      </div>}
+      {sources.map((source, i) => <SourceRows key={i} source={source} zh={zh} />)}
+      {reasoningSummary.length > 0 && <details className="rounded border border-ink/10 p-3 text-xs">
+        <summary className="cursor-pointer font-medium">{zh ? "模型生成的推理摘要" : "Model-generated reasoning summary"}</summary>
+        <p className="mt-2 text-ink/55">{zh ? "此摘要由模型生成，需与上方来源数据核对。" : "Generated by the model; verify it against the source evidence above."}</p>
+        {reasoningSummary.map((text, i) => <p className="mt-2 whitespace-pre-wrap leading-relaxed" key={i}>{text}</p>)}
+      </details>}
+    </section>
   );
 }

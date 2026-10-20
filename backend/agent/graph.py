@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 _AGENT = None
 _CHECKPOINTER = MemorySaver()
+
 _TEMPLATE_QUERY: ContextVar[str] = ContextVar("template_query", default="")
 _EXPLAIN_PRIOR: ContextVar[bool] = ContextVar("explain_prior", default=False)
 _REUSE_PRIOR: ContextVar[bool] = ContextVar("reuse_prior", default=False)
@@ -113,6 +114,9 @@ def build_model():
         # is on. /v1/responses accepts that combination.
         "use_responses_api": True,
     }
+    # Opt in only for a deployment whose model supports provider summaries.
+    if os.getenv("OPENAI_REASONING_SUMMARY", "").lower() == "auto":
+        kwargs["reasoning"] = {"summary": "auto"}
     base_url = os.getenv("OPENAI_BASE_URL")
     if base_url:
         kwargs["base_url"] = base_url
@@ -299,6 +303,7 @@ def run_agent(
     conversation_id: str,
     *,
     clarification_reply: bool = False,
+    progress=None,
 ) -> dict[str, Any]:
     """Entry point used by /api/chat.
 
@@ -371,9 +376,11 @@ def run_agent(
     held_tables = bind_frontend_tables()
     try:
         agent = get_agent()
+        from backend.services.chat_stream import ToolProgress
+        callbacks = [ToolProgress(progress)] if progress else []
         result = agent.invoke(
             {"messages": [{"role": "user", "content": _model_turn(message, clarification_reply=clarification_reply)}]},
-            config={"configurable": {"thread_id": conversation_id}},
+            config={"configurable": {"thread_id": conversation_id}, "callbacks": callbacks},
         )
     finally:
         charts = take_frontend_charts(held_charts)
@@ -384,6 +391,9 @@ def run_agent(
         _PRIOR_ORDER_IDS.reset(held_ids)
         reset_manager_text(manager)
     parsed = parse_agent_result(result, conversation_id)
+    if gate.explain_prior or gate.reuse_prior:
+        from backend.services.why import attach_prior_evidence
+        attach_prior_evidence(parsed, result.get("messages") or [])
     if charts:
         parsed["charts"] = list(parsed.get("charts") or []) + charts
     if tables:
@@ -467,6 +477,8 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
     proposed_actions: list[dict[str, Any]] = []
     charts: list[dict[str, Any]] = []
     tables: list[dict[str, Any]] = []
+    evidence_results: list[dict[str, Any]] = []
+    evidence_limitations: list[str] = []
     limitation = None
     ungrounded_message = None
 
@@ -481,6 +493,9 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
             if payload.get("trace"):
                 traces.append(payload["trace"])
             data = payload.get("data") or {}
+            evidence_limitations.extend(v for v in data.get("limitations", []) if isinstance(v, str))
+            if payload.get("ok") and tool_name not in _DISPLAY_TOOLS:
+                evidence_results.append({"tool": tool_name, "data": data})
             proposal = data.get("proposed_action")
             if isinstance(proposal, dict):
                 proposed_actions.append(proposal)
@@ -535,6 +550,7 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
             "routing_intent": "proceed",
         }
 
+    from backend.services.why import reasoning_summaries
     logger.info(
         "agent done conversation=%s tools=%s",
         conversation_id,
@@ -542,6 +558,9 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
     )
     return {
         "answer": answer,
+        "evidence_limitations": evidence_limitations,
+        "evidence_results": evidence_results,
+        "reasoning_summary": reasoning_summaries(turn) if _get_provider() == "openai" and os.getenv("OPENAI_REASONING_SUMMARY", "").lower() == "auto" else [],
         "conversation_id": conversation_id,
         "tools_used": tools_used,
         "traces": traces,

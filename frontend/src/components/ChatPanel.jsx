@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
-import { confirmAction, declineAction, sendChat } from "../services/api.js";
+import { confirmAction, declineAction, sendChatStream } from "../services/api.js";
 import MessageBubble from "./MessageBubble.jsx";
+import { assistantMessage } from "../services/chatMessages.js";
 
 const STARTERS = [
   "How is ORD-120 doing?",
@@ -19,6 +20,7 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const listRef = useRef(null);
 
@@ -30,26 +32,20 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
     const userMsg = { role: "user", content };
     setMessages((prev) => [...prev, userMsg]);
     setBusy(true);
+    setProgress("Checking the question…");
     try {
-      const result = await sendChat(content, conversationId, clarificationReply);
+      const result = await sendChatStream(content, conversationId, clarificationReply, setProgress);
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content: result.answer,
-          toolsUsed: result.tools_used || [],
-          traces: result.traces || [],
-          limitation: result.limitation,
-          proposedActions: result.proposed_actions || [],
-          charts: result.charts || [],
-          tables: result.tables || [],
-          clarification: result.clarification || null,
-        },
+        assistantMessage(result.answer, result),
       ]);
     } catch (err) {
+      setMessages((prev) => prev.slice(0, -1));
+      setInput(content);
       setError(err.message);
     } finally {
       setBusy(false);
+      setProgress("");
       requestAnimationFrame(() => {
         listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
       });
@@ -78,6 +74,7 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
       setError(err.message);
     } finally {
       setBusy(false);
+      setProgress("");
     }
   }
 
@@ -98,6 +95,7 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
       setError(err.message);
     } finally {
       setBusy(false);
+      setProgress("");
     }
   }
 
@@ -116,6 +114,7 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
           <button
             key={q}
             type="button"
+            disabled={busy}
             onClick={() => submit(q)}
             className="rounded-full border border-ink/15 px-3 py-1 text-left text-xs text-ink/80 hover:border-brass hover:bg-paper"
           >
@@ -146,7 +145,7 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
             clarificationOpen={idx === messages.length - 1}
           />
         ))}
-        {busy && <p className="text-xs text-ink/45">Consulting factory tools…</p>}
+        {busy && <p role="status" aria-live="polite" className="text-xs text-ink/60">{progress || "Saving the change…"}</p>}
       </div>
 
       {error && (
