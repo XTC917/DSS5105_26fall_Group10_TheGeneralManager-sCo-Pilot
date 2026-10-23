@@ -31,12 +31,9 @@ def record_event(*, user_id: int | None = None, event_type: str, conversation_id
 
 
 def list_audit(limit: int = 20, user_id: int | None = None) -> list[dict[str, Any]]:
-    resolved = user_id if user_id is not None else get_current_user_id(required=False)
+    resolved = user_id if user_id is not None else get_current_user_id(required=True)
     with connect(admin=True) as conn:
-        if resolved is None:
-            rows = conn.execute(f"SELECT * FROM {COPILOT_SCHEMA}.audit_log ORDER BY id DESC LIMIT %s", (limit,)).fetchall()
-        else:
-            rows = conn.execute(f"SELECT * FROM {COPILOT_SCHEMA}.audit_log WHERE user_id=%s ORDER BY id DESC LIMIT %s", (resolved, limit)).fetchall()
+        rows = conn.execute(f"SELECT * FROM {COPILOT_SCHEMA}.audit_log WHERE user_id=%s ORDER BY id DESC LIMIT %s", (resolved, limit)).fetchall()
     items = []
     for row in rows:
         item = dict(row)
@@ -47,18 +44,16 @@ def list_audit(limit: int = 20, user_id: int | None = None) -> list[dict[str, An
 
 
 def add_note(*, user_id: int | None = None, order_id: str, note: str) -> int:
-    resolved = user_id if user_id is not None else get_current_user_id(required=False)
+    resolved = user_id if user_id is not None else get_current_user_id(required=True)
     with connect(admin=True) as conn, conn.transaction():
         row = conn.execute(f"INSERT INTO {COPILOT_SCHEMA}.order_notes (user_id,timestamp,order_id,note) VALUES (%s,CURRENT_TIMESTAMP,%s,%s) RETURNING id", (resolved, order_id, note)).fetchone()
     return int(row["id"])
 
 
 def list_notes(*, user_id: int | None = None, order_id: str | None = None) -> list[dict[str, Any]]:
-    resolved = user_id if user_id is not None else get_current_user_id(required=False)
+    resolved = user_id if user_id is not None else get_current_user_id(required=True)
     with connect(admin=True) as conn:
-        if resolved is None:
-            rows = conn.execute(f"SELECT * FROM {COPILOT_SCHEMA}.order_notes ORDER BY id DESC").fetchall()
-        elif order_id:
+        if order_id:
             rows = conn.execute(f"SELECT * FROM {COPILOT_SCHEMA}.order_notes WHERE user_id=%s AND order_id=%s ORDER BY id DESC", (resolved, order_id)).fetchall()
         else:
             rows = conn.execute(f"SELECT * FROM {COPILOT_SCHEMA}.order_notes WHERE user_id=%s ORDER BY id DESC", (resolved,)).fetchall()
@@ -66,19 +61,16 @@ def list_notes(*, user_id: int | None = None, order_id: str | None = None) -> li
 
 
 def add_reminder(*, user_id: int | None = None, order_id: str | None, remind_on: str, message: str) -> int:
-    resolved = user_id if user_id is not None else get_current_user_id(required=False)
+    resolved = user_id if user_id is not None else get_current_user_id(required=True)
     with connect(admin=True) as conn, conn.transaction():
         row = conn.execute(f"INSERT INTO {COPILOT_SCHEMA}.reminders (user_id,timestamp,order_id,remind_on,message,status) VALUES (%s,CURRENT_TIMESTAMP,%s,%s,%s,'OPEN') RETURNING id", (resolved, order_id, remind_on, message)).fetchone()
     return int(row["id"])
 
 
 def list_reminders(*, user_id: int | None = None) -> list[dict[str, Any]]:
-    resolved = user_id if user_id is not None else get_current_user_id(required=False)
+    resolved = user_id if user_id is not None else get_current_user_id(required=True)
     with connect(admin=True) as conn:
-        if resolved is None:
-            rows = conn.execute(f"SELECT * FROM {COPILOT_SCHEMA}.reminders ORDER BY id DESC").fetchall()
-        else:
-            rows = conn.execute(f"SELECT * FROM {COPILOT_SCHEMA}.reminders WHERE user_id=%s ORDER BY id DESC", (resolved,)).fetchall()
+        rows = conn.execute(f"SELECT * FROM {COPILOT_SCHEMA}.reminders WHERE user_id=%s ORDER BY id DESC", (resolved,)).fetchall()
     return [dict(row) for row in rows]
 
 

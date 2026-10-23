@@ -24,13 +24,22 @@ def test_health():
         assert "render_table" in body["tools"]
 
 
-def test_chat_without_key_is_503(monkeypatch):
+def test_chat_without_key_is_503(monkeypatch, employee_auth_headers):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     import backend.main as main_mod
+    from backend.services.conversation_history import create_conversation
 
     monkeypatch.setattr(main_mod, "llm_is_configured", lambda: False)
+    conversation = create_conversation(2)
     with TestClient(app) as client:
-        res = client.post("/api/chat", json={"message": "How is ORD-120?"})
+        res = client.post(
+            "/api/chat",
+            json={
+                "message": "How is ORD-120?",
+                "conversation_id": str(conversation["id"]),
+            },
+            headers=employee_auth_headers,
+        )
         assert res.status_code == 503
 
 

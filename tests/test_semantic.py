@@ -3,21 +3,35 @@
 from __future__ import annotations
 
 from backend.agent.prompts import build_system_prompt
-from backend.services.database import (
-    _ORDERS_COLUMNS,
-    _PRODUCTION_COLUMNS,
-    _WORKSHOP_COLUMNS,
-)
+from backend.pg_config import PG_SCHEMA
+from backend.services.pg_database import connect
 from backend.services.semantic import load_semantic_layer, render_semantic_prompt
 
 
-def test_semantic_layer_covers_csv_columns():
+def _database_columns(table_name: str) -> set[str]:
+    with connect(admin=True) as connection:
+        rows = connection.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = %s AND table_name = %s
+            """,
+            (PG_SCHEMA, table_name),
+        ).fetchall()
+    columns = {row["column_name"] for row in rows}
+    if table_name == "production_log":
+        columns.remove("production_date")
+        columns.add("date")
+    return columns
+
+
+def test_semantic_layer_covers_database_columns(db):
     load_semantic_layer.cache_clear()
     layer = load_semantic_layer()
     tables = layer["data_definition"]["tables"]
-    assert set(tables["orders"]["columns"]) == set(_ORDERS_COLUMNS)
-    assert set(tables["production_log"]["columns"]) == set(_PRODUCTION_COLUMNS)
-    assert set(tables["workshops"]["columns"]) == set(_WORKSHOP_COLUMNS)
+    assert set(tables["orders"]["columns"]) == _database_columns("orders")
+    assert set(tables["production_log"]["columns"]) == _database_columns("production_log")
+    assert set(tables["workshops"]["columns"]) == _database_columns("workshops")
     for table in tables.values():
         for col in (table.get("columns") or {}).values():
             assert str(col.get("description") or "").strip()

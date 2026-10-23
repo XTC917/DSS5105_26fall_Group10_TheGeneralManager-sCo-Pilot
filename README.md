@@ -25,7 +25,8 @@ shipped vs still open is listed below.
 - Reproduce and validate the local PostgreSQL design under `postgresql_database/`
 - Run the experimental PostgreSQL administration API under `SQL_related_app/`
 - `POST /api/chat` — inspectable pre-router, then LangGraph ReAct for in-scope questions
-- Multi-turn chat with **fresh tool calls each turn** (`conversation_id` + MemorySaver)
+- Authenticated multi-turn chat with **fresh tool calls each turn**, PostgreSQL
+  conversation history, and PostgreSQL LangGraph checkpoints
 - Unsupported questions (revenue, selling price, workers, …) return a limitation with **no tool call**
 - Lightweight audit in `data/copilot_state.db` (survives CSV reload of `factory.db`)
 - Field meanings for the agent come from `data/semantic_layer.yaml`
@@ -130,9 +131,15 @@ python -m venv .venv
 pip install -r requirements.txt
 copy .env.example .env
 # Edit .env and set OPENAI_API_KEY (and optionally OPENAI_BASE_URL, LLM_MODEL)
+# Set the PostgreSQL application/admin credentials, then apply schema migrations.
+# For Alembic, temporarily set PGUSER/PGPASSWORD to the factory_admin credentials.
+alembic -c alembic.ini upgrade head
 
 uvicorn backend.main:app --reload --port 8000
 ```
+
+FastAPI startup opens the checkpoint connection pool and verifies the migrated
+checkpoint version. It does not create tables or run migrations.
 
 Health check: [http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health)
 

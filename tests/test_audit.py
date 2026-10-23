@@ -6,7 +6,7 @@ from backend.agent.graph import run_agent
 from backend.services.audit import list_audit
 
 
-def test_short_circuit_writes_audit_row(db, clean_state, monkeypatch):
+def test_short_circuit_writes_audit_row(db, clean_state, test_user, monkeypatch):
     import re
 
     monkeypatch.setattr(

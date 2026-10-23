@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { confirmAction, declineAction, sendChat } from "../services/api.js";
 import MessageBubble from "./MessageBubble.jsx";
 
@@ -15,12 +15,24 @@ const STARTERS = [
   "Cancel the watch on ORD-005",
 ];
 
-export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) {
+export default function ChatPanel({
+  conversationId,
+  llmReady,
+  onBoardChanged,
+  onBusyChange,
+  onConversationUpdated,
+  initialMessages = [],
+}) {
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(() => initialMessages);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const listRef = useRef(null);
+
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
 
   async function submit(text, clarificationReply = false) {
     const content = (text ?? input).trim();
@@ -46,6 +58,7 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
           clarification: result.clarification || null,
         },
       ]);
+      onConversationUpdated?.();
     } catch (err) {
       setError(err.message);
     } finally {

@@ -269,7 +269,7 @@ def test_get_today_priority_tool(db):
     assert "days_left" in buckets["1st_priority"][0]
 
 
-def test_discover_does_not_write_state(db, clean_state):
+def test_discover_does_not_write_state(db, clean_state, test_user):
     before_audit = list_audit(50)
     before_watches = list_watches()
     payload = _tool_data(5)

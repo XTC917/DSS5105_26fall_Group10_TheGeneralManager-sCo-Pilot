@@ -2,16 +2,42 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 
+class ConversationSummary(BaseModel):
+    id: UUID
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    turn_count: int = 0
+
+
+class ChatTurn(BaseModel):
+    id: int
+    conversation_id: UUID
+    turn_number: int
+    question: str
+    answer: str
+    response_json: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class ConversationHistory(BaseModel):
+    conversation: ConversationSummary
+    turns: list[ChatTurn] = Field(default_factory=list)
+    next_before_turn_id: int | None = None
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, description="Manager's natural-language question")
-    conversation_id: str = Field(
-        default="default",
-        description="Stable id so the agent can keep multi-turn context",
+    conversation_id: UUID = Field(
+        ...,
+        description="Server-created conversation owned by the authenticated user",
     )
     clarification_reply: bool = Field(
         default=False,
