@@ -18,8 +18,8 @@ test('stalled knitting cannot include washing orders', () => {
 test('deadline wording handles overdue, today, future and missing values', () => {
   assert.equal(deadlineText(-9), 'Overdue by 9 days');
   assert.equal(deadlineText(-1), 'Overdue by 1 day');
-  assert.equal(deadlineText(0), 'Due today');
-  assert.equal(deadlineText(1), 'Due in 1 day');
+  assert.equal(deadlineText(1), 'Due today');
   assert.equal(deadlineText(2), 'Due in 2 days');
+  assert.equal(deadlineText(3), 'Due in 3 days');
   assert.equal(deadlineText(null), 'Due date unavailable');
 });

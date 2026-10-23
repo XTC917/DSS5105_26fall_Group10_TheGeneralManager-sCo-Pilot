@@ -14,6 +14,26 @@ function cellValue(row, key) {
   return row[key] == null ? "" : String(row[key]);
 }
 
+function formatSum(value) {
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded)
+    ? rounded.toLocaleString()
+    : rounded.toLocaleString(undefined, { maximumFractionDigits: 1 });
+}
+
+function columnTotal(column, rows) {
+  const numbers = [];
+  for (const row of rows) {
+    const raw = row[column.key];
+    if (raw == null || raw === "") continue;
+    const value = numericValue(raw);
+    if (value === null) return null;
+    numbers.push(value);
+  }
+  if (!numbers.length) return null;
+  return numbers.reduce((total, value) => total + value, 0);
+}
+
 function estimateColumnWidth(column, rows) {
   const values = [column.label, ...rows.map((row) => row[column.key] == null ? "-" : String(row[column.key]))];
   const maxTextWidth = values.reduce((max, value) => {
@@ -26,13 +46,20 @@ function estimateColumnWidth(column, rows) {
   return Math.min(360, Math.max(120, Math.ceil(maxTextWidth + 52)));
 }
 
+const PAGE_SIZE = 50;
+
 export default function TableView({ table }) {
   const [filters, setFilters] = useState({});
   const [sort, setSort] = useState(null);
   const [hiddenColumns, setHiddenColumns] = useState([]);
   const [popup, setPopup] = useState(null);
+  const [page, setPage] = useState(0);
   const popupRef = useRef(null);
   const headerRefs = useRef({});
+
+  useEffect(() => {
+    setPage(0);
+  }, [table, filters, sort]);
 
   useEffect(() => {
     if (!popup) return undefined;
@@ -247,6 +274,11 @@ export default function TableView({ table }) {
     );
   }
 
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageRows = rows.slice(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE);
+  const totals = visibleColumns.map((column) => columnTotal(column, rows));
+  const summaryLabelIndex = totals.findIndex((total) => total === null);
   const hiddenColumnItems = table.columns.filter((column) => hiddenColumns.includes(column.key));
   const popupContent = popup?.type === "filter"
     ? filterPopup(table.columns.find((column) => column.key === popup.key))
@@ -346,7 +378,7 @@ export default function TableView({ table }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, rowIndex) => (
+            {pageRows.map((row, rowIndex) => (
               <tr key={rowIndex} className="border-t border-ink/10 odd:bg-white even:bg-ink/[0.025]">
                 {visibleColumns.map((column) => (
                   <td key={column.key} className="break-words whitespace-normal px-3 py-2 text-ink/80" title={row[column.key] == null ? "-" : String(row[column.key])}>
@@ -363,8 +395,57 @@ export default function TableView({ table }) {
               </tr>
             )}
           </tbody>
+          {rows.length > 1 && totals.some((total) => total !== null) && (
+            <tfoot>
+              <tr className="border-t border-ink/10 bg-ink/5 font-semibold text-ink">
+                {visibleColumns.map((column, index) => {
+                  const labelHere = index === (summaryLabelIndex === -1 ? 0 : summaryLabelIndex);
+                  const total = totals[index];
+                  const sumLabel = pageCount > 1 ? "Sum of all pages" : "Sum";
+                  return (
+                    <td
+                      key={column.key}
+                      className="break-words whitespace-normal px-3 py-2"
+                      title={pageCount > 1 ? "Total of every filtered row, not only this page" : undefined}
+                    >
+                      {labelHere && total === null
+                        ? sumLabel
+                        : labelHere
+                          ? `${sumLabel} ${formatSum(total)}`
+                          : total === null ? "" : formatSum(total)}
+                    </td>
+                  );
+                })}
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
+      {pageCount > 1 && (
+        <div className="mt-2 flex items-center justify-between text-xs text-ink/70">
+          <span>
+            {currentPage * PAGE_SIZE + 1}–{Math.min(rows.length, currentPage * PAGE_SIZE + PAGE_SIZE)} of {rows.length}
+          </span>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              disabled={currentPage === 0}
+              onClick={() => setPage(currentPage - 1)}
+              className="rounded border border-ink/15 px-2 py-1 hover:bg-paper disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={currentPage >= pageCount - 1}
+              onClick={() => setPage(currentPage + 1)}
+              className="rounded border border-ink/15 px-2 py-1 hover:bg-paper disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
       {popupContent && createPortal(
         <div
           onContextMenu={(event) => event.preventDefault()}

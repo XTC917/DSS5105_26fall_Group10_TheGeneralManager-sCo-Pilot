@@ -129,12 +129,20 @@ def get_order_status(
 
         order = rows[0]
         computed = order_computed_fields(order)
-        logger.info("get_order_status hit %s", order["order_id"])
+        risk = assess_order_risk(order)
+        pace = pace_fields(order, stage_medians(db))
+        flags = flags_with_pace_tight(list(risk["flags"]), pace)
+        computed = {
+            **computed,
+            "is_tight_deadline": "TIGHT_DEADLINE" in flags,
+            "days_left": pace["days_left"],
+        }
+        logger.info("get_order_status hit %s flags=%s", order["order_id"], flags)
         return tool_json(
             {
                 "ok": True,
                 "tool": tool_name,
-                "data": {"order": order, "computed": computed},
+                "data": {"order": order, "computed": computed, "flags": flags},
                 "trace": {
                     "tool": tool_name,
                     "source_file": "orders.csv",
@@ -150,11 +158,17 @@ def get_order_status(
                             "working_days_until_due_inclusive",
                             "working_days_since_last_activity",
                             "remaining_stage_count",
+                            "days_left",
+                            "is_tight_deadline",
                         )
                     ],
                     "basis": (
                         "Single row from orders.csv. Date differences use factory today "
-                        "2026-04-01 and skip Sundays."
+                        "2026-04-01 and skip Sundays. "
+                        "TIGHT_DEADLINE: not overdue, due today through +3 calendar days, "
+                        "and days_left exceeds working days until due. "
+                        "days_left = max(sum over remaining stages of pieces / 30-day stage median, "
+                        "remaining stage count)."
                     ),
                 },
             }

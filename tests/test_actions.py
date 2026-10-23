@@ -118,7 +118,7 @@ def test_create_reminder_invalid_date(db, clean_state):
     assert payload["error"]["code"] == "INVALID_INPUT"
 
 
-def test_get_recent_actions_reads_audit(db, clean_state):
+def test_get_recent_actions_reads_audit(db, clean_state, test_user):
     parse_tool(draft_chase_email.invoke({"order_id": "ORD-120"}))
     payload = parse_tool(get_recent_actions.invoke({"limit": 10}))
     assert payload["ok"] is True

@@ -72,6 +72,17 @@ def test_get_order_status_requires_filter(db):
     assert payload["error"]["code"] == "INVALID_INPUT"
 
 
+def test_get_order_status_uses_pace_tight_flag(db):
+    tight = parse_tool(get_order_status.invoke({"order_id": "ORD-108"}))
+    assert tight["ok"] is True
+    assert tight["data"]["computed"]["is_overdue"] is False
+    assert tight["data"]["computed"]["is_tight_deadline"] is True
+    assert tight["data"]["flags"] == ["TIGHT_DEADLINE"]
+    far = parse_tool(get_order_status.invoke({"order_id": "ORD-063"}))
+    assert far["data"]["computed"]["is_tight_deadline"] is False
+    assert "TIGHT_DEADLINE" not in far["data"]["flags"]
+
+
 def test_get_orders_at_risk_default_is_pace_miss(db):
     payload = parse_tool(get_orders_at_risk.invoke({}))
     assert payload["ok"] is True

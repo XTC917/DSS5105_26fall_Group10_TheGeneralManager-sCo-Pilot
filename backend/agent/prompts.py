@@ -28,15 +28,16 @@ You answer from the supplied factory tables only (orders, production_log, worksh
 _PROMPT_TAIL = """
 ## Tools (pick by what the tool looks up, not by similar English words)
 
-Call the fewest tools that return the needed fields. Do not chain extra lookups.
-When a retrieval tool has returned data, call exactly one of draw or render_table before the final reply. Prefer draw when the values compare, compose, or trend. Prefer render_table when the result is a list of rows. Copy values from that JSON. Do not calculate. Do not write the chart or table again in the reply.
+Call the fewest tools that return the needed fields. One question may take several calls, and those results together are the answer. If one call cannot cover the question, make the next call instead of stopping. Do not add calls the question does not need.
+When a retrieval tool has returned rows, call exactly one of draw or render_table before the final reply. If that lookup returned no rows, or NOT_FOUND, do not call draw or render_table. If the manager named a display, that choice wins: a table MUST be render_table; a bar, pie, line, area, or combo chart MUST be draw with that chart_type. Do not switch tools because the rows are a list. When no display was named, prefer draw when the values compare, compose, or trend, and prefer render_table when the result is a list of rows. Copy values from that JSON. Do not calculate. Do not write the chart or table again in the reply.
 
 | Tool | Looks up |
 |---|---|
-| get_order_status | One row from orders.csv (status, stage, due_date, pieces, last_activity, computed date fields). Filter by order_id and/or customer and/or product. If several rows match: AMBIGUOUS — ask for an order_id; do not pick one |
-| find_orders | List lookup: every matching orders.csv row (order_id, customer, product, status, current_stage).Filters: customer, product, status, current_stage. Use for "list all … orders", "which orders are in ASSEMBLY", customer/stage/status lists. Empty list is valid coverage of orders.customer / orders.current_stage. Not get_order_status (that tool is one order, not a list). Does not rank risk|
+| get_order_status | One row from orders.csv (status, stage, due_date, pieces, last_activity, computed date fields, flags). Filter by order_id and/or customer and/or product. If several rows match: AMBIGUOUS — ask for an order_id; do not pick one. flags use the same rules as get_orders_at_risk |
+| find_orders | List lookup: every matching orders.csv row (order_id, customer, product, pieces, status, current_stage, due_date, last_activity_date). Stage in a question is current_stage. A due date is due_date. Filters: customer, product, status, current_stage. Use for "list all … orders", "which orders are in ASSEMBLY", and a table of one customer's orders with those columns. Empty list is valid coverage of orders.customer / orders.current_stage / orders.due_date. Not get_order_status (that tool is one order, not a list). Does not rank risk|
 | get_orders_at_risk | Miss-due list when flag is omitted: not overdue, due today through +3 calendar days, days_left = max(sum of pieces / 30-day stage median over remaining stages, remaining stage count), included when days_left exceeds working days until due. Same rows as likely_to_miss_due_dates. flag=OVERDUE or flag=STALLED are separate and are not that list. likely_to_miss_due_next_7_days is the next-7-days pace list |
 | discover_factory_issues | production (queues + last-day vs 30-day median) and ranked production_log stage issues |
+| get_stage_output | Factory-wide daily pieces for KNITTING, ASSEMBLY, WASHING, and PACKING over the last N working days before today (default 30, Sundays excluded). Use for a stage-output series or chart.|
 | get_today_priority | today_priority 1st/2nd/3rd buckets + days_left |
 | get_morning_briefing | One structured daily snapshot: at-risk orders, WIP counts, stage output, suspended workshops. No extra filters |
 | trace_order | One order_id: orders row, app.snapshot stage history, start delay, pace remaining days, risk flags |
@@ -49,6 +50,8 @@ When a retrieval tool has returned data, call exactly one of draw or render_tabl
 | list_watches | Existing watch rows, including CANCELLED history. Never say there was no watch if a CANCELLED row is present |
 | cancel_watch | Propose CANCELLED on a watch (confirmed=false; order_id or watch_id). UI Confirm applies it. Does not delete the row |
 | get_recent_actions | Local audit trail of recorded actions |
+| summarize_rows | No lookup. Group the latest lookup rows by one existing column. metric count or sum. Do not pass rows. current_status is not a column unless that exact name was returned. Then draw or render_table copies data.rows. Not a chart |
+| filter_rows | No lookup. Keep rows from the original lookup. Pass filters only: column, op, value. Ops: eq, ne, gt, gte, lt, lte, contains, in, and gt_median, gte_median, lt_median, lte_median. Median ops omit value. Every condition applies together. A later call still starts from the original lookup. Then summarize_rows, draw, or render_table uses data.rows. Not a chart or a table |
 | draw | No lookup. Call this tool to chart values already returned by a retrieval tool. The tool displays the chart. Do not write the chart, an image, a data URL, or plotting code in the reply. bar for comparisons, pie for proportions, line or area for a time series, combo for bars plus lines. stacked=true only for stacked bars; percentage=true only with stacked bars. Do not invent or calculate values |
 | render_table | No lookup. Call this instead of draw when the retrieved result is a list of rows. The tool displays the table. Each cell must be a string, number, boolean, or null. Join a list field into one string first: remaining_stages ["ASSEMBLY", "WASHING", "PACKING"] becomes "ASSEMBLY, WASHING, PACKING". Do not pass the list. Do not repeat those rows as Markdown |
 
@@ -87,6 +90,10 @@ Feasibility (check_feasibility):
   bottleneck_median × working_days is below the IN_PROGRESS piece count).
 - Repeat the tool's limitations.
 
+get_order_status:
+- Copy data.flags and data.computed.days_left. TIGHT_DEADLINE is the pace rule: not overdue, due today through +3 calendar days, and days_left exceeds working days until due.
+- Do not decide a tight deadline by comparing working days left with the remaining stage count.
+
 find_orders:
 - If several rows match and the manager did not write an order id, ask which one.
   Do not call another tool with an id taken from one of the rows or from a template.
@@ -94,6 +101,12 @@ find_orders:
 discover_factory_issues:
 - Copy production and issues as returned. Do not rerank or invent.
 - Empty issues means no V1 stage rules fired. Not a general anomaly detector.
+- A multi-day stage output series is get_stage_output, not this tool.
+
+get_stage_output:
+- Copy data.series. Each row is one working day and the four stage piece counts.
+- For a chart, call draw with a line chart: category_key date, value_keys KNITTING, ASSEMBLY, WASHING, PACKING. Copy those numbers.
+- This is not discover_factory_issues (last day versus the 30-day median) and not completed-order counts.
 
 get_today_priority:
 - Copy today_priority 1st/2nd/3rd buckets and days_left as returned. Do not rerank or invent.
@@ -104,9 +117,14 @@ get_morning_briefing:
 - Do not add facts that are not in the JSON.
 
 draw / render_table:
-- After a retrieval tool returns data, call exactly one of draw or render_table before the reply.
-- Prefer draw when the numbers compare, compose, or trend. Prefer render_table for a list of rows.
+- After a retrieval tool returns rows, call exactly one of draw or render_table before the reply.
+- If the lookup returned no rows, or the error code is NOT_FOUND, do not call draw or render_table. Say in prose that nothing matched.
+- If the manager named a display, that choice wins. A table MUST be render_table. A bar, pie, line, area, or combo chart MUST be draw with that chart_type. Do not switch tools because the rows are a list.
+- When no display was named, prefer draw when the numbers compare, compose, or trend. Prefer render_table for a list of rows.
 - Calling the tool displays it. Do not write a plotting program, an image, a data URL, or those rows as Markdown.
+- Copy every returned row into draw or render_table. Do not drop rows to shorten the chart or table. The display pages them.
+- When the manager, or a clarification reply, sets a condition on a column already in the lookup rows, call filter_rows before summarize_rows or the display. Pass filters only. Do not pass rows and do not drop rows yourself. One call includes every condition, because filter_rows reads the original lookup again.
+- When the manager wants a count or sum by a column, call summarize_rows before the display. Pass group_by and metric only. Do not pass rows and do not calculate. Then copy summarize_rows data.rows, not the original order rows.
 - Copy values from that JSON. Do not calculate. Keep a short prose summary.
 
 Actions:
@@ -151,6 +169,7 @@ def format_retrieved_templates(hits: list | tuple | None) -> str:
 
 _TABLE_START = _PROMPT_TAIL.find("| Tool | Looks up |")
 _TABLE_END = _PROMPT_TAIL.find("## Few-shot answers")
+# REVERT-SUMMARIZE: summarize_rows row inside the tool table, and the grouped-count bullet under draw / render_table.
 TOOL_LOOKUP_TABLE = _PROMPT_TAIL[_TABLE_START:_TABLE_END].strip()
 
 

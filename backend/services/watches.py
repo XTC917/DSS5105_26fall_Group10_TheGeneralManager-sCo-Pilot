@@ -178,9 +178,7 @@ def _row_to_watch(row: Any) -> dict[str, Any]:
 
 def _ownership_filter(*, user_id: int | None) -> tuple[str, list[Any]]:
     if user_id is None:
-        user_id = get_current_user_id(required=False)
-    if user_id is None:
-        return "", []
+        user_id = get_current_user_id(required=True)
     return "user_id = %s", [user_id]
 
 
@@ -276,7 +274,7 @@ def create_watch_row(
         )
     now = _now_utc()
     params = {"check_date": check_date.isoformat()}
-    owner_id = get_current_user_id(required=False)
+    owner_id = get_current_user_id(required=True)
     with connect(admin=True) as conn:
         cur = conn.execute(
             f"""

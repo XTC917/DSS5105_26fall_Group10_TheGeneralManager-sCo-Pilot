@@ -1,6 +1,8 @@
-import { useRef, useState } from "react";
-import { confirmAction, declineAction, sendChat } from "../services/api.js";
+import { useEffect, useRef, useState } from "react";
+import { confirmAction, declineAction, sendChatStream } from "../services/api.js";
 import MessageBubble from "./MessageBubble.jsx";
+
+const CHAR_MS = 28;
 
 const STARTERS = [
   "How is ORD-120 doing?",
@@ -15,41 +17,186 @@ const STARTERS = [
   "Cancel the watch on ORD-005",
 ];
 
-export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) {
+function stepLabel(progress) {
+  return String(progress || "Checking the question").replace(/[\s.。…]+$/u, "");
+}
+
+function WorkingDots() {
+  return (
+    <span className="working-dots" aria-hidden="true">
+      <span>.</span>
+      <span>.</span>
+      <span>.</span>
+    </span>
+  );
+}
+
+export default function ChatPanel({
+  conversationId,
+  llmReady,
+  onBoardChanged,
+  onBusyChange,
+  onConversationUpdated,
+  initialMessages = [],
+}) {
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(() => initialMessages);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const listRef = useRef(null);
+  const typer = useRef({
+    chars: [],
+    shown: 0,
+    timer: null,
+    official: null,
+    resolve: null,
+  });
 
-  async function submit(text, clarificationReply = false) {
+  function stopTyper() {
+    if (typer.current.timer) {
+      clearInterval(typer.current.timer);
+      typer.current.timer = null;
+    }
+  }
+
+  function resetTyper() {
+    stopTyper();
+    const resolve = typer.current.resolve;
+    typer.current = { chars: [], shown: 0, timer: null, official: null, resolve: null };
+    resolve?.();
+  }
+
+  useEffect(() => resetTyper, []);
+
+  function paintTyped() {
+    const content = typer.current.chars.slice(0, typer.current.shown).join("");
+    setMessages((prev) => {
+      const last = prev[prev.length - 1];
+      if (last?.streaming) {
+        const next = [...prev];
+        next[next.length - 1] = { ...last, content };
+        return next;
+      }
+      if (!content) return prev;
+      return [...prev, { role: "assistant", content, streaming: true }];
+    });
+  }
+
+  function commitOfficial() {
+    const official = typer.current.official;
+    const resolve = typer.current.resolve;
+    typer.current.official = null;
+    typer.current.resolve = null;
+    if (official) {
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.streaming) return [...prev.slice(0, -1), official];
+        return [...prev, official];
+      });
+    }
+    resolve?.();
+  }
+
+  function tickTyper() {
+    const state = typer.current;
+    if (state.shown < state.chars.length) {
+      state.shown += 1;
+      paintTyped();
+      return;
+    }
+    stopTyper();
+    if (state.official) commitOfficial();
+  }
+
+  function startTyper() {
+    if (!typer.current.timer) typer.current.timer = setInterval(tickTyper, CHAR_MS);
+  }
+
+  function queueAnswer(text) {
+    typer.current.chars.push(...Array.from(text || ""));
+    startTyper();
+  }
+
+  function revealOfficial(official) {
+    const state = typer.current;
+    const target = Array.from(official.content || "");
+    const typed = state.chars.join("");
+    const full = target.join("");
+    if (!full.startsWith(typed)) {
+      state.chars = target;
+      state.shown = 0;
+      paintTyped();
+    } else {
+      state.chars = target;
+    }
+    state.official = official;
+    if (state.shown >= state.chars.length) {
+      stopTyper();
+      commitOfficial();
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      state.resolve = resolve;
+      startTyper();
+    });
+  }
+
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
+
+  useEffect(() => {
+    if (!busy) return;
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
+  }, [messages, progress, busy]);
+
+  function assistantMessage(result) {
+    return {
+      role: "assistant",
+      content: result.answer,
+      toolsUsed: result.tools_used || [],
+      traces: result.traces || [],
+      limitation: result.limitation,
+      proposedActions: result.proposed_actions || [],
+      charts: result.charts || [],
+      tables: result.tables || [],
+      clarification: result.clarification || null,
+      why: result.why || null,
+    };
+  }
+
+  async function submit(text, clarificationReply = false, originalQuestion = "") {
     const content = (text ?? input).trim();
     if (!content || busy) return;
     setInput("");
     setError("");
+    setProgress("");
     const userMsg = { role: "user", content };
     setMessages((prev) => [...prev, userMsg]);
     setBusy(true);
     try {
-      const result = await sendChat(content, conversationId, clarificationReply);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: result.answer,
-          toolsUsed: result.tools_used || [],
-          traces: result.traces || [],
-          limitation: result.limitation,
-          proposedActions: result.proposed_actions || [],
-          charts: result.charts || [],
-          tables: result.tables || [],
-          clarification: result.clarification || null,
+      const result = await sendChatStream(content, conversationId, clarificationReply, originalQuestion, {
+        onProgress: setProgress,
+        onToken: (token) => {
+          if (token?.reset) {
+            resetTyper();
+            setMessages((prev) => (prev[prev.length - 1]?.streaming ? prev.slice(0, -1) : prev));
+            return;
+          }
+          if (token?.text) queueAnswer(token.text);
         },
-      ]);
+      });
+      await revealOfficial(assistantMessage(result));
+      onConversationUpdated?.();
     } catch (err) {
+      resetTyper();
+      setMessages((prev) => (prev[prev.length - 1]?.streaming ? prev.slice(0, -1) : prev));
       setError(err.message);
     } finally {
       setBusy(false);
+      setProgress("");
       requestAnimationFrame(() => {
         listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
       });
@@ -138,15 +285,21 @@ export default function ChatPanel({ conversationId, llmReady, onBoardChanged }) 
             onConfirm={(action) => confirm(idx, action)}
             onDismiss={(action) => dismiss(idx, action)}
             onClarify={(text) => {
+              const original = [...messages].reverse().find((item) => item.role === "user")?.content || "";
               setMessages((prev) =>
                 prev.map((item, i) => (i === idx ? { ...item, clarification: null } : item)),
               );
-              submit(text, true);
+              submit(text, true, original);
             }}
             clarificationOpen={idx === messages.length - 1}
           />
         ))}
-        {busy && <p className="text-xs text-ink/45">Consulting factory tools…</p>}
+        {busy && !(messages.at(-1)?.streaming && messages.at(-1)?.content) && (
+          <p className="text-xs text-ink/45">
+            {stepLabel(progress)}
+            <WorkingDots />
+          </p>
+        )}
       </div>
 
       {error && (

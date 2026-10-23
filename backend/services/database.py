@@ -39,7 +39,7 @@ class FactoryDB:
 
     def get_order_by_id(self, order_id: str) -> dict[str, Any] | None:
         rows = self._fetch(
-            f"SELECT * FROM {PG_SCHEMA}.orders WHERE order_id = %s",
+            f"SELECT * FROM {PG_SCHEMA}.orders WHERE UPPER(order_id) = UPPER(%s)",
             (order_id.strip(),),
         )
         return rows[0] if rows else None
@@ -49,7 +49,7 @@ class FactoryDB:
         clauses: list[str] = []
         params: list[Any] = []
         if order_id:
-            clauses.append("order_id = %s")
+            clauses.append("UPPER(order_id) = UPPER(%s)")
             params.append(order_id.strip())
         if customer:
             clauses.append("LOWER(customer) = LOWER(%s)")
@@ -78,7 +78,7 @@ class FactoryDB:
             f"""
             SELECT order_id, status, stage, date
             FROM {PG_SCHEMA}.snapshot
-            WHERE order_id = %s
+            WHERE UPPER(order_id) = UPPER(%s)
             ORDER BY date, stage
             """,
             (order_id.strip(),),

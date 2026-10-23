@@ -97,11 +97,18 @@ def pace_tight_deadline(row: dict[str, Any]) -> bool:
 
 
 def flags_with_pace_tight(flags: list[str], pace_row: dict[str, Any]) -> list[str]:
-    """TIGHT_DEADLINE is the pace rule. Stage-count tight from assess_order_risk is dropped."""
+    """TIGHT_DEADLINE is only the pace rule."""
     kept = [flag for flag in flags if flag != "TIGHT_DEADLINE"]
     if pace_tight_deadline(pace_row):
         kept.append("TIGHT_DEADLINE")
     return kept
+
+
+def pace_tight_rank(rank_score: int, flags: list[str]) -> int:
+    """Overdue stays ahead. A pace tight deadline ranks above stall idle days."""
+    if "TIGHT_DEADLINE" in flags:
+        return rank_score + 500
+    return rank_score
 
 
 def _is_pace_miss(row: dict[str, Any], *, min_slack: float = 0.0) -> bool:

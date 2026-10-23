@@ -69,6 +69,10 @@ def ungrounded_order_error(tool: str, order_id: str) -> str:
 
 
 def tool_json(payload: dict[str, Any]) -> str:
+    # REVERT-SUMMARIZE: stop stashing lookup rows for summarize_rows.
+    from backend.tools.lookup_rows import note_lookup_payload
+
+    note_lookup_payload(payload)
     return json.dumps(payload, ensure_ascii=False, default=str)
 
 

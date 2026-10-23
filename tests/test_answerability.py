@@ -135,6 +135,32 @@ def test_different_answers_keep_the_models_wording():
     assert card["options"][0]["message"] == "TrendCart orders in progress"
 
 
+def test_conflicting_order_terms_stay_two_readings():
+    from backend.agent.answerability import _AMBIGUITY_SYSTEM, interpretation_clarification
+
+    assert "cannot describe the same orders" in _AMBIGUITY_SYSTEM
+    assert "asking back to the user" in _AMBIGUITY_SYSTEM
+    card = interpretation_clarification(
+        "Show completed orders and their overdue time.",
+        [
+            {
+                "tool": "find_orders",
+                "label": "Show the completed orders.",
+                "message": "Show the completed orders.",
+            },
+            {
+                "tool": "get_orders_at_risk",
+                "label": "Show the orders that are overdue.",
+                "message": "Show the orders that are overdue.",
+            },
+        ],
+    )
+    assert [row["label"] for row in card["options"]] == [
+        "Show the completed orders.",
+        "Show the orders that are overdue.",
+    ]
+
+
 def test_one_row_and_the_list_are_one_answer():
     from backend.agent.answerability import interpretation_clarification
 
@@ -191,9 +217,108 @@ def test_clarification_reply_judges_the_chosen_lookup():
     assert _CHOSEN_READING in _data_system(True)
 
 
+def test_tool_coverage_allows_a_combination():
+    from backend.agent.answerability import _TOOL_SYSTEM
+
+    assert "combination of registered tools" in _TOOL_SYSTEM
+    assert "only if a registered tool returns that fact" not in _TOOL_SYSTEM
+
+
 def test_tool_lookup_table_marks_find_orders_as_list_lookup():
     from backend.agent.prompts import TOOL_LOOKUP_TABLE
 
     assert "| find_orders |" in TOOL_LOOKUP_TABLE
     assert "List lookup" in TOOL_LOOKUP_TABLE
     assert "orders.customer" in TOOL_LOOKUP_TABLE
+
+
+def test_method_only_card_stays_clickable_options():
+    from backend.agent.answerability import combine_clarification
+
+    method = {
+        "prompt": "Which of these did you mean?",
+        "options": [
+            {"label": "Completed orders.", "message": "Completed orders."},
+            {"label": "Overdue orders.", "message": "Overdue orders."},
+        ],
+    }
+    card = combine_clarification(method, [], "Show completed orders and their overdue time.")
+    assert card["options"][0]["label"] == "Completed orders."
+    assert "questions" not in card
+
+
+def test_term_questions_join_a_method_without_replacing_it():
+    from backend.agent.answerability import _terms_from_payload, combine_clarification
+
+    method = {
+        "prompt": "Which reading?",
+        "options": [
+            {"label": "At-risk orders.", "message": "At-risk orders."},
+            {"label": "Overdue orders.", "message": "Overdue orders."},
+        ],
+    }
+    terms = _terms_from_payload(
+        {
+            "terms": [
+                {
+                    "term": "large",
+                    "prompt": "What piece count counts as large?",
+                    "options": [
+                        {
+                            "tool": "find_orders + filter_rows",
+                            "label": "At least 1,000 pieces",
+                            "message": "pieces >= 1000",
+                        },
+                        {
+                            "tool": "find_orders + filter_rows",
+                            "label": "At least the median",
+                            "message": "pieces at or above the median",
+                        },
+                        {
+                            "tool": "not_a_tool",
+                            "label": "By revenue",
+                            "message": "Use revenue",
+                        },
+                    ],
+                }
+            ]
+        }
+    )
+    card = combine_clarification(method, terms, "Are any large orders at high risk?")
+    assert [item["id"] for item in card["questions"]] == ["method", "term-0"]
+    assert [item["label"] for item in card["questions"][1]["options"]] == [
+        "At least 1,000 pieces",
+        "At least the median",
+    ]
+    assert "options" not in card
+
+
+def test_clarification_drops_readings_the_tools_cannot_do():
+    from backend.agent.answerability import _clarification_catalog, interpretation_clarification
+    from backend.tools.registry import MVP_TOOLS
+
+    catalog = _clarification_catalog()
+    for tool in MVP_TOOLS:
+        assert tool.name in catalog
+    card = interpretation_clarification(
+        "Show me the large orders.",
+        [
+            {
+                "tool": "find_orders + filter_rows",
+                "label": "Show orders with at least 1,000 pieces.",
+                "message": "Show orders with at least 1,000 pieces.",
+            },
+            {
+                "tool": "not_a_tool",
+                "label": "Show orders by revenue.",
+                "message": "Show orders by revenue.",
+            },
+            {
+                "tool": "draw",
+                "label": "Draw a chart with no rows.",
+                "message": "Draw a chart with no rows.",
+            },
+        ],
+    )
+    assert card is None
+

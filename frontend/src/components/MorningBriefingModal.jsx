@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { fetchBriefing } from "../services/api.js";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { confirmAction, fetchBriefing } from "../services/api.js";
 import { filterOrders, deadlineText } from "./briefingFilters.mjs";
 
 const BUCKETS = [
@@ -12,7 +12,27 @@ const BUCKETS = [
 const number = (value) => Number(value || 0).toLocaleString();
 const label = (value) => String(value || "Unknown").replaceAll("_", " ").toLowerCase();
 
-export default function MorningBriefingModal({ onClose, refreshToken }) {
+const BUCKET_COLOR = Object.fromEntries(BUCKETS.map(([key, , color]) => [key, color]));
+const ORDER_COLUMNS = [
+  ["order_id", "Order / Customer"],
+  ["product", "Product"],
+  ["pieces", "Pieces"],
+  ["current_stage", "Stage"],
+  ["due_date", "Due date"],
+  ["flags", "Flags"],
+];
+
+function pieceColor(row) {
+  return BUCKET_COLOR[row.bucket] || BUCKET_COLOR.UNKNOWN;
+}
+
+function sortValue(row, key) {
+  if (key === "flags") return (row.flags || []).join(", ");
+  if (key === "pieces") return Number(row.pieces);
+  return row[key] == null ? "" : String(row[key]);
+}
+
+export default function MorningBriefingModal({ onClose, refreshToken, onAlertCreated }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -20,6 +40,9 @@ export default function MorningBriefingModal({ onClose, refreshToken }) {
   const [filter, setFilter] = useState("ALL");
   const [stage, setStage] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [ordersView, setOrdersView] = useState("table");
+  const [sort, setSort] = useState(null);
+  const [alertState, setAlertState] = useState({ busy: false, note: "", error: "" });
   const dialog = useRef(null);
   const details = useRef(null);
   const ordersSection = useRef(null);
@@ -56,10 +79,47 @@ export default function MorningBriefingModal({ onClose, refreshToken }) {
 
   const board = data?.dashboard;
   const rows = useMemo(() => filterOrders(board?.orders || [], filter, stage), [board, filter, stage]);
+  const tableRows = useMemo(() => {
+    if (!sort) return rows;
+    const direction = sort.direction === "ascending" ? 1 : -1;
+    return [...rows].sort((left, right) => {
+      const leftValue = sortValue(left, sort.key);
+      const rightValue = sortValue(right, sort.key);
+      const leftEmpty = leftValue === "" || leftValue == null || Number.isNaN(leftValue);
+      const rightEmpty = rightValue === "" || rightValue == null || Number.isNaN(rightValue);
+      if (leftEmpty && rightEmpty) return 0;
+      if (leftEmpty) return 1;
+      if (rightEmpty) return -1;
+      const comparison = typeof leftValue === "number" && typeof rightValue === "number"
+        ? leftValue - rightValue
+        : String(leftValue).localeCompare(String(rightValue), undefined, { numeric: true, sensitivity: "base" });
+      return comparison * direction;
+    });
+  }, [rows, sort]);
   const output = (data?.unusual_stage_output || []).map((row) => ({ ...row, name: label(row.stage) }));
   function chooseFilter(next) {
-    setFilter(next); setStage(null); setSelected(null);
+    setFilter(next); setStage(null); setSelected(null); setAlertState({ busy: false, note: "", error: "" });
     requestAnimationFrame(() => ordersSection.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  async function addAlert(row) {
+    const factoryToday = data?.factory_today || "2026-04-01";
+    const due = row.due_date || factoryToday;
+    const checkDate = due >= factoryToday ? due : factoryToday;
+    setAlertState({ busy: true, note: "", error: "" });
+    try {
+      const result = await confirmAction({
+        type: "create_watch",
+        order_id: row.order_id,
+        condition_type: "ORDER_INACTIVE_BY_DATE",
+        check_date: checkDate,
+        message: `Tell me if ${row.order_id} hasn't moved by ${checkDate}.`,
+      });
+      setAlertState({ busy: false, note: result.summary || `Alert saved for ${row.order_id}.`, error: "" });
+      onAlertCreated?.();
+    } catch (err) {
+      setAlertState({ busy: false, note: "", error: err.message || "Could not save the alert." });
+    }
   }
   function chooseStage(next) {
     setStage(next); setFilter("ALL"); setSelected(null);
@@ -89,10 +149,14 @@ export default function MorningBriefingModal({ onClose, refreshToken }) {
               </section>
               <section className="rounded-xl border border-ink/10 bg-white p-5"><h3 className="font-semibold">Delivery outlook</h3><p className="mb-4 text-xs text-ink/50">All active orders · select a deadline group</p><div className="space-y-2">{BUCKETS.filter(([key]) => key !== "UNKNOWN" || board.deadline_buckets.UNKNOWN).map(([key, title, color]) => { const count = board.deadline_buckets[key] || 0; return <button type="button" aria-pressed={filter === key} key={key} onClick={() => chooseFilter(key)} className={`grid w-full grid-cols-[92px_1fr_24px] items-center gap-3 rounded-md p-1 text-left text-xs hover:bg-paper ${filter === key ? "bg-paper ring-1 ring-teal-600" : ""}`}><span>{title}</span><span className="h-4 overflow-hidden rounded bg-paper"><span className="block h-full rounded transition-all" style={{ background: color, width: `${board.metrics.active ? count / board.metrics.active * 100 : 0}%` }} /></span><strong className="text-right">{count}</strong></button>; })}</div></section>
             </div>
-            <section ref={ordersSection} className="mt-4 scroll-mt-4 rounded-xl border border-ink/10 bg-white p-5"><div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Orders in progress <span className="text-sm font-normal text-ink/50">({rows.length})</span></h3><button type="button" onClick={() => chooseFilter("ALL")} className="text-xs text-teal-700 underline">Clear filters</button></div><p className="mb-3 text-xs text-ink/50">Filter: {filter === "ALL" ? "All deadlines" : filter === "SOON" ? "Due today through +2 days" : label(filter)}{stage ? ` · ${label(stage)}` : ""}. Ordered by due date. Selecting a metric or stage starts a new filter. Select an order for details.</p>
-              <div className="max-h-80 overflow-auto"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-paper text-ink/60"><tr>{["Order / Customer", "Product", "Pieces", "Stage", "Due date", "Flags"].map((title) => <th key={title} className="whitespace-nowrap px-3 py-2 font-medium">{title}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.order_id} className={`border-b border-ink/5 ${selected?.order_id === row.order_id ? "bg-teal-50" : "hover:bg-paper"}`}><td className="px-3 py-3"><button type="button" onClick={() => setSelected(row)} className="font-semibold text-teal-800 underline underline-offset-2">{row.order_id}</button><span className="mt-1 block text-ink/50">{row.customer}</span></td><td className="px-3 py-3">{row.product}</td><td className="px-3 py-3">{number(row.pieces)}</td><td className="px-3 py-3 capitalize">{label(row.current_stage)}</td><td className="whitespace-nowrap px-3 py-3">{row.due_date || "Unknown"}</td><td className="px-3 py-3"><div className="flex flex-wrap gap-1">{row.flags.length ? row.flags.map((flag) => <span key={flag} className={`whitespace-nowrap rounded px-2 py-1 text-[10px] ${flag === "OVERDUE" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-800"}`}>{label(flag)}</span>) : "No flags"}</div></td></tr>)}</tbody></table>{!rows.length && <p className="p-6 text-center text-sm text-ink/60">No orders match these filters.</p>}</div>
+            <section ref={ordersSection} className="mt-4 scroll-mt-4 rounded-xl border border-ink/10 bg-white p-5"><div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Orders in progress <span className="text-sm font-normal text-ink/50">({rows.length})</span></h3><div className="flex items-center gap-2"><div className="flex rounded-lg border border-ink/15 p-0.5 text-xs"><button type="button" aria-pressed={ordersView === "table"} onClick={() => setOrdersView("table")} className={`rounded-md px-3 py-1 ${ordersView === "table" ? "bg-ink text-paper" : "text-ink/70"}`}>Table</button><button type="button" aria-pressed={ordersView === "chart"} onClick={() => setOrdersView("chart")} className={`rounded-md px-3 py-1 ${ordersView === "chart" ? "bg-ink text-paper" : "text-ink/70"}`}>Chart</button></div><button type="button" onClick={() => chooseFilter("ALL")} className="text-xs text-teal-700 underline">Clear filters</button></div></div><p className="mb-3 text-xs text-ink/50">Filter: {filter === "ALL" ? "All deadlines" : filter === "SOON" ? "Due today through +2 days" : label(filter)}{stage ? ` · ${label(stage)}` : ""}. Ordered by due date. Selecting a metric or stage starts a new filter. Select an order for details.</p>
+              {ordersView === "chart" ? (
+                rows.length ? <div className="h-80 w-full bg-white"><p className="mb-1 text-center text-xs text-ink/70">Orders In-Progress</p><ResponsiveContainer width="100%" height="92%"><BarChart data={rows} margin={{ top: 8, right: 12, left: 0, bottom: 48 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e6e8e5" /><XAxis dataKey="order_id" interval={0} angle={-40} textAnchor="end" height={56} tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip formatter={(value) => [number(value), "Pieces"]} /><Bar dataKey="pieces" name="Pieces" radius={[3, 3, 0, 0]} isAnimationActive={false} onClick={(bar) => { const row = bar?.payload; if (row?.order_id) { setSelected(row); setAlertState({ busy: false, note: "", error: "" }); } }}>{rows.map((row) => <Cell key={row.order_id} fill={pieceColor(row)} cursor="pointer" />)}</Bar></BarChart></ResponsiveContainer></div> : <p className="p-6 text-center text-sm text-ink/60">No orders match these filters.</p>
+              ) : (
+              <div className="max-h-80 overflow-auto"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-paper text-ink/60"><tr>{ORDER_COLUMNS.map(([key, title]) => <th key={key} className="whitespace-nowrap px-3 py-2 font-medium"><button type="button" onClick={() => setSort((current) => current?.key === key && current.direction === "ascending" ? { key, direction: "descending" } : { key, direction: "ascending" })} className="inline-flex items-center gap-1">{title}<span className="text-ink/40">{sort?.key === key ? (sort.direction === "ascending" ? " ↑" : " ↓") : " -"}</span></button></th>)}</tr></thead><tbody>{tableRows.map((row) => <tr key={row.order_id} className={`border-b border-ink/5 ${selected?.order_id === row.order_id ? "bg-teal-50" : "hover:bg-paper"}`}><td className="px-3 py-3"><button type="button" onClick={() => { setSelected(row); setAlertState({ busy: false, note: "", error: "" }); }} className="font-semibold text-teal-800 underline underline-offset-2">{row.order_id}</button><span className="mt-1 block text-ink/50">{row.customer}</span></td><td className="px-3 py-3">{row.product}</td><td className="px-3 py-3">{number(row.pieces)}</td><td className="px-3 py-3 capitalize">{label(row.current_stage)}</td><td className="whitespace-nowrap px-3 py-3">{row.due_date || "Unknown"}</td><td className="px-3 py-3"><div className="flex flex-wrap gap-1">{row.flags.length ? row.flags.map((flag) => <span key={flag} className={`whitespace-nowrap rounded px-2 py-1 text-[10px] ${flag === "OVERDUE" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-800"}`}>{label(flag)}</span>) : "No flags"}</div></td></tr>)}</tbody></table>{!tableRows.length && <p className="p-6 text-center text-sm text-ink/60">No orders match these filters.</p>}</div>
+              )}
             </section>
-            {selected && <section ref={details} aria-live="polite" className="mt-5 rounded-xl border border-teal-700/30 bg-teal-50 p-5"><div className="flex justify-between"><h3 className="font-semibold">{selected.order_id} · Order details</h3><button type="button" aria-label="Close order details" onClick={() => setSelected(null)}>&times;</button></div><p className="mt-2 text-sm">{selected.customer} · {selected.product} · {number(selected.pieces)} pieces</p><p className="mt-2 text-xs">Due: {selected.due_date || "Unknown"} · {selected.completed ? `Completed: ${selected.completed_date}` : `Current stage: ${label(selected.current_stage)}`}</p>{!selected.completed && <><p className="mt-2 text-xs">Last activity: {selected.last_activity_date || "Unknown"} · Working days without activity: {selected.computed.working_days_since_last_activity ?? "Unknown"}</p><p className="mt-2 text-xs">{deadlineText(selected.computed.calendar_days_until_due)} · Estimated remaining working days: {selected.estimated_remaining_working_days ?? "Unavailable"}</p><p className="mt-2 text-xs text-ink/60">Estimate uses 30-working-day stage medians; it does not allocate capacity among competing orders.</p></>}</section>}
+            {selected && <section ref={details} aria-live="polite" className="mt-5 rounded-xl border border-teal-700/30 bg-teal-50 p-5"><div className="flex justify-between"><h3 className="font-semibold">{selected.order_id} · Order details</h3><button type="button" aria-label="Close order details" onClick={() => setSelected(null)}>&times;</button></div><p className="mt-2 text-sm">{selected.customer} · {selected.product} · {number(selected.pieces)} pieces</p><p className="mt-2 text-xs">Due: {selected.due_date || "Unknown"} · {selected.completed ? `Completed: ${selected.completed_date}` : `Current stage: ${label(selected.current_stage)}`}</p>{!selected.completed && <><p className="mt-2 text-xs">Last activity: {selected.last_activity_date || "Unknown"} · Working days without activity: {selected.computed.working_days_since_last_activity ?? "Unknown"}</p><p className="mt-2 text-xs">{deadlineText(selected.computed.calendar_days_until_due)} · Estimated remaining working days: {selected.estimated_remaining_working_days ?? "Unavailable"}</p><p className="mt-2 text-xs text-ink/60">Estimate uses 30-working-day stage medians; it does not allocate capacity among competing orders.</p><button type="button" disabled={alertState.busy} onClick={() => addAlert(selected)} className="mt-3 rounded-lg bg-ink px-3 py-2 text-xs font-semibold text-paper disabled:opacity-50">{alertState.busy ? "Saving alert…" : "Add alert"}</button>{alertState.note && <p className="mt-2 text-xs text-teal-800">{alertState.note}</p>}{alertState.error && <p className="mt-2 text-xs text-red-700">{alertState.error}</p>}</>}</section>}
             <section className="mt-5 rounded-xl border border-ink/10 bg-white p-5"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">Production by stage</h3><p className="text-xs text-ink/50">{data.yesterday_output.date || "No recent production data"} · pieces processed at each stage</p></div><p className="text-xs text-ink/50">Select a stage to filter active orders</p></div>
               {output.length ? <div className="mt-3 h-52"><ResponsiveContainer width="100%" height="100%"><BarChart data={output} margin={{ left: 0, right: 12 }}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e6e8e5" /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 11 }} /><Tooltip /><Legend wrapperStyle={{ fontSize: 11 }} /><Bar name="Last working day" dataKey="last_day_pieces" fill="#267d72" radius={[4, 4, 0, 0]} onClick={(row) => { chooseStage(row.stage || row.payload?.stage); }} cursor="pointer" /><Bar name="30-working-day median" dataKey="lookback_median" fill="#647a9e" radius={[4, 4, 0, 0]} onClick={(row) => { chooseStage(row.stage || row.payload?.stage); }} cursor="pointer" /></BarChart></ResponsiveContainer></div> : <p className="py-6 text-sm text-ink/60">No stage comparison available.</p>}
               <div className="mt-2 flex flex-wrap gap-2">{Object.entries(data.in_progress_by_stage).map(([key, count]) => <button type="button" key={key} aria-pressed={stage === key} onClick={() => { chooseStage(stage === key ? null : key); }} className={`rounded-full border px-3 py-1 text-xs capitalize ${stage === key ? "border-teal-700 bg-teal-50" : "border-ink/15"}`}>{label(key)} · {count} orders</button>)}</div>

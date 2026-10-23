@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 
 ALLOWED_STATUS = {"IN_PROGRESS", "COMPLETE"}
 ALLOWED_STAGE = set(ORDER_LIFECYCLE_IN_ORDER) | {STAGE_COMPLETE}
-MAX_ROWS = 60
 
 
 class FindOrdersInput(BaseModel):
@@ -76,7 +75,9 @@ def find_orders(
 ) -> str:
     """List orders matching customer, product, status, and/or stage.
 
-    Use to find order ids or list several orders. Always return every match.
+    Each row includes order_id, customer, product, pieces, status,
+    current_stage, due_date, and last_activity_date. A requested stage is
+    current_stage. A requested due date is due_date. Always return every match.
     Never pick one order silently. If the manager asks how one customer's
     or product's order is doing, use get_order_status instead — that tool
     returns AMBIGUOUS when several rows match.
@@ -137,8 +138,6 @@ def find_orders(
             }.items()
             if v
         }
-        truncated = len(rows) > MAX_ROWS
-        visible = rows[:MAX_ROWS]
         logger.info("find_orders count=%s filter=%s", len(rows), filters)
         return tool_json(
             {
@@ -146,10 +145,10 @@ def find_orders(
                 "tool": tool_name,
                 "data": {
                     "count": len(rows),
-                    "truncated": truncated,
+                    "truncated": False,
                     "filter": filters,
-                    "orders": [_summary(row) for row in visible],
-                    "order_ids": [row["order_id"] for row in visible],
+                    "orders": [_summary(row) for row in rows],
+                    "order_ids": [row["order_id"] for row in rows],
                     "note": (
                         "All matching rows are listed. If the manager asked about "
                         "one order and several match, ask for an order_id."
@@ -159,7 +158,7 @@ def find_orders(
                     "tool": tool_name,
                     "source_file": "orders.csv",
                     "filter": filters,
-                    "rows": [_summary(row) for row in visible],
+                    "rows": [_summary(row) for row in rows],
                     "calculations": [],
                     "basis": (
                         "Deterministic filters on orders.csv. No generated SQL. "

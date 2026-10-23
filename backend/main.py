@@ -8,13 +8,19 @@ Run from the project root:
 from __future__ import annotations
 
 import logging
+import time
+import asyncio
+import json
 from contextlib import asynccontextmanager
 
+import psycopg
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
 
 from backend.config import FACTORY_TODAY
-from backend.agent.graph import llm_is_configured, run_agent
+from backend.agent.graph import llm_is_configured, run_agent, set_checkpointer
 from backend.logging_setup import setup_logging
 from backend.models.schemas import (
     ChatRequest,
@@ -27,6 +33,17 @@ from backend.services.auth import CurrentUser, get_current_user
 from backend.services.briefing import build_morning_briefing
 from backend.services.calculations import parse_iso_date
 from backend.services.confirm_actions import ConfirmError, confirm_proposed_action, decline_proposed_action
+from backend.services.checkpoint_store import postgres_checkpointer
+from backend.services.conversation_history import (
+    ActionDecisionError,
+    ConversationNotFoundError,
+    fail_chat_attempt,
+    get_owned_conversation,
+    record_turn_action_decision,
+    save_turn,
+    start_chat_attempt,
+    validate_turn_action,
+)
 from backend.services.database import get_db, init_db
 from backend.services.request_context import set_current_user
 from backend.services.discovery import DEFAULT_LIMIT, MAX_LIMIT, discover_factory_issues
@@ -36,18 +53,26 @@ from backend.routers.data_admin import (
     upload_router,
 )
 from backend.services.watches import evaluate_and_list
+from backend.services.why import build_why
 from backend.tools.registry import MVP_TOOLS
 from backend.routers.auth import router as auth_router, users_router
+from backend.routers.conversations import router as conversations_router
 
 logger = logging.getLogger(__name__)
+_CHAT_WORKERS: set[asyncio.Task] = set()
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     setup_logging()
     init_db()
-    logger.info("SweaterCo co-pilot API ready. LLM configured=%s", llm_is_configured())
-    yield
+    try:
+        with postgres_checkpointer() as checkpointer:
+            set_checkpointer(checkpointer)
+            logger.info("SweaterCo co-pilot API ready. LLM configured=%s", llm_is_configured())
+            yield
+    finally:
+        set_checkpointer(None)
 
 
 app = FastAPI(
@@ -74,6 +99,9 @@ app.include_router(datasource_router)
 app.include_router(query_router)
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(conversations_router)
+
+_UNSTORED_LIMITATIONS = frozenset({"needs_clarification", "missing_data", "no_tool"})
 
 
 @app.get("/api/health")
@@ -86,28 +114,183 @@ def health() -> dict:
     }
 
 
-@app.post("/api/chat", response_model=ChatResponse)
-def chat(request: ChatRequest) -> ChatResponse:
-    if not llm_is_configured():
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "LLM key is not set. For Gemini set GOOGLE_API_KEY "
-                "(LLM_PROVIDER=gemini); for GPT set OPENAI_API_KEY. "
-                "Tools still work (run pytest). Copy .env.example to .env "
-                "to enable the agent."
-            ),
-        )
+def _leave_out_of_memory(result: dict) -> bool:
+    """Clarification cards and refusals that never enter the agent stay out of history."""
+    if result.get("clarification"):
+        return True
+    limitation = result.get("limitation")
+    if limitation in _UNSTORED_LIMITATIONS:
+        return True
+    return not result.get("tools_used") and not result.get("traces") and bool(limitation)
+
+
+def _complete_chat(
+    request: ChatRequest,
+    user: CurrentUser,
+    progress=None,
+    on_token=None,
+) -> ChatResponse:
+    started_ns = time.perf_counter_ns()
+    attempt_id: int | None = None
+    public_conversation_id = str(request.conversation_id)
+
+    def duration_ms() -> int:
+        return max(0, (time.perf_counter_ns() - started_ns) // 1_000_000)
+
+    def record_failure(code: str, message: str) -> None:
+        if attempt_id is None:
+            return
+        try:
+            fail_chat_attempt(
+                user.id,
+                attempt_id,
+                duration_ms=duration_ms(),
+                error_code=code,
+                error_message=message,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("could not persist failed chat attempt")
+
     try:
-        result = run_agent(
-            request.message,
+        get_owned_conversation(user.id, request.conversation_id)
+        attempt = start_chat_attempt(
+            user.id,
             request.conversation_id,
+            question=request.message,
             clarification_reply=request.clarification_reply,
         )
+        attempt_id = int(attempt["id"])
+
+        if not llm_is_configured():
+            message = "Chat service is not configured."
+            record_failure("LLM_NOT_CONFIGURED", message)
+            raise HTTPException(status_code=503, detail=message)
+
+        thread_id = f"user:{user.id}:conversation:{public_conversation_id}"
+        set_current_user(user)
+        try:
+            result = run_agent(
+                request.message,
+                public_conversation_id,
+                clarification_reply=request.clarification_reply,
+                original_question=request.original_question,
+                thread_id=thread_id,
+                progress=progress,
+                on_token=on_token,
+            )
+        finally:
+            set_current_user(None)
+
+        response = ChatResponse(**{**result, "why": build_why(request.message, result)})
+        if _leave_out_of_memory(result):
+            record_failure(
+                "NOT_STORED",
+                "Clarification cards and refusals that stop before the agent are not stored.",
+            )
+            return response
+        response_json = response.model_dump(
+            exclude={"answer", "conversation_id"},
+            mode="json",
+        )
+        saved_turn = save_turn(
+            user.id,
+            request.conversation_id,
+            question=request.message,
+            answer=response.answer,
+            response_json=response_json,
+            attempt_id=attempt_id,
+            duration_ms=duration_ms(),
+        )
+        response.proposed_actions = [
+            {**action, "_turn_id": saved_turn["id"]}
+            for action in response.proposed_actions
+        ]
+        return response
+    except ConversationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Conversation not found") from exc
+    except HTTPException:
+        raise
+    except ValidationError as exc:
+        logger.exception("agent returned an invalid response")
+        message = "Chat service returned an invalid response."
+        record_failure("INVALID_AGENT_RESPONSE", message)
+        raise HTTPException(status_code=500, detail=message) from exc
+    except psycopg.Error as exc:
+        logger.exception("chat database operation failed")
+        message = "Chat service is temporarily unavailable."
+        record_failure("DATABASE_UNAVAILABLE", message)
+        raise HTTPException(status_code=503, detail=message) from exc
     except Exception as exc:  # noqa: BLE001
         logger.exception("chat failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return ChatResponse(**result)
+        message = "Chat service is temporarily unavailable."
+        record_failure("CHAT_SERVICE_UNAVAILABLE", message)
+        raise HTTPException(status_code=503, detail=message) from exc
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+def chat(
+    request: ChatRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> ChatResponse:
+    return _complete_chat(request, user)
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(request: ChatRequest, user: CurrentUser = Depends(get_current_user)):
+    """Same chat turn as /api/chat, with live progress and answer text."""
+    if not llm_is_configured():
+        raise HTTPException(status_code=503, detail="Chat service is not configured.")
+
+    async def events():
+        queue: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+
+        def progress(text: str) -> None:
+            loop.call_soon_threadsafe(queue.put_nowait, ("progress", {"message": text}))
+
+        def on_token(piece) -> None:
+            if isinstance(piece, dict) and piece.get("reset"):
+                loop.call_soon_threadsafe(queue.put_nowait, ("token", {"reset": True}))
+                return
+            if piece:
+                loop.call_soon_threadsafe(queue.put_nowait, ("token", {"text": piece}))
+
+        async def produce() -> None:
+            try:
+                response = await asyncio.to_thread(
+                    _complete_chat, request, user, progress, on_token
+                )
+                await queue.put(("done", response.model_dump(mode="json")))
+            except HTTPException as exc:
+                detail = exc.detail if isinstance(exc.detail, str) else "Chat failed. Please try again."
+                await queue.put(("error", {"message": detail}))
+            except Exception:
+                logger.exception("chat stream failed")
+                await queue.put(("error", {"message": "Chat failed. Please try again."}))
+
+        worker = asyncio.create_task(produce())
+        _CHAT_WORKERS.add(worker)
+        worker.add_done_callback(_CHAT_WORKERS.discard)
+        try:
+            yield 'event: progress\ndata: {"message":"Checking the question…"}\n\n'
+            while True:
+                try:
+                    event, data = await asyncio.wait_for(queue.get(), timeout=10)
+                except asyncio.TimeoutError:
+                    yield ": keep-alive\n\n"
+                    continue
+                yield f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+                if event in {"done", "error"}:
+                    break
+        finally:
+            if not worker.done():
+                worker.add_done_callback(lambda task: task.exception() if not task.cancelled() else None)
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/api/briefing")
@@ -167,8 +350,23 @@ def watches(as_of: str | None = None, user: CurrentUser = Depends(get_current_us
 def confirm_action(request: ConfirmActionRequest, user: CurrentUser = Depends(get_current_user)) -> ConfirmActionResponse:
     """Persist a proposed action after a UI click. Does not call the LLM."""
     get_db()
+    turn_id = request.action.get("_turn_id")
     try:
+        if isinstance(turn_id, int) and turn_id >= 1:
+            validate_turn_action(user.id, turn_id, action=request.action)
         result = confirm_proposed_action(request.action, current_user=user)
+        if isinstance(turn_id, int) and turn_id >= 1 and result.get("ok"):
+            record_turn_action_decision(
+                user.id,
+                turn_id,
+                action=request.action,
+                status="confirmed",
+                summary=result.get("summary") or "Action confirmed.",
+            )
+    except ConversationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Chat turn not found") from exc
+    except ActionDecisionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ConfirmError as exc:
         raise HTTPException(status_code=400, detail=exc.message) from exc
     if not result.get("ok"):
@@ -184,8 +382,24 @@ def confirm_action(request: ConfirmActionRequest, user: CurrentUser = Depends(ge
 def decline_action(request: ConfirmActionRequest, user: CurrentUser = Depends(get_current_user)) -> ConfirmActionResponse:
     """Record that the manager dismissed a proposal. Nothing is persisted."""
     get_db()
+    turn_id = request.action.get("_turn_id")
+    summary = "Dismissed. Nothing was saved."
     try:
+        if isinstance(turn_id, int) and turn_id >= 1:
+            validate_turn_action(user.id, turn_id, action=request.action)
         result = decline_proposed_action(request.action, current_user=user)
+        if isinstance(turn_id, int) and turn_id >= 1:
+            record_turn_action_decision(
+                user.id,
+                turn_id,
+                action=request.action,
+                status="dismissed",
+                summary=summary,
+            )
+    except ConversationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Chat turn not found") from exc
+    except ActionDecisionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ConfirmError as exc:
         raise HTTPException(status_code=400, detail=exc.message) from exc
-    return ConfirmActionResponse(ok=True, type=result.get("type"), declined=True, summary="Dismissed. Nothing was saved.")
+    return ConfirmActionResponse(ok=True, type=result.get("type"), declined=True, summary=summary)

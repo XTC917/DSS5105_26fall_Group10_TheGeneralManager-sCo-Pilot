@@ -209,12 +209,14 @@ def test_a_later_table_hides_the_failed_call_table():
 
 def test_clarification_reply_is_wrapped_only_for_the_model():
     chosen = "I'll give you today's overall order and production snapshot."
-    wrapped = _model_turn(chosen, clarification_reply=True)
+    original = "How is sales doing?"
+    wrapped = _model_turn(chosen, clarification_reply=True, original_question=original)
+    assert wrapped.startswith(original)
+    assert "The following is the clarification of that question:" in wrapped
     assert chosen in wrapped
-    assert wrapped != chosen
-    assert "already chose" in wrapped
     assert _model_turn(chosen, clarification_reply=False) == chosen
     chinese = "给我今天的订单和生产快照。"
-    zh = _model_turn(chinese, clarification_reply=True)
+    zh = _model_turn(chinese, clarification_reply=True, original_question="销售怎么样？")
+    assert zh.startswith("销售怎么样？")
+    assert "以下内容是对这个问题的澄清：" in zh
     assert chinese in zh
-    assert "已经选好" in zh

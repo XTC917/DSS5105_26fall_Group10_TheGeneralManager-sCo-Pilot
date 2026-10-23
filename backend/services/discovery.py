@@ -11,10 +11,12 @@ from typing import Any
 
 from backend.config import FACTORY_TODAY, PRODUCTION_DROP_RATIO
 from backend.services.briefing import unusual_stage_output
-from backend.services.calculations import assess_order_risk, remaining_stages
+from backend.services.calculations import assess_order_risk
 from backend.services.database import FactoryDB
 from backend.services.pace import (
-    estimated_remaining_working_days,
+    flags_with_pace_tight,
+    pace_fields,
+    pace_tight_rank,
     production_attention,
     stage_medians,
     today_priority,
@@ -67,17 +69,15 @@ def collect_order_risk_issues(db: FactoryDB) -> list[dict[str, Any]]:
     medians = stage_medians(db)
     for order in db.in_progress_orders():
         risk = assess_order_risk(order)
-        if not risk["at_risk"]:
+        pace = pace_fields(order, medians)
+        flags = flags_with_pace_tight(list(risk["flags"]), pace)
+        if not flags:
             continue
-        flags = list(risk["flags"])
         issue_type = primary_issue_type(flags)
         priority = PRIORITY_BY_TYPE[issue_type]
         computed = risk["computed"]
         oid = order["order_id"]
-        stages_left = remaining_stages(order.get("current_stage") or "")
-        days_left = estimated_remaining_working_days(
-            int(order.get("pieces") or 0), stages_left, medians
-        )
+        days_left = pace["days_left"]
         issues.append(
             {
                 "issue_id": f"order:{oid}",
@@ -100,7 +100,7 @@ def collect_order_risk_issues(db: FactoryDB) -> list[dict[str, Any]]:
                     "flags": flags,
                 },
                 "result": True,
-                "rank_score": risk["rank_score"],
+                "rank_score": pace_tight_rank(risk["rank_score"], flags),
                 "evidence": {
                     "flags": flags,
                     "order": {

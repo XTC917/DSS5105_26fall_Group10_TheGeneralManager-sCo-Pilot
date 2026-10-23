@@ -35,6 +35,76 @@ function stripEmbeddedImages(text) {
     .trim();
 }
 
+function ClarificationCard({ clarification, busy, onClarify }) {
+  const questions = clarification.questions;
+  const [picked, setPicked] = useState({});
+  const [other, setOther] = useState({});
+  const ready = questions.every((question) => {
+    const custom = (other[question.id] || "").trim();
+    return Boolean(picked[question.id] || custom);
+  });
+
+  function submit(event) {
+    event.preventDefault();
+    if (!ready) return;
+    const lines = questions.map((question) => {
+      const custom = (other[question.id] || "").trim();
+      const chosen = picked[question.id];
+      const text = custom || chosen.message || chosen.label;
+      return `${question.prompt}\n${text}`;
+    });
+    onClarify?.(lines.join("\n\n"));
+  }
+
+  return (
+    <form className="mt-2 space-y-3" onSubmit={submit}>
+      {questions.length > 1 && clarification.prompt && (
+        <p className="text-xs text-ink/70">{clarification.prompt}</p>
+      )}
+      {questions.map((question) => (
+        <fieldset key={question.id} className="space-y-2">
+          {question.prompt !== clarification.prompt && (
+            <legend className="text-sm text-ink">{question.prompt}</legend>
+          )}
+          {question.options.map((option, index) => {
+            const selected = picked[question.id]?.label === option.label && !(other[question.id] || "").trim();
+            return (
+              <button
+                key={`${option.label}-${index}`}
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setPicked((current) => ({ ...current, [question.id]: option }));
+                  setOther((current) => ({ ...current, [question.id]: "" }));
+                }}
+                className={`block w-full rounded border px-3 py-2 text-left text-sm text-ink disabled:opacity-50 ${
+                  selected ? "border-brass bg-paper" : "border-ink/20 bg-white hover:border-brass"
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+          <input
+            value={other[question.id] || ""}
+            onChange={(event) => setOther((current) => ({ ...current, [question.id]: event.target.value }))}
+            disabled={busy}
+            placeholder={clarification.other_placeholder || "Other"}
+            className="w-full rounded border border-ink/15 px-2 py-1 text-xs outline-none focus:border-brass"
+          />
+        </fieldset>
+      ))}
+      <button
+        type="submit"
+        disabled={busy || !ready}
+        className="rounded bg-ink px-3 py-1 text-xs font-medium text-paper disabled:opacity-50"
+      >
+        {clarification.other_submit || "Send"}
+      </button>
+    </form>
+  );
+}
+
 export default function MessageBubble({
   message,
   onConfirm,
@@ -84,12 +154,19 @@ export default function MessageBubble({
         {!isUser && tables.map((table, idx) => (
           <TableView key={`${table.title}-${idx}`} table={table} />
         ))}
-        {!isUser && message.toolsUsed?.length > 0 && (
+        {!isUser && message.toolsUsed?.length > 0 && !message.why && (
           <p className="mt-2 text-[11px] uppercase tracking-wide text-ink/45">
             Tools: {message.toolsUsed.join(" → ")}
           </p>
         )}
-        {!isUser && clarificationOpen && clarification?.options?.length > 0 && (
+        {!isUser && clarificationOpen && clarification?.questions?.length > 0 && (
+          <ClarificationCard
+            clarification={clarification}
+            busy={busy}
+            onClarify={onClarify}
+          />
+        )}
+        {!isUser && clarificationOpen && !clarification?.questions?.length && clarification?.options?.length > 0 && (
           <div className="mt-2">
             <div className="flex flex-col gap-2">
               {clarification.options.map((option, index) => (
@@ -166,16 +243,17 @@ export default function MessageBubble({
         {!isUser && decision?.status === "dismissed" && (
           <p className="mt-2 text-xs text-ink/55">Dismissed. Nothing was saved.</p>
         )}
-        {!isUser && traces.length > 0 && (
+        {!isUser && (message.why || traces.length > 0) && (
           <div className="mt-2">
             <button
               type="button"
+              aria-expanded={open}
               onClick={() => setOpen((v) => !v)}
               className="text-xs font-medium text-ink underline decoration-brass underline-offset-2"
             >
-              {open ? "Hide evidence" : "Why? Show source rows"}
+              {open ? "Hide explanation" : "Why? Explain this answer"}
             </button>
-            {open && <TracePanel traces={traces} />}
+            {open && <TracePanel traces={traces} why={message.why} />}
           </div>
         )}
       </div>

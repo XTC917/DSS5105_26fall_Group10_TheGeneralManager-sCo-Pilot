@@ -1,4 +1,5 @@
 import { authHeaders } from "./authApi.js";
+import { readChatStream } from "./chatStream.js";
 
 async function readError(res, fallback) {
   const body = await res.json().catch(() => ({}));
@@ -87,7 +88,7 @@ export async function declineAction(action) {
   return body;
 }
 
-export async function sendChat(message, conversationId, clarificationReply = false) {
+export async function sendChat(message, conversationId, clarificationReply = false, originalQuestion = "") {
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: authHeaders({ "Content-Type": "application/json" }),
@@ -95,6 +96,7 @@ export async function sendChat(message, conversationId, clarificationReply = fal
       message,
       conversation_id: conversationId,
       clarification_reply: clarificationReply,
+      original_question: originalQuestion,
     }),
   });
   if (res.status === 401) {
@@ -106,6 +108,30 @@ export async function sendChat(message, conversationId, clarificationReply = fal
     throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
   }
   return body;
+}
+
+export async function sendChatStream(
+  message,
+  conversationId,
+  clarificationReply = false,
+  originalQuestion = "",
+  handlers = {},
+) {
+  const res = await fetch("/api/chat/stream", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      message,
+      conversation_id: conversationId,
+      clarification_reply: clarificationReply,
+      original_question: originalQuestion,
+    }),
+  });
+  if (res.status === 401) {
+    notifyUnauthorized();
+    throw new Error("Session expired. Please log in again.");
+  }
+  return readChatStream(res, handlers);
 }
 
 export { readError };

@@ -154,9 +154,11 @@ def build_dashboard(db: FactoryDB) -> dict[str, Any]:
         risk = assess_order_risk(order)
         pace = pace_fields(order, medians)
         days = risk["computed"]["calendar_days_until_due"]
+        # calendar_days_until_due counts today through the due date.
+        # Due today is 1. The date windows stay today, +1..+2, and +3..+7.
         bucket = ("UNKNOWN" if days is None else "OVERDUE" if days < 0 else
-                  "TODAY" if days == 0 else "TWO_DAYS" if days <= 2 else
-                  "WEEK" if days <= 7 else "LATER")
+                  "TODAY" if days == 1 else "TWO_DAYS" if days <= 3 else
+                  "WEEK" if days <= 8 else "LATER")
         flags = flags_with_pace_tight(risk["flags"], pace)
         buckets[bucket] += 1
         active.append({
@@ -193,7 +195,7 @@ def build_dashboard(db: FactoryDB) -> dict[str, Any]:
             "attention": sum(bool(row["flags"]) for row in active),
         },
         "basis": {
-            "deadlines": "Calendar days relative to factory_today; due soon includes today through +2 days.",
+            "deadlines": "calendar_days_until_due counts today through the due date (due today = 1). Due soon is due today through 2 calendar days ahead.",
             "stalled": "No activity for at least 3 working days; Sundays excluded. Flags can overlap.",
             "pace": "Factory stage throughput estimate, not a committed delivery date or a capacity allocation.",
         },

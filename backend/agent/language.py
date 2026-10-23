@@ -163,4 +163,24 @@ def align_visible_payload(parsed: dict, question: str) -> dict:
                 option["label"] = once(str(option["label"]))
             if option.get("message"):
                 option["message"] = once(str(option["message"]))
+        for question_item in card.get("questions") or []:
+            if not isinstance(question_item, dict):
+                continue
+            if question_item.get("prompt"):
+                question_item["prompt"] = once(str(question_item["prompt"]))
+            for option in question_item.get("options") or []:
+                if not isinstance(option, dict):
+                    continue
+                if option.get("label"):
+                    option["label"] = once(str(option["label"]))
+                if option.get("message"):
+                    option["message"] = once(str(option["message"]))
+    for table in parsed.get("tables") or []:
+        if not isinstance(table, dict):
+            continue
+        if table.get("title"):
+            table["title"] = once(str(table["title"]))
+        for column in table.get("columns") or []:
+            if isinstance(column, dict) and column.get("label"):
+                column["label"] = once(str(column["label"]))
     return parsed

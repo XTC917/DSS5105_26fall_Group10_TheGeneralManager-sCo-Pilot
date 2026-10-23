@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -17,6 +18,7 @@ import {
   YAxis,
 } from "recharts";
 
+const PAGE_SIZE = 50;
 const COLORS = ["#167d78", "#d49a32", "#c45c42", "#5278a5", "#718a45"];
 const TYPES = {
   bar: "Bar chart",
@@ -112,15 +114,54 @@ function PieChartView({ chart }) {
 }
 
 export default function ChartView({ chart }) {
+  const [page, setPage] = useState(0);
+  useEffect(() => {
+    setPage(0);
+  }, [chart]);
+
   if (!chart || !TYPES[chart.type] || !Array.isArray(chart.data) || !chart.data.length) return null;
   if (!chart.category_key || !Array.isArray(chart.value_keys) || !chart.value_keys.length) return null;
+
+  const pageCount = Math.max(1, Math.ceil(chart.data.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const pageChart = pageCount === 1
+    ? chart
+    : {
+        ...chart,
+        data: chart.data.slice(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE),
+      };
 
   return (
     <figure className="mt-3 max-w-full overflow-hidden border-t border-ink/10 pt-3" aria-label={chartLabel(chart)}>
       <figcaption className="mb-2 text-xs font-semibold text-ink/80">
         {chart.title || TYPES[chart.type]}
       </figcaption>
-      {chart.type === "pie" ? <PieChartView chart={chart} /> : <CartesianChart chart={chart} />}
+      {chart.type === "pie" ? <PieChartView chart={pageChart} /> : <CartesianChart chart={pageChart} />}
+      {pageCount > 1 && (
+        <div className="mt-2 flex items-center justify-between text-xs text-ink/70">
+          <span>
+            {currentPage * PAGE_SIZE + 1}–{Math.min(chart.data.length, currentPage * PAGE_SIZE + PAGE_SIZE)} of {chart.data.length}
+          </span>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              disabled={currentPage === 0}
+              onClick={() => setPage(currentPage - 1)}
+              className="rounded border border-ink/15 px-2 py-1 hover:bg-paper disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={currentPage >= pageCount - 1}
+              onClick={() => setPage(currentPage + 1)}
+              className="rounded border border-ink/15 px-2 py-1 hover:bg-paper disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </figure>
   );
 }

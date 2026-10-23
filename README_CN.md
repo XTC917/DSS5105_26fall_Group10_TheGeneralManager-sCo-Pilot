@@ -38,9 +38,11 @@ Track 1 要求系统具备五类工具能力：
 
 * 加载 `orders.csv`、`production_log.csv`、`workshops.csv` 至 SQLite
 * `POST /api/chat` — 经过可检查的 Pre-router 后，将业务范围内的问题交给 LangGraph ReAct Agent
-* 支持多轮对话，并且**每一轮都会重新调用工具获取最新数据**
+* 支持登录用户的多轮对话，并且**每一轮都会重新调用工具获取最新数据**
 
-  * 使用 `conversation_id` + `MemorySaver` 管理会话
+  * 使用 PostgreSQL 保存用户可见的会话历史
+  * 使用 PostgreSQL LangGraph checkpoint 保存 Human、AI 和 Tool 上下文
+  * 服务正常运行时不再使用 `MemorySaver`；`MemorySaver` 只作为单元测试和未启动 FastAPI lifespan 时的回退
 * 对超出系统能力范围的问题（收入、销售价格、员工数量等）返回能力限制，**不会调用无关工具**
 * 使用 `data/copilot_state.db` 进行轻量级审计
 

@@ -138,13 +138,6 @@ def order_computed_fields(order: dict[str, Any], today: date = FACTORY_TODAY) ->
             and working_since_activity is not None
             and working_since_activity >= STALL_WORKING_DAYS
         ),
-        "is_tight_deadline": bool(
-            order.get("status") == "IN_PROGRESS"
-            and due is not None
-            and due >= today
-            and working_until_due is not None
-            and working_until_due < len(stages_left)
-        ),
     }
 
 
@@ -156,10 +149,9 @@ def assess_order_risk(order: dict[str, Any], today: date = FACTORY_TODAY) -> dic
     * OVERDUE — status is IN_PROGRESS and due_date < factory today.
     * STALLED — status is IN_PROGRESS and working days since last_activity_date
       (excluding that date, including today) >= STALL_WORKING_DAYS.
-    * TIGHT_DEADLINE on this object — not yet overdue, and
-      working_days_until_due_inclusive < remaining_stage_count.
-      get_orders_at_risk does not use this flag. Its miss-due list uses
-      days_left (max of pieces / 30-day stage median and remaining stage count) instead.
+    * TIGHT_DEADLINE is not decided here. Callers apply the pace rule:
+      not overdue, due today through +3 calendar days, and days_left
+      exceeds working days until due.
 
     COMPLETE orders are never flagged.
     """
@@ -215,33 +207,13 @@ def assess_order_risk(order: dict[str, Any], today: date = FACTORY_TODAY) -> dic
             }
         )
 
-    if computed["is_tight_deadline"]:
-        flags.append("TIGHT_DEADLINE")
-        calculations.append(
-            {
-                "name": "tight_deadline",
-                "formula": (
-                    "working_days_until_due_inclusive < remaining_stage_count "
-                    "(at least one working day per remaining stage)"
-                ),
-                "inputs": {
-                    "working_days_until_due_inclusive": computed[
-                        "working_days_until_due_inclusive"
-                    ],
-                    "remaining_stages": computed["remaining_stages"],
-                    "remaining_stage_count": computed["remaining_stage_count"],
-                },
-                "result": True,
-            }
-        )
-
-    # Rank: overdue first (more days late = more urgent), then tight, then stalled.
+    # Rank: overdue first (more days late = more urgent), then stalled.
+    # Pace TIGHT_DEADLINE adds its own rank where that flag is applied.
     days_overdue = 0
     if computed["is_overdue"] and computed["calendar_days_until_due"] is not None:
         days_overdue = abs(computed["calendar_days_until_due"])
     rank_score = (
         days_overdue * 1000
-        + (500 if computed["is_tight_deadline"] else 0)
         + (computed["working_days_since_last_activity"] or 0)
     )
 
@@ -254,7 +226,7 @@ def assess_order_risk(order: dict[str, Any], today: date = FACTORY_TODAY) -> dic
         "basis": (
             "OVERDUE: due_date < 2026-04-01. "
             f"STALLED: idle >= {STALL_WORKING_DAYS} working days. "
-            "TIGHT_DEADLINE: working days left < remaining stages."
+            "TIGHT_DEADLINE is the pace rule, applied by the caller."
         ),
     }
 

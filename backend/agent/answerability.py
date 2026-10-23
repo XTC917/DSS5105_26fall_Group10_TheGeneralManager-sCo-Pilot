@@ -39,10 +39,10 @@ The language rule in the user message overrides every other language. Do not tra
 """
 
 _CHOSEN_READING = (
-    "This message is the reading the manager already chose. "
-    "The subject is the lookup that sentence says it will show. "
-    "A clause that only says why they chose it is not the subject. "
-    "Do not mark that lookup missing because the reason names a fact the tables do not hold."
+    "This message starts with the manager's original question. "
+    "The text after the clarification line defines that question. "
+    "Apply those definitions. Do not ask the same clarification again. "
+    "The subject is the original question as clarified."
 )
 
 
@@ -61,12 +61,15 @@ Reply with one JSON object, no markdown:
 
 ambiguous=false when one answer method fits. readings has that one object.
 ambiguous=true when more than one answer method fits. readings has one object per method.
+ambiguous=true when the question joins terms that cannot describe the same orders. Do not pick one term for the order, but asking back to the user to use which term.
 One row and the list of those same rows are one method: name only one tool.
+Prefer that different tools return results pointing in different directions.
 A further fact about rows already in Previous tool JSON is one method when the question asks that fact.
 label: one complete sentence the manager can read as this choice. Say what they will be told, in everyday words. Not a short title, and not "could mean".
 message: the exact same sentence as label. Do not rephrase it, and do not turn it into a yes/no question.
 Do not swap in a generic customer, product, stage, or example question.
 reason: one short question asking which choice they want, such as "Which of these did you mean?" Do not describe the choices in reason.
+Every reading must be implementable by the registered tools in the user message. tool is one of those names, or several joined with +. Do not offer a reading those tools cannot carry out. filter_rows, summarize_rows, draw, and render_table do not answer alone.
 Do not invent numbers. Do not add names the manager did not write.
 The language rule in the user message overrides every other language. Do not translate into French or Spanish.
 """
@@ -78,7 +81,8 @@ Reply with one JSON object, no markdown:
 
 needs_tool=false when Previous tool JSON already has the facts and this question only changes how to say them, such as language or a shorter wording. Then has_tool=false and tool=null.
 needs_tool=true when a new fact must be looked up or computed.
-When needs_tool is true, has_tool=true only if a registered tool returns that fact. Otherwise has_tool=false and tool=null.
+When needs_tool is true, has_tool=true when one registered tool or a combination of registered tools can answer. has_tool=false only when no combination can.
+filter_rows may keep rows from a lookup by a condition on a column that lookup already returns. summarize_rows may count or sum a returned column. draw and render_table only display.
 A tool that merely mentions another table as a side effect does not count.
 If kind is action, needs_tool=true and pick the matching action tool.
 reason: one or two sentences.
@@ -252,7 +256,7 @@ def interpretation_clarification(
         tool = str(row.get("tool") or "").strip()
         label = str(row.get("label") or "").strip()
         message = str(row.get("message") or "").strip()
-        if not tool or not label or not message:
+        if not tool or not label or not message or not _reading_is_implementable(tool):
             continue
         key = _answer_key(tool)
         if key in seen:
@@ -265,6 +269,137 @@ def interpretation_clarification(
         {"prompt": (ask or "").strip() or "Which of these did you mean?", "options": kept},
         question,
     )
+
+
+_TERM_SYSTEM = """You only decide whether the manager used a word with no stored definition.
+
+Do not offer another way to answer the question. A different step does that.
+
+Reply with one JSON object, no markdown:
+{"terms":[{"term":string,"prompt":string,"options":[{"tool":string,"label":string,"message":string}]}]}
+
+terms is empty when the question has no such word, the manager already gave the threshold, or no registered tool can apply a definition.
+A word needs a definition when changing it would select different rows and no stored column defines it. "Large" with no piece count is one.
+Each term is one question. Give exactly two recommended options. Each option must be implementable by the registered tools in the user message.
+tool is one of those names, or several joined with +. A threshold on a column the lookup returns is find_orders + filter_rows. Do not offer a choice those tools cannot carry out.
+label: a short choice the manager can click. message: the full instruction to apply, including the number or rule, such as pieces greater than or equal to 1000, or pieces at or above the median.
+Do not use revenue, selling price, or workers.
+Do not invent numbers the manager already wrote. Do not add names the manager did not write.
+The language rule in the user message overrides every other language. Do not translate into French or Spanish.
+"""
+
+_ALONE = frozenset({"filter_rows", "summarize_rows", "draw", "render_table"})
+
+
+def _registered_tool_names() -> list[str]:
+    from backend.tools.registry import MVP_TOOLS
+
+    return [str(getattr(tool, "name", tool)) for tool in MVP_TOOLS]
+
+
+def _clarification_catalog() -> str:
+    return (
+        "Registered tools:\n"
+        + ", ".join(_registered_tool_names())
+        + "\n\nWhat each tool answers:\n"
+        + TOOL_LOOKUP_TABLE
+    )
+
+
+def _named_tools(tool: str) -> list[str]:
+    return [part.strip() for part in re.split(r"\s*\+\s*", tool) if part.strip()]
+
+
+def _reading_is_implementable(tool: str) -> bool:
+    names = _named_tools(tool)
+    registered = set(_registered_tool_names())
+    if not names or any(name not in registered for name in names):
+        return False
+    return any(name not in _ALONE for name in names)
+
+
+def _terms_from_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    terms: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in payload.get("terms") or []:
+        if not isinstance(item, dict):
+            continue
+        term = str(item.get("term") or "").strip()
+        prompt = str(item.get("prompt") or "").strip()
+        if not term or not prompt or term.casefold() in seen:
+            continue
+        options: list[dict[str, str]] = []
+        labels: set[str] = set()
+        for option in item.get("options") or []:
+            if not isinstance(option, dict):
+                continue
+            label = str(option.get("label") or "").strip()
+            message = str(option.get("message") or "").strip() or label
+            tool = str(option.get("tool") or "").strip()
+            if not label or label in labels or not _reading_is_implementable(tool):
+                continue
+            labels.add(label)
+            options.append({"label": label, "message": message})
+        if len(options) < 2:
+            continue
+        seen.add(term.casefold())
+        terms.append({"term": term, "prompt": prompt, "options": options[:4]})
+    return terms
+
+
+def _ask_term_questions(model: Any, question: str) -> list[dict[str, Any]]:
+    try:
+        payload = _ask_json(
+            model,
+            _TERM_SYSTEM,
+            language_rule(question)
+            + "\n\n"
+            + _clarification_catalog()
+            + "\n\nManager question:\n"
+            + (question or ""),
+        )
+    except Exception:  # noqa: BLE001 — a term failure must not block method clarification
+        logger.exception("term clarification failed")
+        return []
+    if not isinstance(payload, dict):
+        return []
+    return _terms_from_payload(payload)
+
+
+def combine_clarification(
+    method_card: dict[str, Any] | None,
+    terms: list[dict[str, Any]],
+    question: str,
+) -> dict[str, Any] | None:
+    """Keep a method-only card unchanged. Add term questions only when they exist."""
+    if not terms:
+        return method_card
+    questions: list[dict[str, Any]] = []
+    if method_card and method_card.get("options"):
+        questions.append(
+            {
+                "id": "method",
+                "prompt": str(method_card.get("prompt") or "").strip(),
+                "options": list(method_card["options"]),
+            }
+        )
+    for index, term in enumerate(terms):
+        questions.append(
+            {
+                "id": f"term-{index}",
+                "prompt": term["prompt"],
+                "options": term["options"],
+            }
+        )
+    if not questions:
+        return None
+    if len(questions) == 1:
+        prompt = questions[0]["prompt"]
+    elif reply_language(question) == "zh":
+        prompt = "请回答下面每一个问题后再发送。"
+    else:
+        prompt = "Answer every question below, then send."
+    return attach_other({"prompt": prompt, "questions": questions}, question)
 
 
 def scope_clarification(reason: str, question: str = "") -> dict[str, Any]:
@@ -480,10 +615,13 @@ def _ask_tool_coverage(
         + TOOL_LOOKUP_TABLE
         + "\n\nFirst decide needs_tool. False only when Previous tool JSON already "
         "holds the facts and this question only changes the wording. "
-        "If needs_tool is true, has_tool=true only if one registered tool returns "
-        "the step-1 field. A list tool that filters on that column counts. "
-        "draw and render_table do not return that field. "
-        "If none do, has_tool=false and tool=null.\n\n"
+        "If needs_tool is true, has_tool=true when one registered tool or a combination "
+        "of registered tools can answer. A list tool that filters on the step-1 column counts. "
+        "summarize_rows may count or sum a column that lookup already returns, and draw or "
+        "render_table may display it. filter_rows may keep rows by a condition on a column "
+        "that lookup already returns. That is covered. Do not mark has_tool=false because "
+        "no single tool both looks up the rows and draws the chart. "
+        "has_tool=false only when no combination can produce the fact.\n\n "
         "Manager question:\n"
         + (question or "")
     )
@@ -543,8 +681,8 @@ def assess_answerability(
     if not clarification_reply:
         ambiguity_user = (
             language_rule(question)
-            + "\n\nWhat each tool answers:\n"
-            + TOOL_LOOKUP_TABLE
+            + "\n\n"
+            + _clarification_catalog()
             + "\nPrevious tool JSON:\n"
             + (prior or "(none)")
             + "\nManager question:\n"
@@ -553,22 +691,39 @@ def assess_answerability(
         ambiguity = _tools_from_payload(
             _ask_json(model, _AMBIGUITY_SYSTEM, ambiguity_user)
         )
-        card = interpretation_clarification(question, ambiguity.options, ambiguity.reason)
+        method_card = interpretation_clarification(question, ambiguity.options, ambiguity.reason)
+        terms = _ask_term_questions(model, question)
+        card = combine_clarification(method_card, terms, question)
         if card is not None:
-            logger.info("answerability clarify readings=%s", ambiguity.readings)
+            logger.info(
+                "answerability clarify readings=%s terms=%s",
+                ambiguity.readings,
+                [item.get("term") for item in terms],
+            )
+            traces = []
+            if method_card:
+                traces.append(
+                    _trace(
+                        "assess_ambiguity",
+                        {"ambiguous": True, "readings": ambiguity.readings},
+                        ambiguity.reason,
+                    )
+                )
+            if terms:
+                traces.append(
+                    _trace(
+                        "assess_terms",
+                        {"terms": [item["prompt"] for item in terms]},
+                        "Undefined words get their own questions.",
+                    )
+                )
             return AnswerabilityGate(
                 proceed=False,
                 data=DataVerdict(reason=ambiguity.reason),
                 tools=ambiguity,
                 answer=card["prompt"],
                 limitation="needs_clarification",
-                traces=[
-                    _trace(
-                        "assess_ambiguity",
-                        {"ambiguous": True, "readings": ambiguity.readings},
-                        ambiguity.reason,
-                    )
-                ],
+                traces=traces,
                 clarification=card,
             )
 

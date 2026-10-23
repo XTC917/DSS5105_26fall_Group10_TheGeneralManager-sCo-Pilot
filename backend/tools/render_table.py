@@ -37,7 +37,6 @@ class RenderTableInput(BaseModel):
     columns: list[TableColumn] = Field(min_length=1, max_length=12)
     rows: list[dict[str, Any]] = Field(
         min_length=1,
-        max_length=100,
         description=(
             "One object per displayed row. Each cell must be a string, number, boolean, or null. "
             "A tool field that is a list is not a cell. Join it into one string and pass that string. "

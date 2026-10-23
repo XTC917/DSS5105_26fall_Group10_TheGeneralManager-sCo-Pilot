@@ -42,7 +42,6 @@ class DrawInput(BaseModel):
     title: str = Field(min_length=1, max_length=100)
     data: list[dict[str, Any]] = Field(
         min_length=1,
-        max_length=40,
         description="Rows of tool-grounded values, each including category and numeric series.",
     )
     category_key: str = Field(min_length=1, max_length=40)

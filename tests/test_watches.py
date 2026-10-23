@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 
 from backend.main import app
 from backend.services.audit import list_audit
+from backend.services.auth import CurrentUser
+from backend.services.request_context import set_current_user
 from backend.services.watches import (
     CONDITION_INACTIVE,
     evaluate_active_watches,
@@ -271,3 +273,19 @@ def test_list_watches_tool_keeps_cancelled_for_trace(db, clean_state, test_user)
     assert by_id["ORD-107"]["status"] == "ACTIVE"
     assert after["data"]["cancelled_count"] == 1
     assert after["data"]["active_count"] == 1
+
+
+def test_watch_rows_are_isolated_by_authenticated_user(db, clean_state, test_user):
+    _create("ORD-005", "2026-04-02", confirmed=True)
+    assert len(list_watches()) == 1
+
+    set_current_user(
+        CurrentUser(
+            id=1,
+            username="test_admin",
+            email=None,
+            role="ADMIN",
+            status="ACTIVE",
+        )
+    )
+    assert list_watches() == []

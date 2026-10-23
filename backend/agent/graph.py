@@ -32,6 +32,8 @@ from backend.services.question_templates import (
 from backend.tools.common import reset_manager_text, set_manager_text
 from backend.tools.draw import bind_frontend_charts, take_frontend_charts
 from backend.tools.render_table import bind_frontend_tables, take_frontend_tables
+# REVERT-SUMMARIZE: lookup-row stash for summarize_rows.
+from backend.tools.lookup_rows import bind_lookup_rows, reset_lookup_rows
 from backend.tools.registry import MVP_TOOLS
 
 load_dotenv(PROJECT_ROOT / ".env", override=True)
@@ -39,6 +41,13 @@ logger = logging.getLogger(__name__)
 
 _AGENT = None
 _CHECKPOINTER = MemorySaver()
+
+
+def set_checkpointer(checkpointer: Any | None) -> None:
+    """Use PostgreSQL in the API lifespan; retain MemorySaver for unit tests."""
+    global _AGENT, _CHECKPOINTER
+    _AGENT = None
+    _CHECKPOINTER = checkpointer if checkpointer is not None else MemorySaver()
 _TEMPLATE_QUERY: ContextVar[str] = ContextVar("template_query", default="")
 _EXPLAIN_PRIOR: ContextVar[bool] = ContextVar("explain_prior", default=False)
 _REUSE_PRIOR: ContextVar[bool] = ContextVar("reuse_prior", default=False)
@@ -147,16 +156,67 @@ def _react_prompt(state: dict[str, Any]):
     if any(isinstance(msg, ToolMessage) for msg in turn):
         called = set(_tools_from_turn(turn))
         charted = bool(called & {"draw", "render_table"})
-        hold_for_chart = not charted and not _EXPLAIN_PRIOR.get() and not _REUSE_PRIOR.get()
-        if hold_for_chart:
+        empty_lookup = _turn_lookups_are_empty(turn)
+        hold_for_chart = (
+            not charted
+            and not empty_lookup
+            and not _EXPLAIN_PRIOR.get()
+            and not _REUSE_PRIOR.get()
+        )
+        if hold_for_chart and _filter_matched_nothing(turn):
             system += (
-                "\n\nA retrieval tool already returned the data. "
-                "Your next message MUST be exactly one tool call, draw or render_table, not prose. "
-                "Prefer draw when the values compare, compose, or trend. "
-                "Prefer render_table when the result is a list of rows. "
-                "Copy only values already in that JSON. Do not calculate. "
-                "Do not answer in text on this step."
+                "\n\nfilter_rows matched no rows from the original lookup. "
+                "Do not call draw or render_table. Say in prose that nothing matched."
             )
+        elif hold_for_chart:
+            # REVERT-SUMMARIZE: allow summarize_rows before the one display call.
+            summarized = "summarize_rows" in called
+            filtered = "filter_rows" in called
+            if summarized:
+                system += (
+                    "\n\nsummarize_rows already grouped the lookup rows. "
+                    "If the question still needs another lookup, call that lookup next and do not display yet. "
+                    "Otherwise your next message MUST be exactly one tool call, draw or render_table, not prose. "
+                    "Copy data.rows from summarize_rows. Do not copy the original order rows. "
+                    "Do not call summarize_rows again on these same rows. "
+                    "If a later lookup replaced them, call summarize_rows on that lookup. Do not calculate. "
+                    "If the manager named a display, that choice wins: a table MUST be render_table; "
+                    "a bar, pie, line, area, or combo chart MUST be draw with that chart_type. "
+                    "category_key is data.group_by. value_keys is data.value_key."
+                )
+            elif filtered:
+                system += (
+                    "\n\nfilter_rows already kept the matching rows from the original lookup. "
+                    "If the question still needs another lookup, call that lookup next and do not display yet. "
+                    "Copy data.rows from filter_rows. Do not copy rows the filter removed. "
+                    "If the manager wants a count or a sum of those kept rows, call summarize_rows. "
+                    "Pass group_by and metric only. Do not pass rows. Do not calculate. "
+                    "Otherwise your next message MUST be exactly one tool call, draw or render_table, not prose. "
+                    "If the manager named a display, that choice wins: a table MUST be render_table; "
+                    "a bar, pie, line, area, or combo chart MUST be draw with that chart_type. "
+                    "Do not call filter_rows again unless a condition was wrong. "
+                    "Do not answer in text on this step."
+                )
+            else:
+                system += (
+                    "\n\nA retrieval tool already returned the data. "
+                    "If this result does not yet cover the question, call the next tool that covers the rest. "
+                    "Do not stop because one call cannot return the whole set. "
+                    "If the manager, or a clarification reply, set a condition on a column already "
+                    "in those rows, call filter_rows. Pass filters only. Do not pass rows. "
+                    "Do not drop rows yourself. "
+                    "If the manager wants a count or a sum grouped by a column, and that grouping "
+                    "is not already in the lookup JSON, call summarize_rows. "
+                    "Pass group_by and metric only. Do not pass rows. Do not calculate. "
+                    "Otherwise your next message MUST be exactly one tool call, draw or render_table, not prose. "
+                    "If the manager named a display, that choice wins: a table MUST be render_table; "
+                    "a bar, pie, line, area, or combo chart MUST be draw with that chart_type. "
+                    "Do not switch tools because the rows are a list. "
+                    "When no display was named, prefer draw when the values compare, compose, or trend, "
+                    "and prefer render_table when the result is a list of rows. "
+                    "Copy only values already in that JSON. Do not calculate. "
+                    "Do not answer in text on this step."
+                )
         else:
             query = _TEMPLATE_QUERY.get()
             hits = retrieve_answer_templates(query)
@@ -171,6 +231,11 @@ def _react_prompt(state: dict[str, Any]):
                     "Write the reply from the tool JSON now. Do not call another tool. "
                     "The chart or table is already shown. Do not write it again, "
                     "and do not write a plotting program, an image, or a data:image URL."
+                )
+            elif empty_lookup:
+                system += (
+                    "\n\nThe lookup returned no rows. "
+                    "Write the reply now. Do not call draw or render_table."
                 )
     return [SystemMessage(content=system), *messages]
 
@@ -191,6 +256,52 @@ def _tools_from_turn(turn: list[BaseMessage]) -> list[str]:
             seen.add(tool)
             names.append(tool)
     return names
+
+
+def _lookup_is_empty(payload: dict[str, Any]) -> bool:
+    """True when this lookup found nothing to chart or tabulate."""
+    error = payload.get("error") if isinstance(payload.get("error"), dict) else {}
+    if error.get("code") == "NOT_FOUND":
+        return True
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    if isinstance(data.get("order"), dict) and data["order"]:
+        return False
+    if data.get("orders") == [] or data.get("series") == []:
+        return True
+    return data.get("count") == 0
+
+
+def _filter_matched_nothing(turn: list[BaseMessage]) -> bool:
+    latest: dict[str, Any] | None = None
+    for msg in turn:
+        if not isinstance(msg, ToolMessage):
+            continue
+        payload = _parse_json(getattr(msg, "content", ""))
+        if not isinstance(payload, dict):
+            continue
+        tool = str(payload.get("tool") or getattr(msg, "name", "") or "").strip()
+        if tool == "filter_rows":
+            latest = payload
+    if not latest:
+        return False
+    data = latest.get("data") if isinstance(latest.get("data"), dict) else {}
+    rows = data.get("rows")
+    return data.get("matched_count") == 0 or rows == []
+
+
+def _turn_lookups_are_empty(turn: list[BaseMessage]) -> bool:
+    lookups: list[dict[str, Any]] = []
+    for msg in turn:
+        if not isinstance(msg, ToolMessage):
+            continue
+        payload = _parse_json(getattr(msg, "content", ""))
+        if not isinstance(payload, dict):
+            continue
+        tool = str(payload.get("tool") or getattr(msg, "name", "") or "").strip()
+        if tool in {"draw", "render_table"}:
+            continue
+        lookups.append(payload)
+    return bool(lookups) and all(_lookup_is_empty(payload) for payload in lookups)
 
 
 def get_agent():
@@ -280,18 +391,21 @@ def _prior_tool_json(conversation_id: str) -> str:
     return "\n\n".join(chunks[-2:])
 
 
-def _model_turn(message: str, *, clarification_reply: bool) -> str:
-    """The answering model sees a chosen clarification as a lookup, not a new offer."""
+def _model_turn(
+    message: str,
+    *,
+    clarification_reply: bool,
+    original_question: str = "",
+) -> str:
+    """The answering model sees the original question and the clarification together."""
     if not clarification_reply:
         return message
-    if reply_language(message) == "zh":
-        lead = "这是经理在澄清里已经选好的读法。按这句话去查，不要把它当成经理要自己提供数据。"
-    else:
-        lead = (
-            "This is the reading the manager already chose. Look that up. "
-            "Do not treat it as the manager offering to supply the data."
-        )
-    return f"{lead}\n{message}"
+    zh = reply_language(original_question or message) == "zh"
+    note = "以下内容是对这个问题的澄清：" if zh else "The following is the clarification of that question:"
+    original = (original_question or "").strip()
+    if original:
+        return f"{original}\n\n{note}\n{message}"
+    return f"{note}\n{message}"
 
 
 def run_agent(
@@ -299,13 +413,24 @@ def run_agent(
     conversation_id: str,
     *,
     clarification_reply: bool = False,
+    original_question: str = "",
+    thread_id: str | None = None,
+    progress=None,
+    on_token=None,
 ) -> dict[str, Any]:
     """Entry point used by /api/chat.
 
     Unsupported / not-implemented questions are answered here without an LLM
-    call, so no unrelated tool can fire.
+    call, so no unrelated tool can fire. Clarification cards and refusals that
+    return before the agent are not written to the checkpointer.
     """
+    memory_thread = thread_id or conversation_id
     decision = route_query(message)
+    model_message = _model_turn(
+        message,
+        clarification_reply=clarification_reply,
+        original_question=original_question,
+    )
     if decision.short_circuit:
         logger.info(
             "route short-circuit conversation=%s intent=%s",
@@ -327,8 +452,8 @@ def run_agent(
         return parsed
 
     gate = assess_answerability(
-        message,
-        prior_tool_json=_prior_tool_json(conversation_id),
+        model_message,
+        prior_tool_json=_prior_tool_json(memory_thread),
         clarification_reply=clarification_reply,
     )
     if not gate.proceed:
@@ -351,6 +476,8 @@ def run_agent(
         _audit_turn(message, conversation_id, parsed, short_circuit=False)
         return parsed
 
+    explain_prior = gate.explain_prior
+    reuse_prior = gate.reuse_prior
     token = _TEMPLATE_QUERY.set(message)
     explain = _EXPLAIN_PRIOR.set(gate.explain_prior)
     reuse = _REUSE_PRIOR.set(gate.reuse_prior)
@@ -359,22 +486,35 @@ def run_agent(
         gate.proceed
         and not gate.explain_prior
         and not gate.reuse_prior
-        and continues_prior_rows(message, _prior_tool_json(conversation_id))
+        and continues_prior_rows(message, _prior_tool_json(memory_thread))
     ):
-        prior_ids = " ".join(_previous_turn_order_ids(conversation_id))
+        prior_ids = " ".join(_previous_turn_order_ids(memory_thread))
     held_ids = _PRIOR_ORDER_IDS.set(prior_ids)
-    spoken = _manager_text(conversation_id, message)
+    spoken = _manager_text(memory_thread, message)
     if prior_ids:
         spoken = spoken + "\n" + prior_ids
     manager = set_manager_text(spoken)
     held_charts = bind_frontend_charts()
     held_tables = bind_frontend_tables()
+    # REVERT-SUMMARIZE: per-turn lookup rows for summarize_rows.
+    held_rows = bind_lookup_rows()
     try:
         agent = get_agent()
-        result = agent.invoke(
-            {"messages": [{"role": "user", "content": _model_turn(message, clarification_reply=clarification_reply)}]},
-            config={"configurable": {"thread_id": conversation_id}},
-        )
+        payload = {"messages": [{"role": "user", "content": model_message}]}
+        config = {"configurable": {"thread_id": memory_thread}}
+        if progress or on_token:
+            from backend.services.chat_stream import ToolProgress
+
+            config["callbacks"] = [
+                ToolProgress(
+                    progress or (lambda _text: None),
+                    on_tool_start_extra=(lambda: on_token({"reset": True})) if on_token else None,
+                )
+            ]
+        if on_token:
+            result = _stream_agent(agent, payload, config, on_token)
+        else:
+            result = agent.invoke(payload, config)
     finally:
         charts = take_frontend_charts(held_charts)
         tables = take_frontend_tables(held_tables)
@@ -383,7 +523,13 @@ def run_agent(
         _REUSE_PRIOR.reset(reuse)
         _PRIOR_ORDER_IDS.reset(held_ids)
         reset_manager_text(manager)
+        # REVERT-SUMMARIZE
+        reset_lookup_rows(held_rows)
     parsed = parse_agent_result(result, conversation_id)
+    if explain_prior or reuse_prior:
+        from backend.services.why import attach_prior_evidence
+
+        attach_prior_evidence(parsed, result.get("messages") or [])
     if charts:
         parsed["charts"] = list(parsed.get("charts") or []) + charts
     if tables:
@@ -396,6 +542,45 @@ def run_agent(
     align_visible_payload(parsed, message)
     _audit_turn(message, conversation_id, parsed, short_circuit=False)
     return parsed
+
+
+def _stream_agent(agent, payload: dict[str, Any], config: dict[str, Any], on_token) -> dict[str, Any]:
+    """Stream answer text as it arrives. Tool-call text is discarded."""
+    final_state = None
+    emitted = ""
+    for mode, data in agent.stream(payload, config, stream_mode=["messages", "values"]):
+        if mode == "values":
+            final_state = data
+            continue
+        if mode != "messages":
+            continue
+        message = data[0] if isinstance(data, tuple) else data
+        if isinstance(message, ToolMessage) or getattr(message, "tool_calls", None) or getattr(message, "tool_call_chunks", None):
+            if emitted:
+                on_token({"reset": True})
+                emitted = ""
+            continue
+        if not isinstance(message, AIMessage):
+            continue
+        text = _content_to_text(getattr(message, "content", ""))
+        if not text:
+            continue
+        if text.startswith(emitted):
+            delta = text[len(emitted):]
+            emitted = text
+        else:
+            delta = text
+            emitted += text
+        if delta:
+            on_token(delta)
+    if not isinstance(final_state, dict) or "messages" not in final_state:
+        snapshot = agent.get_state(config)
+        values = getattr(snapshot, "values", None)
+        if isinstance(values, dict) and "messages" in values:
+            final_state = values
+    if not isinstance(final_state, dict) or "messages" not in final_state:
+        raise RuntimeError("agent stream ended without a final state")
+    return final_state
 
 
 def _error_echo_table(table: dict[str, Any]) -> bool:
@@ -467,6 +652,8 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
     proposed_actions: list[dict[str, Any]] = []
     charts: list[dict[str, Any]] = []
     tables: list[dict[str, Any]] = []
+    evidence_results: list[dict[str, Any]] = []
+    evidence_limitations: list[str] = []
     limitation = None
     ungrounded_message = None
 
@@ -481,6 +668,11 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
             if payload.get("trace"):
                 traces.append(payload["trace"])
             data = payload.get("data") or {}
+            evidence_limitations.extend(
+                item for item in data.get("limitations", []) if isinstance(item, str)
+            )
+            if payload.get("ok") and tool_name not in _DISPLAY_TOOLS:
+                evidence_results.append({"tool": tool_name, "data": data})
             proposal = data.get("proposed_action")
             if isinstance(proposal, dict):
                 proposed_actions.append(proposal)
@@ -527,6 +719,8 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
             "conversation_id": conversation_id,
             "tools_used": [tool_name] if tool_name else tools_used,
             "traces": traces,
+            "evidence_results": evidence_results,
+            "evidence_limitations": evidence_limitations,
             "proposed_actions": [],
             "charts": [],
             "tables": [],
@@ -545,6 +739,8 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
         "conversation_id": conversation_id,
         "tools_used": tools_used,
         "traces": traces,
+        "evidence_results": evidence_results,
+        "evidence_limitations": evidence_limitations,
         "proposed_actions": proposed_actions,
         "charts": charts,
         "tables": tables,
