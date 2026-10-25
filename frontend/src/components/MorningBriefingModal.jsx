@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, ComposedChart, LabelList, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { confirmAction, fetchBriefing } from "../services/api.js";
 import { filterOrders, deadlineText } from "./briefingFilters.mjs";
 
@@ -26,6 +26,104 @@ function pieceColor(row) {
   return BUCKET_COLOR[row.bucket] || BUCKET_COLOR.UNKNOWN;
 }
 
+const STAGE_LINE = [
+  ["ASSEMBLY", "#4c78a8"],
+  ["KNITTING", "#f28e2b"],
+  ["PACKING", "#8d8d8d"],
+  ["WASHING", "#e6b325"],
+];
+const CUSTOMER_COLOR = ["#4c78a8", "#59a14f", "#f2c14e", "#9c9c9c", "#e15759", "#76b7b2", "#b07aa1", "#ff9da7"];
+const percentLabel = (value) => (Number(value) > 0 ? `${value}%` : "");
+
+function LastWeekBriefing({ week }) {
+  const weeks = week.weeks || [];
+  const customers = week.customers || [];
+  const productChart = [];
+  for (const row of week.products || []) {
+    let column = productChart.find((item) => item.product === row.product);
+    if (!column) {
+      column = { product: row.product };
+      productChart.push(column);
+    }
+    column[row.customer] = row.pieces;
+  }
+  return (
+    <>
+      <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-teal-700">Last week's sum-up</p>
+      <section className="rounded-xl border border-ink/10 bg-white p-5">
+        <h3 className="text-center font-semibold">Number of orders completed weekly</h3>
+        <p className="mb-2 text-center text-xs text-ink/50">Green is finished on time. Red is finished after the due date. The line is the weekly count.</p>
+        {weeks.length ? (
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={weeks} margin={{ top: 28, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e6e8e5" />
+                <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                <YAxis yAxisId="count" allowDecimals={false} tick={{ fontSize: 11 }} />
+                <YAxis yAxisId="share" orientation="right" domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 11 }} />
+                <Tooltip formatter={(value, name) => [typeof value === "number" && name.includes("%") ? `${value}%` : number(value), name]} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar yAxisId="count" dataKey="on_time" name="Done on time" stackId="done" fill="#9ccc7c" isAnimationActive={false}>
+                  <LabelList dataKey="on_time_percent" position="center" formatter={percentLabel} style={{ fontSize: 10, fill: "#245c32" }} />
+                </Bar>
+                <Bar yAxisId="count" dataKey="overdue" name="Done overdue" stackId="done" fill="#e48b8b" isAnimationActive={false}>
+                  <LabelList dataKey="overdue_percent" position="center" formatter={percentLabel} style={{ fontSize: 10, fill: "#7a2e2e" }} />
+                </Bar>
+                <Line yAxisId="count" dataKey="completed" name="Orders completed" stroke="#e6b325" strokeWidth={2} dot={{ r: 4, fill: "#ffe14a", stroke: "#c89612" }} isAnimationActive={false}>
+                  <LabelList dataKey="completed" position="top" style={{ fontSize: 11, fontWeight: 700, fill: "#8a6a00" }} />
+                </Line>
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        ) : <p className="py-6 text-sm text-ink/60">No completed orders are recorded.</p>}
+      </section>
+      <section className="mt-4 rounded-xl border border-ink/10 bg-white p-5">
+        <h3 className="text-center font-semibold">4-stage complete pieces</h3>
+        <p className="mb-2 text-center text-xs text-ink/50">Factory-wide pieces completed at each stage, totaled by week.</p>
+        {weeks.length ? (
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={weeks} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e6e8e5" />
+                <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip formatter={(value) => number(value)} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {STAGE_LINE.map(([stage, color]) => (
+                  <Line key={stage} dataKey={stage} name={stage} stroke={color} strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />
+                ))}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        ) : <p className="py-6 text-sm text-ink/60">No stage output is recorded.</p>}
+      </section>
+      <section className="mt-4 rounded-xl border border-ink/10 bg-white p-5">
+        <h3 className="text-center font-semibold">Products completed last week</h3>
+        <p className="mb-2 text-center text-xs text-ink/50">{week.start} – {week.end} · each stack is a brand, and brand is the customer</p>
+        {productChart.length ? (
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={productChart} margin={{ top: 12, right: 8, left: 0, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e6e8e5" />
+                <XAxis dataKey="product" interval={0} angle={-25} textAnchor="end" height={70} tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip formatter={(value) => number(value)} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {customers.map((customer, index) => (
+                  <Bar key={customer} dataKey={customer} name={customer} stackId="pieces" fill={CUSTOMER_COLOR[index % CUSTOMER_COLOR.length]} isAnimationActive={false}>
+                    <LabelList dataKey={customer} position="center" formatter={(value) => (Number(value) > 0 ? number(value) : "")} style={{ fontSize: 10, fill: "#1c2430" }} />
+                  </Bar>
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : <p className="py-6 text-sm text-ink/60">No products were completed in the previous full week.</p>}
+      </section>
+      <footer className="mt-4 text-xs text-ink/50">{week.basis}</footer>
+    </>
+  );
+}
+
 function sortValue(row, key) {
   if (key === "flags") return (row.flags || []).join(", ");
   if (key === "pieces") return Number(row.pieces);
@@ -41,6 +139,7 @@ export default function MorningBriefingModal({ onClose, refreshToken, onAlertCre
   const [stage, setStage] = useState(null);
   const [selected, setSelected] = useState(null);
   const [ordersView, setOrdersView] = useState("table");
+  const [panel, setPanel] = useState("today");
   const [sort, setSort] = useState(null);
   const [alertState, setAlertState] = useState({ busy: false, note: "", error: "" });
   const dialog = useRef(null);
@@ -130,13 +229,14 @@ export default function MorningBriefingModal({ onClose, refreshToken, onAlertCre
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-2 backdrop-blur-sm sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="briefing-title" className="flex max-h-[94dvh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-[#f6f5f0] text-ink shadow-2xl outline-none">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-ink/10 bg-white px-5 py-4 sm:px-7">
-          <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-teal-700">SweaterCo / Factory overview</p><h2 id="briefing-title" className="mt-1 text-2xl font-semibold">Morning briefing</h2><p className="mt-1 text-xs text-ink/60">Factory date: {data?.factory_today || "Loading…"} · Sundays closed</p></div>
-          <div className="flex gap-2"><button type="button" disabled={loading} onClick={() => setRevision((v) => v + 1)} className="rounded-lg border border-ink/20 px-3 py-2 text-xs disabled:opacity-50">{loading ? "Loading…" : "Refresh"}</button><button type="button" onClick={onClose} aria-label="Close morning briefing" className="rounded-lg border border-ink/20 px-3 py-2 text-sm">&times;</button></div>
+          <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-teal-700">SweaterCo / Factory overview</p><h2 id="briefing-title" className="mt-1 text-2xl font-semibold">{panel === "week" ? "Last week's briefing" : "Morning briefing"}</h2><p className="mt-1 text-xs text-ink/60">{panel === "week" && data?.last_week ? `Weekly trend through the factory date · products ${data.last_week.start} – ${data.last_week.end}` : `Factory date: ${data?.factory_today || "Loading…"}`} · Sundays closed</p></div>
+          <div className="flex gap-2"><button type="button" aria-pressed={panel === "week"} onClick={() => setPanel((current) => current === "week" ? "today" : "week")} className={`rounded-lg px-3 py-2 text-xs font-semibold ${panel === "week" ? "border border-ink/20 bg-white text-ink" : "bg-ink text-paper"}`}>{panel === "week" ? "Morning briefing" : "Last week's briefing"}</button><button type="button" disabled={loading} onClick={() => setRevision((v) => v + 1)} className="rounded-lg border border-ink/20 px-3 py-2 text-xs disabled:opacity-50">{loading ? "Loading…" : "Refresh"}</button><button type="button" onClick={onClose} aria-label="Close morning briefing" className="rounded-lg border border-ink/20 px-3 py-2 text-sm">&times;</button></div>
         </header>
         <div className="overflow-y-auto p-4 sm:p-7" aria-busy={loading}>
           {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-5"><p>{error}</p><button type="button" onClick={() => setRevision((v) => v + 1)} className="mt-3 underline">Try again</button></div>}
           {loading && <p role="status" className="py-10 text-center text-ink/60">Preparing factory snapshot…</p>}
-          {!loading && board && <>
+          {!loading && panel === "week" && data?.last_week && <LastWeekBriefing week={data.last_week} />}
+          {!loading && panel === "today" && board && <>
             <div className="mb-3 rounded-xl bg-ink px-5 py-4 text-paper"><p className="text-lg font-medium">{board.metrics.attention ? `${board.metrics.attention} orders need your attention.` : "No active orders are flagged."}</p><p className="mt-1 text-sm text-paper/70">{board.metrics.overdue} overdue · {board.metrics.due_soon} due today or in the next two days · {board.completed_orders.length} completed on {board.completion_date}.</p></div>
             {output.filter((row) => row.flagged).map((row) => <button type="button" key={row.stage} onClick={() => chooseStage(row.stage)} className="mb-3 block w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm text-amber-950 hover:bg-amber-100"><strong className="capitalize">{row.name} output needs attention</strong><span className="mt-1 block text-xs">{number(row.last_day_pieces)} pieces on {row.last_working_date}: {Math.round(row.ratio_to_median * 100)}% of the historical median, below the 70% threshold. View stage orders →</span></button>)}
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

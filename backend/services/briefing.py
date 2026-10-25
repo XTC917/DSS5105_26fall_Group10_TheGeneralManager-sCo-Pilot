@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Any
 
 from backend.config import (
@@ -82,13 +82,141 @@ def build_morning_briefing(db: FactoryDB) -> dict[str, Any]:
         },
         "unusual_stage_output": unusual,
         "suspended_workshops": suspended,
+        "last_week": build_last_week(db),
         "limitations": [
             "The at_risk list is get_orders_at_risk with no flag: not-yet-overdue orders whose days_left exceeds working days until due. OVERDUE and STALLED are separate flags.",
+            "last_week is the previous Monday–Saturday. It does not include today's in-progress or stalled orders.",
             "production_log.csv is factory-wide by stage, not per order.",
             "Unusual output uses last working day vs the same 30-day stage median as feasibility.",
             "No worker names, selling prices, or revenue are included because they are not in the data.",
             "This object is structured facts, not a canned briefing script.",
         ],
+    }
+
+
+def previous_working_week(today: date = FACTORY_TODAY) -> tuple[date, date]:
+    """Monday–Saturday before the week that contains factory today."""
+    monday = today - timedelta(days=today.weekday())
+    start = monday - timedelta(days=7)
+    return start, start + timedelta(days=5)
+
+
+def _week_monday(day: date) -> date:
+    return day - timedelta(days=day.weekday())
+
+
+def _late_days(order: dict[str, Any], done: date) -> int | None:
+    late = order.get("days_late")
+    if late is not None:
+        return int(late)
+    due = parse_iso_date(order.get("due_date"))
+    if due is None:
+        return None
+    return (done - due).days
+
+
+def build_last_week(db: FactoryDB, today: date = FACTORY_TODAY) -> dict[str, Any]:
+    """Weekly completion mix, stage output, and last complete week's products."""
+    start, end = previous_working_week(today)
+    completions = []
+    for order in db.find_orders(status="COMPLETE"):
+        done = parse_iso_date(order.get("completed_date"))
+        if done is None or done > today:
+            continue
+        completions.append({
+            "product": order.get("product") or "",
+            "customer": order.get("customer") or "",
+            "pieces": int(order.get("pieces") or 0),
+            "completed": done,
+            "days_late": _late_days(order, done),
+        })
+
+    dated = [row["completed"] for row in completions]
+    for row in db.production_log():
+        parsed = parse_iso_date(row.get("date"))
+        if parsed is not None and parsed <= today and is_working_day(parsed):
+            dated.append(parsed)
+    if not dated:
+        return {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "weeks": [],
+            "products": [],
+            "customers": [],
+            "basis": "No weekly factory records are available.",
+        }
+
+    monday = _week_monday(min(dated))
+    last_monday = _week_monday(today)
+    weeks: list[dict[str, Any]] = []
+    week_number = 1
+    while monday <= last_monday:
+        week_end = monday + timedelta(days=5)
+        partial = week_end > today
+        item = {
+            "week": week_number,
+            "start": monday.isoformat(),
+            "end": (today if partial else week_end).isoformat(),
+            "partial": partial,
+            "on_time": 0,
+            "overdue": 0,
+            "completed": 0,
+            **{stage: 0 for stage in PRODUCTION_STAGES_IN_ORDER},
+        }
+        weeks.append(item)
+        monday += timedelta(days=7)
+        week_number += 1
+    by_start = {row["start"]: row for row in weeks}
+
+    for row in completions:
+        bucket = by_start.get(_week_monday(row["completed"]).isoformat())
+        if bucket is None:
+            continue
+        if (row["days_late"] or 0) > 0:
+            bucket["overdue"] += 1
+        else:
+            bucket["on_time"] += 1
+        bucket["completed"] += 1
+    for row in db.production_log():
+        parsed = parse_iso_date(row.get("date"))
+        stage = row.get("stage")
+        if parsed is None or parsed > today or stage not in PRODUCTION_STAGES_IN_ORDER:
+            continue
+        if not is_working_day(parsed):
+            continue
+        bucket = by_start.get(_week_monday(parsed).isoformat())
+        if bucket is None:
+            continue
+        bucket[stage] += int(row.get("pieces_completed") or 0)
+    for row in weeks:
+        total = row["completed"]
+        row["on_time_percent"] = round(100 * row["on_time"] / total, 1) if total else 0
+        row["overdue_percent"] = round(100 * row["overdue"] / total, 1) if total else 0
+
+    products: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in completions:
+        if not (start <= row["completed"] <= end):
+            continue
+        key = (row["product"], row["customer"])
+        bucket = products.setdefault(key, {
+            "product": row["product"],
+            "customer": row["customer"],
+            "pieces": 0,
+        })
+        bucket["pieces"] += row["pieces"]
+    product_rows = sorted(products.values(), key=lambda item: (item["product"], -item["pieces"], item["customer"]))
+    return {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "weeks": weeks,
+        "products": product_rows,
+        "customers": sorted({row["customer"] for row in product_rows}),
+        "basis": (
+            "Each point is a Monday–Saturday factory week. The week containing factory today "
+            "stops on that date, so it is shorter than six working days. "
+            "Products are the previous complete Monday–Saturday. Brand is orders.customer. "
+            "Stage pieces are factory-wide output, not finished garments."
+        ),
     }
 
 

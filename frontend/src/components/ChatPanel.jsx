@@ -21,16 +21,6 @@ function stepLabel(progress) {
   return String(progress || "Checking the question").replace(/[\s.。…]+$/u, "");
 }
 
-function WorkingDots() {
-  return (
-    <span className="working-dots" aria-hidden="true">
-      <span>.</span>
-      <span>.</span>
-      <span>.</span>
-    </span>
-  );
-}
-
 export default function ChatPanel({
   conversationId,
   llmReady,
@@ -295,9 +285,8 @@ export default function ChatPanel({
           />
         ))}
         {busy && !(messages.at(-1)?.streaming && messages.at(-1)?.content) && (
-          <p className="text-xs text-ink/45">
-            {stepLabel(progress)}
-            <WorkingDots />
+          <p className="working-step text-xs text-ink/55">
+            {stepLabel(progress)}...
           </p>
         )}
       </div>

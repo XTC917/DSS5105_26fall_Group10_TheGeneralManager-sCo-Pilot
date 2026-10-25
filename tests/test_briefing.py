@@ -45,6 +45,22 @@ def test_briefing_stage_drop_rule_is_inspectable(db):
     assert assembly["flagged"] is expected_flag
 
 
+def test_last_week_tracks_every_factory_week(db):
+    data = parse_tool(get_morning_briefing.invoke({}))["data"]["last_week"]
+    assert data["start"] == "2026-03-23"
+    assert data["end"] == "2026-03-28"
+    weeks = data["weeks"]
+    assert weeks
+    assert weeks[-1]["partial"] is True
+    assert weeks[-1]["end"] == "2026-04-01"
+    assert [row["week"] for row in weeks] == list(range(1, len(weeks) + 1))
+    last_complete = next(row for row in weeks if row["start"] == "2026-03-23")
+    assert last_complete["completed"] == last_complete["on_time"] + last_complete["overdue"]
+    assert set(data["customers"]) == {row["customer"] for row in data["products"]}
+    assert all(stage in last_complete for stage in ("KNITTING", "ASSEMBLY", "WASHING", "PACKING"))
+    assert "revenue" not in data
+
+
 def test_briefing_does_not_invent_revenue_or_workers(db):
     data = parse_tool(get_morning_briefing.invoke({}))["data"]
     assert "revenue" not in data
