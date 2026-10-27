@@ -21,6 +21,20 @@ function stepLabel(progress) {
   return String(progress || "Checking the question").replace(/[\s.。…]+$/u, "");
 }
 
+function releasedEnd(chars, official) {
+  if (official) return chars.length;
+  for (let i = chars.length - 1; i >= 0; i -= 1) {
+    if (chars[i] === "\n") return i + 1;
+  }
+  return 0;
+}
+
+function hasUnclosedMark(text) {
+  const bold = text.split("**").length - 1;
+  const code = text.split("`").length - 1;
+  return bold % 2 === 1 || code % 2 === 1;
+}
+
 export default function ChatPanel({
   conversationId,
   llmReady,
@@ -90,8 +104,15 @@ export default function ChatPanel({
 
   function tickTyper() {
     const state = typer.current;
-    if (state.shown < state.chars.length) {
+    const limit = releasedEnd(state.chars, state.official);
+    if (state.shown < limit) {
       state.shown += 1;
+      while (
+        state.shown < limit &&
+        hasUnclosedMark(state.chars.slice(0, state.shown).join(""))
+      ) {
+        state.shown += 1;
+      }
       paintTyped();
       return;
     }

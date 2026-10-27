@@ -146,6 +146,9 @@ export default function MessageBubble({
             >
               {content}
             </ReactMarkdown>
+            {message.streaming && content && (
+              <p className="working-step mt-2 text-xs text-ink/55">typing...</p>
+            )}
           </div>
         )}
         {!isUser && charts.map((chart, idx) => (
