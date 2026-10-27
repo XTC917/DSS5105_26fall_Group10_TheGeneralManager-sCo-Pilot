@@ -1,0 +1,68 @@
+{
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "introFrames": 70,
+  "cardFrames": 46,
+  "outroFrames": 76,
+  "placeholderFrames": 64,
+  "showClockOnClip": true,
+  "intro": {
+    "kicker": "Monday",
+    "title": "Just came in.",
+    "subtitle": "A day on the floor"
+  },
+  "outro": {
+    "title": "That's the day.",
+    "subtitle": "The answer was already on screen."
+  },
+  "colors": {
+    "paper": "#f4efe6",
+    "ink": "#12202b",
+    "brass": "#c4a574",
+    "muted": "#6d645b",
+    "white": "#ffffff"
+  },
+  "scenes": [
+    {
+      "id": "0700-yesterday",
+      "time": "7:00",
+      "bridge": "Just came in.",
+      "task": "Morning briefing",
+      "question": "Did anything go wrong yesterday?",
+      "clip": null
+    },
+    {
+      "id": "0940-trendcart",
+      "time": "9:40",
+      "bridge": "A customer is on the line.",
+      "task": "One order",
+      "question": "How is the TrendCart order doing?",
+      "clip": null
+    },
+    {
+      "id": "1115-hoodies",
+      "time": "11:15",
+      "bridge": "Before lunch, a new order.",
+      "task": "Can we take it",
+      "question": "800 hoodies by the 25th. Can we take it?",
+      "clip": null
+    },
+    {
+      "id": "1430-chase",
+      "time": "14:30",
+      "bridge": "Back from the floor.",
+      "task": "Chase it",
+      "question": "It hasn't moved in a week. Chase it.",
+      "clip": null
+    },
+    {
+      "id": "1700-packing",
+      "time": "17:00",
+      "bridge": "Before leaving.",
+      "task": "Still behind",
+      "question": "Remind me if packing is still behind.",
+      "clip": null
+    }
+  ]
+}

@@ -155,7 +155,8 @@ def _react_prompt(state: dict[str, Any]):
     turn = _latest_turn(messages)
     if any(isinstance(msg, ToolMessage) for msg in turn):
         called = set(_tools_from_turn(turn))
-        charted = bool(called & {"draw", "render_table"})
+        displays = _display_call_count(turn)
+        charted = displays > 0
         empty_lookup = _turn_lookups_are_empty(turn)
         hold_for_chart = (
             not charted
@@ -217,6 +218,13 @@ def _react_prompt(state: dict[str, Any]):
                     "Copy only values already in that JSON. Do not calculate. "
                     "Do not answer in text on this step."
                 )
+            system += (
+                "\n\nThat call displays one result. "
+                "Each other result the reply will use gets its own chart or table before the reply. "
+                "Every number, list, or comparison in the reply must appear on one of them. "
+                "You do not need every column, only the figures the reply will state. "
+                "Do not display the same rows twice."
+            )
         else:
             query = _TEMPLATE_QUERY.get()
             hits = retrieve_answer_templates(query)
@@ -225,12 +233,27 @@ def _react_prompt(state: dict[str, Any]):
             extra = format_retrieved_templates(hits)
             if extra:
                 system = system + "\n\n" + extra
-            if charted:
+            if charted and displays >= _MAX_DISPLAYS:
                 system += (
-                    "\n\nA chart or table tool already ran this turn. "
+                    "\n\nThe display limit for this turn is reached. "
                     "Write the reply from the tool JSON now. Do not call another tool. "
-                    "The chart or table is already shown. Do not write it again, "
-                    "and do not write a plotting program, an image, or a data:image URL."
+                    "The charts and tables are already shown. Do not write them again, "
+                    "and do not write a plotting program, an image, or a data:image URL. "
+                    "Do not state a figure that is not on a chart or table."
+                )
+            elif charted:
+                system += (
+                    "\n\nSome results are already displayed. "
+                    "If the reply will use another result from this turn that is not yet "
+                    "on a chart or table, your next message MUST be exactly one draw or "
+                    "render_table for that result, not prose. "
+                    "Do not display the same rows twice. "
+                    "Do not add a display for a fact the reply will not mention. "
+                    "Include the figures the reply will state. You do not need every column. "
+                    "When every fact the reply will use is already displayed, write the reply. "
+                    "Do not call another tool. The charts and tables are already shown. "
+                    "Do not write them again, and do not write a plotting program, an image, "
+                    "or a data:image URL. Do not state a figure that is not on a chart or table."
                 )
             elif empty_lookup:
                 system += (
@@ -238,6 +261,26 @@ def _react_prompt(state: dict[str, Any]):
                     "Write the reply now. Do not call draw or render_table."
                 )
     return [SystemMessage(content=system), *messages]
+
+
+_MAX_DISPLAYS = 6
+_DISPLAY_TOOLS_FOR_COUNT = frozenset({"draw", "render_table"})
+
+
+def _display_call_count(turn: list[BaseMessage]) -> int:
+    count = 0
+    for msg in turn:
+        if not isinstance(msg, ToolMessage):
+            continue
+        payload = _parse_json(getattr(msg, "content", ""))
+        tool = ""
+        if isinstance(payload, dict):
+            tool = str(payload.get("tool") or "").strip()
+        if not tool:
+            tool = str(getattr(msg, "name", None) or "").strip()
+        if tool in _DISPLAY_TOOLS_FOR_COUNT:
+            count += 1
+    return count
 
 
 def _tools_from_turn(turn: list[BaseMessage]) -> list[str]:

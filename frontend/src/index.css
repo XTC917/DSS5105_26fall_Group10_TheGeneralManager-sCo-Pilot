@@ -12,6 +12,15 @@ body {
   line-height: 1.45;
 }
 
+.pace-formula .katex-display {
+  margin: 0.35rem 0 0;
+  overflow: visible;
+}
+
+.pace-formula .katex {
+  font-size: 1.05em;
+}
+
 .working-step {
   animation: working-step 1.2s ease-in-out infinite;
 }

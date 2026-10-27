@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -664,6 +665,43 @@ def _trace(name: str, payload: dict[str, Any], basis: str) -> dict[str, Any]:
     }
 
 
+def pinned_clarification(question: str) -> AnswerabilityGate | None:
+    """Use a cosine-matched clarification example, or None when nothing is close.
+
+    The examples live in data/clarification_few_shots.json. Delete that file,
+    backend/agent/clarification_examples.py, and the call below to remove this.
+    """
+    from backend.agent.clarification_examples import match_clarification
+
+    hit = match_clarification(question)
+    if hit is None:
+        return None
+    item, score = hit
+    card = interpretation_clarification(question, item["options"], str(item.get("prompt") or ""))
+    if card is None:
+        return None
+    readings = [str(option.get("tool") or "") for option in item["options"]]
+    prompt = str(item.get("prompt") or card["prompt"])
+    logger.info("answerability clarify few-shot score=%s readings=%s", round(score, 4), readings)
+    # A direct hit has no model call. Hold the thinking line so the card is not instant.
+    time.sleep(2)
+    return AnswerabilityGate(
+        proceed=False,
+        data=DataVerdict(reason=prompt),
+        tools=ToolVerdict(reason=prompt, readings=readings, options=list(item["options"])),
+        answer=card["prompt"],
+        limitation="needs_clarification",
+        traces=[
+            _trace(
+                "assess_ambiguity",
+                {"ambiguous": True, "readings": readings, "few_shot_score": round(score, 4)},
+                prompt,
+            )
+        ],
+        clarification=card,
+    )
+
+
 def assess_answerability(
     question: str,
     model: Any | None = None,
@@ -672,6 +710,11 @@ def assess_answerability(
     clarification_reply: bool = False,
 ) -> AnswerabilityGate:
     """Clarify first, without a stored-field check. Then stored-data and tool coverage."""
+    if not clarification_reply:
+        pinned = pinned_clarification(question)
+        if pinned is not None:
+            return pinned
+
     if model is None:
         from backend.agent.graph import build_model
 

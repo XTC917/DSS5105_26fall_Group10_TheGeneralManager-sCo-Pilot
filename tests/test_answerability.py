@@ -109,6 +109,26 @@ def test_wording_change_does_not_need_a_tool():
     assert verdict.tool is None
 
 
+def test_focus_today_is_pinned_to_three_clarifications():
+    from backend.agent.answerability import pinned_clarification
+
+    gate = pinned_clarification("Is there anything I should focus on today?")
+    assert gate is not None
+    assert gate.limitation == "needs_clarification"
+    labels = [option["label"] for option in gate.clarification["options"]]
+    assert labels == [
+        "You will be told which orders are the first, second, and third priorities today.",
+        "You will be given today's full morning snapshot of at-risk orders, work in progress, stage output, and suspended workshops.",
+        "You will be told which production queues and stages currently need attention.",
+    ]
+    assert gate.tools.readings == [
+        "get_today_priority",
+        "get_morning_briefing",
+        "discover_factory_issues",
+    ]
+    assert pinned_clarification("What should we prioritize today?") is None
+
+
 def test_different_answers_keep_the_models_wording():
     from backend.agent.answerability import interpretation_clarification
 

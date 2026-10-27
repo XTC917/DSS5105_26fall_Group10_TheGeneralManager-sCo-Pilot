@@ -29,7 +29,7 @@ _PROMPT_TAIL = """
 ## Tools (pick by what the tool looks up, not by similar English words)
 
 Call the fewest tools that return the needed fields. One question may take several calls, and those results together are the answer. If one call cannot cover the question, make the next call instead of stopping. Do not add calls the question does not need.
-When a retrieval tool has returned rows, call exactly one of draw or render_table before the final reply. If that lookup returned no rows, or NOT_FOUND, do not call draw or render_table. If the manager named a display, that choice wins: a table MUST be render_table; a bar, pie, line, area, or combo chart MUST be draw with that chart_type. Do not switch tools because the rows are a list. When no display was named, prefer draw when the values compare, compose, or trend, and prefer render_table when the result is a list of rows. Copy values from that JSON. Do not calculate. Do not write the chart or table again in the reply.
+When retrieval tools have returned data, call draw or render_table once for each distinct result the reply will use. Several charts and tables are allowed. Every number, list, or comparison in the reply must already appear on one of them. You do not need every column, only the figures the reply will state. Do not add a display for a fact the reply will not mention, and do not display the same rows twice. If that lookup returned no rows, or NOT_FOUND, do not call draw or render_table for it. If the manager named a display, that choice wins for that result: a table MUST be render_table; a bar, pie, line, area, or combo chart MUST be draw with that chart_type. Do not switch tools because the rows are a list. When no display was named, prefer draw when the values compare, compose, or trend, and prefer render_table when the result is a list of rows. Copy values from that JSON. Do not calculate. Do not write the chart or table again in the reply.
 
 | Tool | Looks up |
 |---|---|
@@ -117,12 +117,14 @@ get_morning_briefing:
 - Do not add facts that are not in the JSON.
 
 draw / render_table:
-- After a retrieval tool returns rows, call exactly one of draw or render_table before the reply.
-- If the lookup returned no rows, or the error code is NOT_FOUND, do not call draw or render_table. Say in prose that nothing matched.
-- If the manager named a display, that choice wins. A table MUST be render_table. A bar, pie, line, area, or combo chart MUST be draw with that chart_type. Do not switch tools because the rows are a list.
+- Before the reply, call draw or render_table once for each distinct result the reply will use. Several charts and tables are allowed.
+- Every number, list, or comparison in the reply must already appear on one of them. You do not need every column, only the figures the reply will state. Do not state a figure that is not on a chart or table.
+- Do not add a display for a fact the reply will not mention, and do not display the same rows twice.
+- If the lookup returned no rows, or the error code is NOT_FOUND, do not call draw or render_table for it. Say in prose that nothing matched.
+- If the manager named a display, that choice wins for that result. A table MUST be render_table. A bar, pie, line, area, or combo chart MUST be draw with that chart_type. Do not switch tools because the rows are a list.
 - When no display was named, prefer draw when the numbers compare, compose, or trend. Prefer render_table for a list of rows.
 - Calling the tool displays it. Do not write a plotting program, an image, a data URL, or those rows as Markdown.
-- Copy every returned row into draw or render_table. Do not drop rows to shorten the chart or table. The display pages them.
+- Copy the rows for that result into its display. Do not drop rows to shorten the chart or table. The display pages them.
 - When the manager, or a clarification reply, sets a condition on a column already in the lookup rows, call filter_rows before summarize_rows or the display. Pass filters only. Do not pass rows and do not drop rows yourself. One call includes every condition, because filter_rows reads the original lookup again.
 - When the manager wants a count or sum by a column, call summarize_rows before the display. Pass group_by and metric only. Do not pass rows and do not calculate. Then copy summarize_rows data.rows, not the original order rows.
 - Copy values from that JSON. Do not calculate. Keep a short prose summary.

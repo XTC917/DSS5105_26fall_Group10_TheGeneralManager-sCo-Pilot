@@ -42,6 +42,91 @@ def test_risk_explanation_uses_current_tool_comparison_not_reference_example():
     assert why["sources"][0]["rows"][0]["Customer"] == "Actual customer"
 
 
+def test_pace_method_is_shared_across_tools_and_hides_internal_formula():
+    method = r"\mathrm{days}_{\mathrm{left}}"
+    priority = build_why(
+        "What should we prioritize today?",
+        {
+            "answer": "Start with the first bucket.",
+            "traces": [
+                {
+                    "tool": "get_today_priority",
+                    "source_file": "orders.csv",
+                    "rows": [{"order_id": "ORD-002", "days_left": 4.2}],
+                    "calculations": [
+                        {
+                            "name": "days_left",
+                            "formula": "see backend.services.pace",
+                            "result": "per-order field on today_priority",
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    step = " ".join(priority["steps"][2]["items"])
+    assert method in step
+    assert "per-order field" not in step
+    assert "backend.services" not in step
+
+    at_risk = build_why(
+        "Which orders are at risk?",
+        {
+            "answer": "ORD-108 may miss its due date.",
+            "traces": [{"tool": "get_orders_at_risk", "calculations": [], "rows": []}],
+            "evidence_results": [
+                {
+                    "tool": "get_orders_at_risk",
+                    "data": {
+                        "orders": [
+                            {
+                                "order_id": "ORD-108",
+                                "pace": {
+                                    "estimated_remaining_working_days": 8.4,
+                                    "working_days_until_due_inclusive": 3,
+                                    "formula": "see backend.services.pace",
+                                },
+                            }
+                        ]
+                    },
+                }
+            ],
+        },
+    )
+    text = " ".join(at_risk["steps"][2]["items"])
+    assert method in text
+    assert "backend.services" not in json.dumps(at_risk)
+
+    briefing = build_why(
+        "今天的晨报是什么？",
+        {
+            "answer": "Assembly is slow.",
+            "evidence_results": [
+                {
+                    "tool": "get_morning_briefing",
+                    "data": {"dashboard": {"orders": [{"estimated_remaining_working_days": 2.0}]}},
+                }
+            ],
+        },
+    )
+    assert r"\mathrm{days}_{\mathrm{left}}" in " ".join(briefing["steps"][2]["items"])
+
+    other = build_why(
+        "How was yesterday's output?",
+        {
+            "answer": "Assembly made 455 pieces.",
+            "traces": [
+                {
+                    "tool": "get_stage_output",
+                    "calculations": [{"name": "pieces_completed", "result": 455}],
+                    "rows": [{"stage": "ASSEMBLY", "pieces_completed": 455}],
+                }
+            ],
+        },
+    )
+    assert method not in json.dumps(other)
+
+
 def test_no_rows_or_calculations_does_not_claim_verification():
     why = build_why("Why?", {"answer": "Unknown", "traces": []})
     assert "verification is unavailable" in why["steps"][1]["items"][0]

@@ -1,0 +1,23 @@
+{
+  "name": "question-burst",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Parameter-driven kinetic typography opener for Remotion.",
+  "scripts": {
+    "preview": "remotion studio",
+    "render": "remotion render Opening out/opening.mp4",
+    "still": "remotion still Opening out/opening.png --frame=150",
+    "demo": "remotion render Day out/day.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.261",
+    "@remotion/google-fonts": "^4.0.261",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "^4.0.261"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.8.0"
+  }
+}

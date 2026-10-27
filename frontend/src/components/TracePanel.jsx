@@ -1,3 +1,25 @@
+import katex from "katex";
+import "katex/dist/katex.min.css";
+
+const PACE_LATEX = String.raw`\mathrm{days}_{\mathrm{left}}=\max\left(\sum_{\text{remaining stages}}\frac{\text{pieces}}{\mathrm{median}_{30\mathrm{d}}},\ \text{remaining stages}\right)`;
+
+function isPaceFormula(item) {
+  return item.includes(String.raw`\mathrm{days}_{\mathrm{left}}`)
+    || item.startsWith("days_left = max")
+    || item.startsWith("Estimated working days still needed is the larger")
+    || item.startsWith("预计仍需工作日取两个数");
+}
+
+function PaceFormula() {
+  const html = katex.renderToString(PACE_LATEX, { throwOnError: false, displayMode: true });
+  return (
+    <div
+      className="pace-formula mt-1 text-ink"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
 function SourceRows({ source, zh }) {
   const rows = (source.rows || []).filter((row) => Object.keys(row).length);
   const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
@@ -38,15 +60,13 @@ export default function TracePanel({ traces = [], why }) {
           <li key={i} className="flex gap-3">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink text-xs text-paper">{i + 1}</span>
             <div className="min-w-0"><h3 className="text-sm font-semibold">{step.title}</h3>
-              {step.items.map((item, j) => <p key={j} className="mt-1 whitespace-pre-wrap break-words text-xs leading-relaxed text-ink/75">{item}</p>)}
+              {step.items.map((item, j) => (
+                isPaceFormula(item) ? <PaceFormula key={j} /> : <p key={j} className="mt-1 whitespace-pre-wrap break-words text-xs leading-relaxed text-ink/75">{item}</p>
+              ))}
             </div>
           </li>
         ))}
       </ol> : <p className="text-xs text-ink/70">This response has source records only. A four-step explanation was not attached.</p>}
-      {why?.limitations?.length > 0 && <div className="rounded bg-amber-50 p-3 text-xs text-amber-950">
-        <h3 className="font-semibold">{zh ? "适用范围与限制" : "Scope and limitations"}</h3>
-        {why.limitations.map((item, i) => <p className="mt-1" key={i}>{item}</p>)}
-      </div>}
       {sources.map((source, i) => <SourceRows key={i} source={source} zh={zh} />)}
     </section>
   );

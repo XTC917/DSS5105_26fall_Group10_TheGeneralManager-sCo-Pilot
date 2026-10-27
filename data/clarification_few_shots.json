@@ -1,0 +1,25 @@
+{
+  "examples": [
+    {
+      "question": "Is there anything I should focus on today?",
+      "prompt": "Which of these did you mean?",
+      "options": [
+        {
+          "tool": "get_today_priority",
+          "label": "You will be told which orders are the first, second, and third priorities today.",
+          "message": "You will be told which orders are the first, second, and third priorities today."
+        },
+        {
+          "tool": "get_morning_briefing",
+          "label": "You will be given today's overall factory briefing, including risks, work in progress, output,and suspended workshops.",
+          "message": "You will be given today's overall factory briefing, including risks, work in progress, output,and suspended workshops."
+        },
+        {
+          "tool": "discover_factory_issues",
+          "label": "You will be told today's factory bottlenecks and production stages performing below their usual levels.",
+          "message": "You will be told today's factory bottlenecks and production stages performing below their usual levels."
+        }
+      ]
+    }
+  ]
+}

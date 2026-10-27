@@ -1,0 +1,45 @@
+{
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "durationInFrames": 180,
+  "questions": [
+    { "text": "Did anything go wrong yesterday?" },
+    { "text": "How is the TrendCart order doing?" },
+    { "text": "800 hoodies by the 25th. Can we take it?" },
+    { "text": "It hasn't moved in a week. Chase it." },
+    { "text": "Remind me if packing is still behind." }
+  ],
+  "finalTitle": "An answer he can check.",
+  "finalSubtitle": "No SQL on screen.",
+  "colors": {
+    "background": "#10110f",
+    "backgroundGlow": "#2a241c",
+    "question": "#f3efe6",
+    "questionMuted": "#b7b0a4",
+    "title": "#f7f3ea",
+    "subtitle": "#c7b89a"
+  },
+  "typography": {
+    "fontFamily": "Inter",
+    "titleFontFamily": "Newsreader",
+    "baseSize": 46,
+    "minSize": 24,
+    "titleSize": 84,
+    "subtitleSize": 28,
+    "questionWeight": 500
+  },
+  "timing": {
+    "firstFrame": 8,
+    "staggerFrames": 9,
+    "enterFrames": 20,
+    "fadeStartFrame": 118,
+    "fadeOutFrames": 16,
+    "titleStartFrame": 132
+  },
+  "motion": {
+    "travel": 150,
+    "blur": 7,
+    "trail": 4
+  }
+}
