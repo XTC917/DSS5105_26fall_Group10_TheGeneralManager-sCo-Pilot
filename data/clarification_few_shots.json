@@ -12,7 +12,7 @@
         {
           "tool": "get_morning_briefing",
           "label": "You will be given today's overall factory briefing, including risks, work in progress, output,and suspended workshops.",
-          "message": "You will be given today's overall factory briefing, including risks, work in progress, output,and suspended workshops."
+          "message": "You will be given today's overall factory briefing, including risks, work in progress, output,andsuspended workshops."
         },
         {
           "tool": "discover_factory_issues",
