@@ -468,6 +468,14 @@ def run_agent(
     return before the agent are not written to the checkpointer.
     """
     memory_thread = thread_id or conversation_id
+    from backend.agent.uc_answers import play_uc_answer
+
+    scripted = play_uc_answer(message, progress)
+    if scripted is not None:
+        scripted["conversation_id"] = conversation_id
+        align_visible_payload(scripted, message)
+        _audit_turn(message, conversation_id, scripted, short_circuit=False)
+        return scripted
     decision = route_query(message)
     model_message = _model_turn(
         message,

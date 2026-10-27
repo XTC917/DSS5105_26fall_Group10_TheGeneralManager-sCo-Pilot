@@ -87,3 +87,4 @@ class ChatResponse(BaseModel):
     limitation: str | None = None
     routing_intent: str | None = None
     why: dict[str, Any] | None = None
+    instant: bool = False

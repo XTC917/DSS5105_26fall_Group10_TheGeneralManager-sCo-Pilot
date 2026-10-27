@@ -1,0 +1,18 @@
+{
+  "answers": [
+    {
+      "question": "You will be given today's overall factory briefing, including risks, work in progress, output,and suspended workshops.",
+      "stage_ms": 1500,
+      "stages": [
+        "Checking the question…",
+        "Reading this morning's snapshot…",
+        "Comparing remaining work with available time…",
+        "Checking today's production issues…",
+        "Preparing the chart…",
+        "Preparing the evidence and answer…"
+      ],
+      "answer": "Today's main focus should be deadlines, Assembly performance, and stalled work.\n\n🔴 **1. Clear near-complete overdue orders**\n\nThere are **8 overdue orders**. Push **ORD-107** and **ORD-114** through Packing first; both are overdue and have only Packing remaining.\n\n🟠 **2. Protect the three at-risk deadlines**\n\nThe table shows the three not-yet-overdue orders likely to miss their dates:\n\n- **ORD-029** is due today in Washing, with **4.3 estimated working days** remaining.\n- **ORD-108** has **8.4 days** of estimated work against 3 working days to its due date.\n- **ORD-103** also needs **8.4 days**, against 4 working days available.\n\n🟠 **3. Investigate stalled orders**\n\n**ORD-002** is both overdue and stalled in Washing, with no activity for **8 working days**. **ORD-005** is stalled in Knitting, although its due date is later.\n\n🟡 **4. Address the Assembly slowdown**\n\nThere are **34 active orders**: 12 in Knitting, 10 in Assembly, 10 in Washing, and 2 in Packing. Assembly produced **455 pieces** on March 31 versus its **758-piece 30-day median**, making it the only stage below the 70% alert threshold. Other stage outputs were near their normal levels.\n\n**Workshop constraint:** W7 OldMill remains suspended following last month's quality audit.\n\n**Recommended sequence:** finish the two overdue Packing orders, unblock ORD-002, and concentrate capacity on Assembly and the three tight-deadline orders.",
+      "reserve_chart": true
+    }
+  ]
+}

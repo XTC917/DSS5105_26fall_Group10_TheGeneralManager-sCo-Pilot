@@ -120,8 +120,11 @@ export default function ChatPanel({
     if (state.official) commitOfficial();
   }
 
-  function startTyper() {
-    if (!typer.current.timer) typer.current.timer = setInterval(tickTyper, CHAR_MS);
+  function startTyper(interval = CHAR_MS) {
+    if (typer.current.timer && typer.current.interval === interval) return;
+    stopTyper();
+    typer.current.interval = interval;
+    typer.current.timer = setInterval(tickTyper, interval);
   }
 
   function queueAnswer(text) {
@@ -129,7 +132,7 @@ export default function ChatPanel({
     startTyper();
   }
 
-  function revealOfficial(official) {
+  function revealOfficial(official, interval = CHAR_MS) {
     const state = typer.current;
     const target = Array.from(official.content || "");
     const typed = state.chars.join("");
@@ -149,7 +152,7 @@ export default function ChatPanel({
     }
     return new Promise((resolve) => {
       state.resolve = resolve;
-      startTyper();
+      startTyper(interval);
     });
   }
 
@@ -199,7 +202,8 @@ export default function ChatPanel({
           if (token?.text) queueAnswer(token.text);
         },
       });
-      await revealOfficial(assistantMessage(result));
+      const official = assistantMessage(result);
+      await revealOfficial(official, result.instant ? CHAR_MS / 4 : CHAR_MS);
       onConversationUpdated?.();
     } catch (err) {
       resetTyper();

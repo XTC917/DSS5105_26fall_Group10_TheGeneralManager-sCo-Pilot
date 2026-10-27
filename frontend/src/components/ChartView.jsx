@@ -113,12 +113,107 @@ function PieChartView({ chart }) {
   );
 }
 
+function StageDailyChart({ chart }) {
+  const stages = Array.isArray(chart.stages) ? chart.stages : [];
+  const data = Array.isArray(chart.data) ? chart.data : [];
+  const [hidden, setHidden] = useState(() => new Set());
+  const number = (value) => Number(value || 0).toLocaleString();
+  function toggle(key) {
+    setHidden((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+  const visible = stages.filter((stage) => !hidden.has(stage.key));
+  return (
+    <figure className="mt-3 max-w-full overflow-hidden border-t border-ink/10 pt-3" aria-label={chart.title || "4-stage complete pieces"}>
+      <figcaption className="text-center">
+        <span className="block text-sm font-semibold text-ink">{chart.title || "4-stage complete pieces"}</span>
+        {chart.subtitle && <span className="mt-1 block text-xs text-ink/50">{chart.subtitle}</span>}
+      </figcaption>
+      <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-[11px]">
+        {stages.map((stage) => {
+          const off = hidden.has(stage.key);
+          return (
+            <button
+              key={stage.key}
+              type="button"
+              aria-pressed={!off}
+              onClick={() => toggle(stage.key)}
+              className={`inline-flex items-center gap-1.5 ${off ? "text-ink/35 line-through" : "text-ink"}`}
+            >
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-full border"
+                style={{ background: off ? "transparent" : stage.color, borderColor: stage.color }}
+              />
+              {stage.key}
+            </button>
+          );
+        })}
+      </div>
+      {data.length ? (
+        <div className="mt-2 h-80 w-full min-w-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ top: 12, right: 8, left: 0, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e6e8e5" />
+              <XAxis
+                dataKey="date"
+                interval={1}
+                angle={-40}
+                textAnchor="end"
+                height={58}
+                tick={{ fontSize: 10 }}
+                tickFormatter={(value) => String(value).slice(5)}
+              />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip
+                labelFormatter={(value) => String(value)}
+                formatter={(value, name) => [number(value), name]}
+                itemSorter={(item) => stages.findIndex((stage) => stage.key === item.dataKey)}
+              />
+              {visible.map((stage) => (
+                <Line
+                  key={stage.key}
+                  dataKey={stage.key}
+                  name={stage.key}
+                  stroke={stage.color}
+                  strokeWidth={2}
+                  dot={{ r: 2, fill: stage.color, stroke: stage.color }}
+                  activeDot={{ r: 3, fill: stage.color, stroke: stage.color }}
+                  isAnimationActive={false}
+                />
+              ))}
+              {visible.map((stage) => (
+                <Line
+                  key={`${stage.key}-mean`}
+                  dataKey={`${stage.key}_mean`}
+                  name={`${stage.key} mean`}
+                  stroke={stage.color}
+                  strokeWidth={1.5}
+                  strokeDasharray="5 4"
+                  dot={false}
+                  activeDot={false}
+                  legendType="none"
+                  isAnimationActive={false}
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      ) : <p className="py-6 text-center text-sm text-ink/60">No stage output is recorded.</p>}
+    </figure>
+  );
+}
+
 export default function ChartView({ chart }) {
   const [page, setPage] = useState(0);
   useEffect(() => {
     setPage(0);
   }, [chart]);
 
+  if (chart?.type === "stage_daily") return <StageDailyChart chart={chart} />;
   if (!chart || !TYPES[chart.type] || !Array.isArray(chart.data) || !chart.data.length) return null;
   if (!chart.category_key || !Array.isArray(chart.value_keys) || !chart.value_keys.length) return null;
 

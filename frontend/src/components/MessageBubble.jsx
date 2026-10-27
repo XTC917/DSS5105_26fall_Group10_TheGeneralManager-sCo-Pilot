@@ -152,7 +152,7 @@ export default function MessageBubble({
           </div>
         )}
         {!isUser && charts.map((chart, idx) => (
-          <ChartView key={`${chart.type}-${idx}`} chart={chart} />
+          <ChartView key={`${chart.type || "chart"}-${idx}`} chart={chart} />
         ))}
         {!isUser && tables.map((table, idx) => (
           <TableView key={`${table.title}-${idx}`} table={table} />
