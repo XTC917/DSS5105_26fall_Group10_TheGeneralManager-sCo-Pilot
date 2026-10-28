@@ -181,7 +181,9 @@ def _complete_chat(
         finally:
             set_current_user(None)
 
-        response = ChatResponse(**{**result, "why": build_why(request.message, result)})
+        prepared = result.get("why")
+        why = prepared if isinstance(prepared, dict) else build_why(request.message, result)
+        response = ChatResponse(**{**result, "why": why})
         if _leave_out_of_memory(result):
             record_failure(
                 "NOT_STORED",

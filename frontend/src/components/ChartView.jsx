@@ -7,6 +7,7 @@ import {
   CartesianGrid,
   Cell,
   ComposedChart,
+  LabelList,
   Legend,
   Line,
   LineChart,
@@ -114,8 +115,10 @@ function PieChartView({ chart }) {
 }
 
 function StageDailyChart({ chart }) {
-  const stages = Array.isArray(chart.stages) ? chart.stages : [];
+  const stage = (Array.isArray(chart.stages) ? chart.stages : [])[0] || {};
   const data = Array.isArray(chart.data) ? chart.data : [];
+  const color = stage.color || "#4c78a8";
+  const alertColor = chart.threshold_color || "#bf5145";
   const [hidden, setHidden] = useState(() => new Set());
   const number = (value) => Number(value || 0).toLocaleString();
   function toggle(key) {
@@ -126,29 +129,33 @@ function StageDailyChart({ chart }) {
       return next;
     });
   }
-  const visible = stages.filter((stage) => !hidden.has(stage.key));
+  const items = [
+    ["ASSEMBLY", "ASSEMBLY", color, false],
+    ["median", "30-day median", color, true],
+    ["alert_threshold", "Alert threshold", alertColor, true],
+  ];
   return (
-    <figure className="mt-3 max-w-full overflow-hidden border-t border-ink/10 pt-3" aria-label={chart.title || "4-stage complete pieces"}>
+    <figure className="mt-3 max-w-full overflow-hidden border-t border-ink/10 pt-3" aria-label={chart.title || "Assembly complete pieces"}>
       <figcaption className="text-center">
-        <span className="block text-sm font-semibold text-ink">{chart.title || "4-stage complete pieces"}</span>
+        <span className="block text-sm font-semibold text-ink">{chart.title || "Assembly complete pieces"}</span>
         {chart.subtitle && <span className="mt-1 block text-xs text-ink/50">{chart.subtitle}</span>}
       </figcaption>
       <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-[11px]">
-        {stages.map((stage) => {
-          const off = hidden.has(stage.key);
+        {items.map(([key, name, swatch, dashed]) => {
+          const off = hidden.has(key);
           return (
             <button
-              key={stage.key}
+              key={key}
               type="button"
               aria-pressed={!off}
-              onClick={() => toggle(stage.key)}
+              onClick={() => toggle(key)}
               className={`inline-flex items-center gap-1.5 ${off ? "text-ink/35 line-through" : "text-ink"}`}
             >
               <span
-                className="inline-block h-2.5 w-2.5 rounded-full border"
-                style={{ background: off ? "transparent" : stage.color, borderColor: stage.color }}
+                className="inline-block h-0.5 w-4 border-t-2"
+                style={{ borderColor: swatch, borderTopStyle: dashed ? "dashed" : "solid", opacity: off ? 0.35 : 1 }}
               />
-              {stage.key}
+              {name}
             </button>
           );
         })}
@@ -156,7 +163,7 @@ function StageDailyChart({ chart }) {
       {data.length ? (
         <div className="mt-2 h-80 w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 12, right: 8, left: 0, bottom: 8 }}>
+            <LineChart data={data} margin={{ top: 20, right: 12, left: 0, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e6e8e5" />
               <XAxis
                 dataKey="date"
@@ -168,37 +175,55 @@ function StageDailyChart({ chart }) {
                 tickFormatter={(value) => String(value).slice(5)}
               />
               <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip
-                labelFormatter={(value) => String(value)}
-                formatter={(value, name) => [number(value), name]}
-                itemSorter={(item) => stages.findIndex((stage) => stage.key === item.dataKey)}
-              />
-              {visible.map((stage) => (
+              <Tooltip labelFormatter={(value) => String(value)} formatter={(value, name) => [number(value), name]} />
+              {!hidden.has("ASSEMBLY") && (
                 <Line
-                  key={stage.key}
-                  dataKey={stage.key}
-                  name={stage.key}
-                  stroke={stage.color}
+                  dataKey="ASSEMBLY"
+                  name="ASSEMBLY"
+                  stroke={color}
                   strokeWidth={2}
-                  dot={{ r: 2, fill: stage.color, stroke: stage.color }}
-                  activeDot={{ r: 3, fill: stage.color, stroke: stage.color }}
+                  dot={{ r: 2, fill: color, stroke: color }}
+                  activeDot={{ r: 3, fill: color, stroke: color }}
                   isAnimationActive={false}
-                />
-              ))}
-              {visible.map((stage) => (
+                >
+                  <LabelList
+                    dataKey="ASSEMBLY"
+                    content={({ x, y, value, index }) => {
+                      const row = data[index];
+                      if (!row || row.date !== chart.label_date) return null;
+                      return (
+                        <text x={x} y={y - 8} textAnchor="middle" fontSize="11" fontWeight="700" fill={color}>
+                          {number(value)}
+                        </text>
+                      );
+                    }}
+                  />
+                </Line>
+              )}
+              {!hidden.has("median") && (
                 <Line
-                  key={`${stage.key}-mean`}
-                  dataKey={`${stage.key}_mean`}
-                  name={`${stage.key} mean`}
-                  stroke={stage.color}
+                  dataKey="median"
+                  name="30-day median"
+                  stroke={color}
                   strokeWidth={1.5}
                   strokeDasharray="5 4"
                   dot={false}
                   activeDot={false}
-                  legendType="none"
                   isAnimationActive={false}
                 />
-              ))}
+              )}
+              {!hidden.has("alert_threshold") && (
+                <Line
+                  dataKey="alert_threshold"
+                  name="Alert threshold"
+                  stroke={alertColor}
+                  strokeWidth={1.5}
+                  strokeDasharray="5 4"
+                  dot={false}
+                  activeDot={false}
+                  isAnimationActive={false}
+                />
+              )}
             </LineChart>
           </ResponsiveContainer>
         </div>

@@ -13,57 +13,62 @@ from datetime import date
 from functools import lru_cache
 from typing import Any
 
-from backend.config import PROJECT_ROOT
-from backend.services.calculations import is_working_day, parse_iso_date
+from backend.config import PRODUCTION_DROP_RATIO, PROJECT_ROOT
+from backend.services.calculations import is_working_day, median_or_none, parse_iso_date
 
 logger = logging.getLogger(__name__)
 
 ANSWERS_PATH = PROJECT_ROOT / "data" / "uc_answers.json"
-# Same order and colors as the weekly briefing "4-stage complete pieces" chart.
-_STAGE_LINES = (
-    ("ASSEMBLY", "#4c78a8"),
-    ("KNITTING", "#f28e2b"),
-    ("PACKING", "#8d8d8d"),
-    ("WASHING", "#e6b325"),
-)
+_ASSEMBLY = "ASSEMBLY"
+_ASSEMBLY_COLOR = "#4c78a8"
+_ALERT_COLOR = "#bf5145"
 _STAGE_DAILY_DAYS = 30
+_LABEL_DATE = "2026-03-31"
 
 
-def stage_daily_chart(log: list[dict[str, Any]], today: date, days: int = _STAGE_DAILY_DAYS) -> dict[str, Any]:
-    """Daily pieces for the last N working days before today, plus each stage mean."""
+def stage_daily_chart(
+    log: list[dict[str, Any]],
+    today: date,
+    days: int = _STAGE_DAILY_DAYS,
+    median: float | None = None,
+) -> dict[str, Any]:
+    """Assembly pieces for the last N working days, its 30-day median, and the alert line."""
     found: set[date] = set()
     for row in log:
         day = parse_iso_date(row.get("date"))
         if day is not None and day < today and is_working_day(day):
             found.add(day)
     chosen = sorted(found)[-days:]
-    totals = {day: {stage: 0 for stage, _color in _STAGE_LINES} for day in chosen}
-    allowed = set(chosen)
+    totals = {day: 0 for day in chosen}
+    recorded: list[int] = []
     for row in log:
         day = parse_iso_date(row.get("date"))
-        stage = row.get("stage")
-        if day not in allowed or stage not in totals.get(day, {}):
+        if day not in totals or row.get("stage") != _ASSEMBLY:
             continue
-        totals[day][stage] += int(row.get("pieces_completed") or 0)
-    count = len(chosen)
-    means = {
-        stage: round(sum(totals[day][stage] for day in chosen) / count, 1) if count else 0
-        for stage, _color in _STAGE_LINES
-    }
-    data = []
-    for day in chosen:
-        item = {"date": day.isoformat(), **totals[day]}
-        for stage, _color in _STAGE_LINES:
-            item[f"{stage}_mean"] = means[stage]
-        data.append(item)
+        pieces = int(row.get("pieces_completed") or 0)
+        totals[day] += pieces
+        recorded.append(pieces)
+    if median is None:
+        median = median_or_none(recorded if recorded else list(totals.values()))
+    median_value = round(float(median or 0), 1)
+    threshold = round(median_value * PRODUCTION_DROP_RATIO, 1)
+    data = [
+        {
+            "date": day.isoformat(),
+            _ASSEMBLY: totals[day],
+            "median": median_value,
+            "alert_threshold": threshold,
+        }
+        for day in chosen
+    ]
     return {
         "type": "stage_daily",
-        "title": "4-stage complete pieces",
-        "subtitle": "Past 30 working days. Dashed line is the mean.",
-        "stages": [
-            {"key": stage, "color": color, "mean": means[stage]}
-            for stage, color in _STAGE_LINES
-        ],
+        "title": "Assembly complete pieces",
+        "subtitle": "Past 30 working days.",
+        "label_date": _LABEL_DATE,
+        "stages": [{"key": _ASSEMBLY, "color": _ASSEMBLY_COLOR, "median": median_value}],
+        "threshold": threshold,
+        "threshold_color": _ALERT_COLOR,
         "data": data,
     }
 
@@ -127,24 +132,62 @@ def uc_why_traces() -> list[dict[str, Any]]:
     }]
 
 
+_BRIEFING_SOURCE = "orders.csv, production_log.csv, workshops.csv"
+
+
+def compose_uc_why(message: str, answer: str, source_trace: dict[str, Any] | None) -> dict[str, Any]:
+    """Keep the pinned four steps. The source line names the briefing files only."""
+    from backend.services.why import build_why
+
+    why = build_why(message, {"answer": answer, "traces": uc_why_traces()})
+    name = _BRIEFING_SOURCE
+    count = 0
+    if isinstance(source_trace, dict) and source_trace.get("source_file"):
+        name = str(source_trace["source_file"])
+        count = len([row for row in source_trace.get("rows") or [] if isinstance(row, dict)])
+    why["sources"] = [{"name": name, "row_count": count, "rows": [], "summary_only": True}]
+    return why
+
+
+def _briefing_source_trace() -> dict[str, Any] | None:
+    from backend.tools.briefing import get_morning_briefing
+
+    try:
+        payload = json.loads(get_morning_briefing.invoke({}))
+    except Exception:  # noqa: BLE001
+        logger.exception("uc briefing source failed")
+        return None
+    trace = payload.get("trace") if isinstance(payload, dict) else None
+    if isinstance(trace, dict) and trace.get("source_file"):
+        return trace
+    return None
+
+
 def play_uc_answer(message: str, progress) -> dict[str, Any] | None:
     """Hold each listed stage, then return the pinned reply. No model call."""
     row = match_uc_answer(message)
     if row is None:
         return None
+    answer = str(row.get("answer") or "")
+    charts = []
+    source_trace = None
+    if row.get("reserve_chart"):
+        from backend.config import FACTORY_TODAY
+        from backend.services.database import get_db
+        from backend.services.feasibility import stage_throughput_medians
+
+        db = get_db()
+        medians = stage_throughput_medians(db)["medians_pieces_per_working_day"]
+        charts = [stage_daily_chart(db.production_log(), FACTORY_TODAY, median=medians.get(_ASSEMBLY))]
+        source_trace = _briefing_source_trace()
     stage_ms = int(row.get("stage_ms") or 1500)
     for stage in row.get("stages") or []:
         if progress:
             progress(str(stage))
         time.sleep(max(0, stage_ms) / 1000)
-    charts = []
-    if row.get("reserve_chart"):
-        from backend.config import FACTORY_TODAY
-        from backend.services.database import get_db
-
-        charts = [stage_daily_chart(get_db().production_log(), FACTORY_TODAY)]
     return {
-        "answer": str(row.get("answer") or ""),
+        "answer": answer,
+        "why": compose_uc_why(message, answer, source_trace),
         "tools_used": [],
         "traces": uc_why_traces(),
         "proposed_actions": [],

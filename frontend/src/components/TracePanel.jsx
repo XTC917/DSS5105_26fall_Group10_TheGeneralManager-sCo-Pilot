@@ -23,6 +23,10 @@ function PaceFormula() {
 function SourceRows({ source, zh }) {
   const rows = (source.rows || []).filter((row) => Object.keys(row).length);
   const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  const label = `${source.name} · ${source.row_count ?? rows.length} ${zh ? "条来源记录" : "source records"}`;
+  if (source.summary_only) {
+    return <p className="rounded border border-ink/10 bg-white p-3 text-xs font-medium">{label}</p>;
+  }
   return (
     <details className="rounded border border-ink/10 bg-white p-3">
       <summary className="cursor-pointer text-xs font-medium">
