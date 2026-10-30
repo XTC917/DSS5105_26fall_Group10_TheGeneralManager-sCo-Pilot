@@ -74,18 +74,6 @@ real-time monitoring and **not** a scheduler.
 
 `evaluation/questions.json` is a few-shot wording bank for the agent, not a scoring harness.
 
-## What is not built yet (course gaps first)
-
-These are Track 1 core capabilities that are still missing or only half-done:
-
-- **Scheduled briefing** — current briefing is on-demand (ask in chat, or the sidebar loads `/api/briefing`). Nothing generates it on a clock. Prose appears only when the agent writes it.
-- **Watch types beyond `ORDER_INACTIVE_BY_DATE`** — no stage-still-in, overdue-as-of, or factory-wide packing-behind watches yet. No scheduler; evaluate by calling the API with `as_of`.
-- **`assess_stage_performance`** — full inspectable “is this stage output normal?” tool. Discovery/briefing only reuse the 0.70 × 30-day-median drop heuristic.
-- **Held-out evaluation file** — add a separate JSON (`meta.usage = "held-out"`) before claiming official accuracy.
-- **Course write-ups** — `Evaluation.pdf` (including ≥10 analysed failure cases), Sprint decks, `GroupX.zip`. Not product code.
-
-Out of scope for this track (not a course requirement): real SMTP / calendar /
-push, voice in/out, a YAML business ontology.
 
 ## Repository layout
 
