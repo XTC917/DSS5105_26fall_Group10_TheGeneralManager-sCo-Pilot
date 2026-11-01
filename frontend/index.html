@@ -3,7 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <title>SweaterCo — GM Co-Pilot</title>
+    <script>
+      // Apply the persisted theme before first paint to avoid a flash (FOUC).
+      (function () {
+        try {
+          var root = document.documentElement;
+          var mode = localStorage.getItem("sweaterco.theme.mode") || "system";
+          var accent = localStorage.getItem("sweaterco.theme.accent") || "ocean";
+          var prefersDark =
+            window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var resolved =
+            mode === "dark" || (mode === "system" && prefersDark) ? "dark" : "light";
+          root.dataset.theme = resolved;
+          root.dataset.accent = accent;
+        } catch (e) {
+          /* ignore — defaults from tokens.css apply */
+        }
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

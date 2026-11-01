@@ -1,0 +1,351 @@
+/* =========================================================================
+   SweaterCo Design System — Semantic tokens
+   -------------------------------------------------------------------------
+   Colour variables are stored as raw RGB channels ("R G B") so Tailwind can
+   apply opacity modifiers (e.g. bg-surface/60) via <alpha-value>.
+
+   Layers:
+     1. Base neutrals (light by default, overridden under [data-theme="dark"])
+     2. Accent variables per [data-accent="..."]
+     3. Semantic aliases (--accent, --accent-text, --ring, --chart-*, ...)
+     4. Radius / shadow / motion / typography tokens
+     5. Small utility layer (focus ring, type scale, skeleton, reduced motion)
+   ========================================================================= */
+
+:root {
+  /* ---- Base neutrals (light) ---- */
+  --bg: 250 250 249;
+  --surface: 255 255 255;
+  --surface-2: 246 246 245;
+  --surface-3: 240 240 238;
+  --foreground: 23 27 32;
+  --muted: 90 98 108;
+  --muted-2: 132 139 148;
+  --line: 226 228 231;
+  --line-strong: 205 210 216;
+
+  /* ---- Status (light) ---- */
+  --danger: 190 40 45;
+  --danger-soft: 254 226 226;
+  --success: 21 128 93;
+  --success-soft: 209 250 229;
+  --warning: 180 120 20;
+  --warning-soft: 254 243 199;
+
+  /* ---- Accent source (defaults to Ocean) ---- */
+  --a-fill: 29 78 216;
+  --a-text-light: 29 78 216;
+  --a-text-dark: 96 165 250;
+  --a-soft-light: 219 234 254;
+  --a-soft-dark: 23 37 84;
+
+  /* Default accent scale (Ocean) so utilities resolve before data-accent is applied. */
+  --accent-50: 239 246 255;
+  --accent-100: 219 234 254;
+  --accent-200: 191 219 254;
+  --accent-300: 147 197 253;
+  --accent-400: 96 165 250;
+  --accent-500: 59 130 246;
+  --accent-600: 37 99 235;
+  --accent-700: 29 78 216;
+  --accent-800: 30 64 175;
+  --accent-900: 30 58 138;
+
+  /* ---- Semantic accent aliases ---- */
+  --accent: var(--a-fill);
+  --accent-contrast: 255 255 255;
+  --accent-soft: var(--a-soft-light);
+  --accent-text: var(--a-text-light);
+  --ring: var(--a-fill);
+
+  /* ---- Chart palette (chart-1 follows the accent) ---- */
+  --chart-1: var(--a-fill);
+  --chart-2: 14 165 233;
+  --chart-3: 16 185 129;
+  --chart-4: 245 158 11;
+  --chart-5: 244 63 94;
+  --chart-6: 139 92 246;
+
+  /* ---- Radius ---- */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 999px;
+
+  /* ---- Elevation (subtle, theme-aware) ---- */
+  --shadow-xs: 0 1px 2px rgb(16 24 40 / 0.05);
+  --shadow-sm: 0 1px 3px rgb(16 24 40 / 0.08), 0 1px 2px rgb(16 24 40 / 0.04);
+  --shadow-md: 0 6px 16px -4px rgb(16 24 40 / 0.12), 0 2px 6px -2px rgb(16 24 40 / 0.06);
+  --shadow-lg: 0 18px 40px -12px rgb(16 24 40 / 0.22), 0 6px 14px -6px rgb(16 24 40 / 0.12);
+
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 280ms;
+
+  --ring-width: 2px;
+  --ring-offset: 2px;
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: 12 14 17;
+  --surface: 20 23 27;
+  --surface-2: 27 31 36;
+  --surface-3: 34 39 45;
+  --foreground: 237 239 242;
+  --muted: 158 166 175;
+  --muted-2: 118 126 136;
+  --line: 40 45 52;
+  --line-strong: 58 65 74;
+
+  --danger: 248 113 113;
+  --danger-soft: 60 20 22;
+  --success: 52 211 153;
+  --success-soft: 12 45 34;
+  --warning: 251 191 36;
+  --warning-soft: 60 44 8;
+
+  --accent-soft: var(--a-soft-dark);
+  --accent-text: var(--a-text-dark);
+  --ring: var(--a-text-dark);
+
+  --chart-1: var(--a-text-dark);
+  --chart-2: 56 189 248;
+  --chart-3: 52 211 153;
+  --chart-4: 251 191 36;
+  --chart-5: 251 113 133;
+  --chart-6: 167 139 250;
+
+  color-scheme: dark;
+}
+
+/* ---- Accent palettes ---------------------------------------------------- */
+[data-accent="ocean"] {
+  --accent-50: 239 246 255;
+  --accent-100: 219 234 254;
+  --accent-200: 191 219 254;
+  --accent-300: 147 197 253;
+  --accent-400: 96 165 250;
+  --accent-500: 59 130 246;
+  --accent-600: 37 99 235;
+  --accent-700: 29 78 216;
+  --accent-800: 30 64 175;
+  --accent-900: 30 58 138;
+
+  --a-fill: 29 78 216;
+  --a-text-light: 29 78 216;
+  --a-text-dark: 96 165 250;
+  --a-soft-light: 219 234 254;
+  --a-soft-dark: 23 37 84;
+}
+
+[data-accent="lavender"] {
+  --accent-50: 245 243 255;
+  --accent-100: 237 233 254;
+  --accent-200: 221 214 254;
+  --accent-300: 196 181 253;
+  --accent-400: 167 139 250;
+  --accent-500: 139 92 246;
+  --accent-600: 124 58 237;
+  --accent-700: 109 40 217;
+  --accent-800: 91 33 182;
+  --accent-900: 76 29 149;
+
+  --a-fill: 109 40 217;
+  --a-text-light: 109 40 217;
+  --a-text-dark: 167 139 250;
+  --a-soft-light: 237 233 254;
+  --a-soft-dark: 46 16 101;
+}
+
+[data-accent="sage"] {
+  --accent-50: 242 248 245;
+  --accent-100: 220 237 228;
+  --accent-200: 185 219 204;
+  --accent-300: 134 188 161;
+  --accent-400: 76 147 114;
+  --accent-500: 47 107 79;
+  --accent-600: 38 90 66;
+  --accent-700: 29 74 54;
+  --accent-800: 23 58 43;
+  --accent-900: 17 44 33;
+
+  --a-fill: 47 107 79;
+  --a-text-light: 47 107 79;
+  --a-text-dark: 110 231 183;
+  --a-soft-light: 220 252 231;
+  --a-soft-dark: 20 46 34;
+}
+
+[data-accent="rose"] {
+  --accent-50: 253 242 248;
+  --accent-100: 252 231 243;
+  --accent-200: 251 207 232;
+  --accent-300: 249 168 212;
+  --accent-400: 244 114 182;
+  --accent-500: 236 72 153;
+  --accent-600: 219 39 119;
+  --accent-700: 190 24 93;
+  --accent-800: 157 23 77;
+  --accent-900: 131 24 67;
+
+  --a-fill: 190 24 93;
+  --a-text-light: 190 24 93;
+  --a-text-dark: 244 114 182;
+  --a-soft-light: 252 231 243;
+  --a-soft-dark: 74 16 40;
+}
+
+[data-accent="amber"] {
+  --accent-50: 255 251 235;
+  --accent-100: 254 243 199;
+  --accent-200: 253 230 138;
+  --accent-300: 252 211 77;
+  --accent-400: 251 191 36;
+  --accent-500: 245 158 11;
+  --accent-600: 217 119 6;
+  --accent-700: 180 83 9;
+  --accent-800: 146 64 14;
+  --accent-900: 120 53 15;
+
+  --a-fill: 180 83 9;
+  --a-text-light: 180 83 9;
+  --a-text-dark: 251 191 36;
+  --a-soft-light: 254 243 199;
+  --a-soft-dark: 69 40 6;
+}
+
+[data-accent="slate"] {
+  --accent-50: 248 250 252;
+  --accent-100: 241 245 249;
+  --accent-200: 226 232 240;
+  --accent-300: 203 213 225;
+  --accent-400: 148 163 184;
+  --accent-500: 100 116 139;
+  --accent-600: 71 85 105;
+  --accent-700: 51 65 85;
+  --accent-800: 30 41 59;
+  --accent-900: 15 23 42;
+
+  --a-fill: 51 65 85;
+  --a-text-light: 51 65 85;
+  --a-text-dark: 148 163 184;
+  --a-soft-light: 226 232 240;
+  --a-soft-dark: 30 41 59;
+}
+
+/* =========================================================================
+   Utility layer
+   ========================================================================= */
+
+/* Accessible focus ring driven by the current accent + surface. */
+.focus-ring {
+  outline: none;
+}
+.focus-ring:focus-visible {
+  box-shadow:
+    0 0 0 var(--ring-offset) rgb(var(--bg)),
+    0 0 0 calc(var(--ring-offset) + var(--ring-width)) rgb(var(--ring));
+}
+
+/* Tabular numerals for scannable metrics and tables. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Type scale --------------------------------------------------------- */
+.type-display {
+  font-size: clamp(2rem, 1.4rem + 2.2vw, 2.75rem);
+  line-height: 1.08;
+  letter-spacing: -0.022em;
+  font-weight: 600;
+}
+.type-h1 {
+  font-size: 1.75rem;
+  line-height: 1.18;
+  letter-spacing: -0.018em;
+  font-weight: 600;
+}
+.type-h2 {
+  font-size: 1.375rem;
+  line-height: 1.24;
+  letter-spacing: -0.012em;
+  font-weight: 600;
+}
+.type-h3 {
+  font-size: 1.125rem;
+  line-height: 1.34;
+  letter-spacing: -0.008em;
+  font-weight: 600;
+}
+.type-body {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+.type-sm {
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+.type-caption {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+}
+.type-overline {
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.type-metric {
+  font-size: 1.875rem;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Skeleton shimmer --------------------------------------------------- */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+.skeleton {
+  background-image: linear-gradient(
+    90deg,
+    rgb(var(--surface-2)) 25%,
+    rgb(var(--surface-3)) 37%,
+    rgb(var(--surface-2)) 63%
+  );
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+
+/* ---- Selection ---------------------------------------------------------- */
+::selection {
+  background-color: rgb(var(--accent-soft));
+  color: rgb(var(--foreground));
+}
+
+/* ---- Reduced motion ----------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

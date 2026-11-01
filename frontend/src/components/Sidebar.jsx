@@ -3,9 +3,9 @@ import { fetchAudit, fetchBriefing, fetchDiscovery, fetchWatches } from "../serv
 
 function Card({ title, children }) {
   return (
-    <section className="rounded-lg border border-ink/10 bg-white p-4 shadow-sm">
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-ink/50">{title}</h2>
-      <div className="mt-2 text-sm text-ink/70">{children}</div>
+    <section className="rounded-card border border-line bg-surface p-4 shadow-xs">
+      <h2 className="type-overline text-muted">{title}</h2>
+      <div className="mt-2 type-sm text-muted">{children}</div>
     </section>
   );
 }
@@ -23,12 +23,12 @@ function FiredAlert({ item }) {
   const [open, setOpen] = useState(false);
   const snapshot = item.snapshot || {};
   return (
-    <li className="rounded border border-ink/10 bg-paper px-2 py-2">
-      <p className="text-xs font-semibold text-ink">Standing watch triggered</p>
-      <p className="mt-1 text-sm text-ink">
+    <li className="rounded-control border border-line bg-surfaceMuted px-2 py-2">
+      <p className="type-caption font-semibold text-foreground">Standing watch triggered</p>
+      <p className="mt-1 type-sm text-foreground">
         {item.order_id} has not moved by {formatFactoryDate(item.check_date)}
       </p>
-      <ul className="mt-1 space-y-0.5 text-xs">
+      <ul className="mt-1 space-y-0.5 type-caption text-muted">
         <li>Last activity: {item.last_activity_date || "—"}</li>
         <li>Triggered as of: {item.fired_as_of || item.as_of || "—"}</li>
         <li>Status then: {item.order_status || "—"}</li>
@@ -37,12 +37,12 @@ function FiredAlert({ item }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="mt-1 text-xs font-medium text-ink underline decoration-brass underline-offset-2"
+        className="mt-1 type-caption font-medium text-accentText underline underline-offset-2"
       >
         {open ? "Hide evidence" : "Why?"}
       </button>
       {open && (
-        <pre className="trace-pre mt-1 max-h-40 overflow-auto text-[11px] text-ink/80">
+        <pre className="trace-pre mt-1 max-h-40 overflow-auto type-caption text-muted">
           {JSON.stringify(
             {
               order_id: item.order_id,
@@ -68,23 +68,23 @@ function IssueRow({ item }) {
   const [open, setOpen] = useState(false);
   const where = item.order_id || item.stage || "";
   return (
-    <li className="rounded border border-ink/10 bg-paper px-2 py-2">
-      <p className="text-xs font-semibold text-ink">
+    <li className="rounded-control border border-line bg-surfaceMuted px-2 py-2">
+      <p className="type-caption font-semibold text-foreground">
         P{item.priority} · {item.title || item.issue_type}
       </p>
-      <p className="mt-0.5 text-xs text-ink/70">
+      <p className="mt-0.5 type-caption text-muted">
         {where}
         {item.evidence?.flags?.length ? ` · ${item.evidence.flags.join(", ")}` : ""}
       </p>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="mt-1 text-xs font-medium text-ink underline decoration-brass underline-offset-2"
+        className="mt-1 type-caption font-medium text-accentText underline underline-offset-2"
       >
         {open ? "Hide evidence" : "Why?"}
       </button>
       {open && (
-        <pre className="trace-pre mt-1 max-h-40 overflow-auto text-[11px] text-ink/80">
+        <pre className="trace-pre mt-1 max-h-40 overflow-auto type-caption text-muted">
           {JSON.stringify(
             {
               issue_id: item.issue_id,
@@ -142,8 +142,14 @@ export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
   return (
     <aside className="space-y-3">
       <Card title="Morning briefing">
-        <button type="button" onClick={onOpenBriefing} className="mb-3 w-full rounded-md bg-ink px-3 py-2 text-sm font-semibold text-paper hover:bg-ink/90">Open morning briefing ↗</button>
-        {error && <p>API offline — ask in chat once the backend is running.</p>}
+        <button
+          type="button"
+          onClick={onOpenBriefing}
+          className="mb-3 w-full rounded-control bg-accent px-3 py-2 type-sm font-semibold text-accentContrast transition-colors duration-[var(--dur-fast)] hover:brightness-110"
+        >
+          Open morning briefing ↗
+        </button>
+        {error && <p className="text-danger">API offline — ask in chat once the backend is running.</p>}
         {!error && !briefing && <p>Loading structured facts…</p>}
         {briefing && (
           <ul className="space-y-1">
@@ -199,12 +205,12 @@ export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
           </p>
         )}
         {active.length > 0 && (
-          <ul className="space-y-1 text-xs">
+          <ul className="space-y-1 type-caption">
             {active.map((item) => (
               <li key={item.watch_id}>
                 {item.order_id} · inactive by {formatFactoryDate(item.check_date)} ·{" "}
                 {item.status}
-                <span className="block text-ink/45">
+                <span className="block text-subtle">
                   Ask in chat to cancel watch {item.watch_id}
                 </span>
               </li>
@@ -217,7 +223,7 @@ export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
           <p>Cancelled watches stay here for audit. They are not deleted.</p>
         )}
         {cancelledWatches.length > 0 && (
-          <ul className="space-y-1 text-xs">
+          <ul className="space-y-1 type-caption">
             {cancelledWatches.map((item) => (
               <li key={item.watch_id}>
                 {item.order_id} · inactive by {formatFactoryDate(item.check_date)} ·
@@ -233,7 +239,7 @@ export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
           <p>No local audit rows yet. Drafts, notes, reminders, and watches will appear here.</p>
         )}
         {audit.length > 0 && (
-          <ul className="space-y-1 text-xs">
+          <ul className="space-y-1 type-caption">
             {audit.slice(0, 5).map((row) => (
               <li key={row.id}>
                 {row.tool || row.event_type}
@@ -242,7 +248,7 @@ export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
             ))}
           </ul>
         )}
-        <p className="mt-2 text-xs">Email is never actually sent (no SMTP).</p>
+        <p className="mt-2 type-caption">Email is never actually sent (no SMTP).</p>
       </Card>
     </aside>
   );

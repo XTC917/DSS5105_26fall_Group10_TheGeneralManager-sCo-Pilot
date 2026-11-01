@@ -19,22 +19,11 @@ export default function ConversationList({
   onCreate,
 }) {
   return (
-    <section className="rounded-lg border border-ink/10 bg-white p-2 shadow-sm">
-      <div className="mb-2 flex items-center justify-between gap-2 px-1">
-        <p className="text-xs font-semibold uppercase tracking-wide text-ink/60">Conversations</p>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={onCreate}
-          className="rounded border border-ink/15 px-2 py-1 text-xs font-medium text-ink hover:border-brass disabled:opacity-50"
-        >
-          New
-        </button>
-      </div>
+    <div className="space-y-1">
       {loading ? (
-        <p className="px-2 py-3 text-xs text-ink/45">Loading history…</p>
+        <p className="px-2 py-3 type-caption text-subtle">Loading history…</p>
       ) : conversations.length === 0 ? (
-        <p className="px-2 py-3 text-xs text-ink/45">No saved conversations.</p>
+        <p className="px-2 py-3 type-caption text-subtle">No saved conversations.</p>
       ) : (
         <div className="max-h-64 space-y-1 overflow-y-auto">
           {conversations.map((conversation) => {
@@ -45,12 +34,14 @@ export default function ConversationList({
                 type="button"
                 disabled={disabled}
                 onClick={() => onSelect(conversation.id)}
-                className={`block w-full rounded-md px-2 py-2 text-left disabled:opacity-50 ${
-                  active ? "bg-ink text-paper" : "text-ink hover:bg-paper"
+                className={`focus-ring block w-full rounded-xl px-2.5 py-2 text-left transition-colors duration-[var(--dur-fast)] disabled:opacity-50 ${
+                  active
+                    ? "bg-accentSoft text-foreground shadow-xs"
+                    : "text-foreground hover:bg-surfaceMuted"
                 }`}
               >
-                <span className="block truncate text-xs font-medium">{conversation.title}</span>
-                <span className={`mt-0.5 block text-[10px] ${active ? "text-paper/65" : "text-ink/45"}`}>
+                <span className="block truncate type-caption font-medium">{conversation.title}</span>
+                <span className={`mt-0.5 block text-[10px] ${active ? "text-accentText" : "text-subtle"}`}>
                   {conversation.turn_count} turns · {formatUpdatedAt(conversation.updated_at)}
                 </span>
               </button>
@@ -58,6 +49,6 @@ export default function ConversationList({
           })}
         </div>
       )}
-    </section>
+    </div>
   );
 }
