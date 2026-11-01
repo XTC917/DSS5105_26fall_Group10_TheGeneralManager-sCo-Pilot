@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://REPLACE-WITH-RENDER-SERVICE.onrender.com/api/:path*"
+      "destination": "https://sweaterco-copilot-api.onrender.com/api/:path*"
     },
     {
       "source": "/(.*)",
