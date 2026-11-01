@@ -1,0 +1,61 @@
+# Render Blueprint template. This file does NOT create anything until you
+# connect the repository in the Render dashboard and apply the blueprint.
+#
+# Free plan notes (verified 2026-06):
+# - 512 MB RAM, less than 1 CPU
+# - spins down after 15 minutes without inbound traffic; cold start about 1 min
+# - ephemeral filesystem; uploads and logs are lost on restart/redeploy
+# - 750 free instance hours per workspace per month
+services:
+  - type: web
+    name: sweaterco-copilot-api
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: LLM_PROVIDER
+        value: openai
+      - key: LLM_MODEL
+        value: gpt-5.6
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_BASE_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_UNPOOLED
+        sync: false
+      - key: PG_ADMIN_DATABASE_URL
+        sync: false
+      - key: PG_ADMIN_USER
+        sync: false
+      - key: PG_ADMIN_PASSWORD
+        sync: false
+      - key: PGHOST
+        sync: false
+      - key: PGPORT
+        value: "5432"
+      - key: PGDATABASE
+        sync: false
+      - key: PGSCHEMA
+        value: app
+      - key: PG_ADMIN_META_SCHEMA
+        value: admin_meta
+      - key: PG_COPILOT_SCHEMA
+        value: copilot
+      - key: PG_AUTH_SCHEMA
+        value: auth
+      - key: PGCONNECT_TIMEOUT
+        value: "10"
+      - key: PG_STATEMENT_TIMEOUT_MS
+        value: "30000"
+      - key: PG_READ_STATEMENT_TIMEOUT_MS
+        value: "5000"
+      - key: AUTH_SECRET_KEY
+        sync: false
+      - key: ADMIN_REGISTRATION_CODE
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

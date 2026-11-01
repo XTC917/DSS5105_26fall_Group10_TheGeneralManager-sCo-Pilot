@@ -28,3 +28,7 @@ Thumbs.db
 .vscode/
 *.swp
 RUN.txt
+.neon
+.neon-admin.local
+.env.local-backup-before-neon
+node_modules/

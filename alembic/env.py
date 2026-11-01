@@ -3,9 +3,13 @@ from __future__ import annotations
 
 import os
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=True)
 
 config = context.config
 if config.config_file_name is not None:
@@ -13,6 +17,11 @@ if config.config_file_name is not None:
 
 
 def database_url() -> str:
+    # Migrations require a direct connection; Neon's pooled endpoint cannot
+    # reliably preserve session state needed by Alembic.
+    url = os.getenv("DATABASE_URL_UNPOOLED") or os.getenv("PG_ADMIN_DATABASE_URL")
+    if url:
+        return url
     url = os.getenv("DATABASE_URL")
     if url:
         return url

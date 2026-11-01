@@ -11,8 +11,15 @@ load_dotenv(PROJECT_ROOT / ".env", override=True)
 
 
 def postgres_dsn(*, admin: bool = False) -> str:
-    if os.getenv("DATABASE_URL") and not admin:
+    if admin:
+        admin_url = os.getenv("PG_ADMIN_DATABASE_URL") or os.getenv("DATABASE_URL_UNPOOLED")
+        if admin_url:
+            return admin_url
+    elif os.getenv("DATABASE_URL"):
         return os.environ["DATABASE_URL"]
+    elif os.getenv("DATABASE_URL_UNPOOLED"):
+        return os.environ["DATABASE_URL_UNPOOLED"]
+
     user = os.getenv("PG_ADMIN_USER" if admin else "PGUSER", "factory_admin" if admin else "factory_agent")
     password = os.getenv("PG_ADMIN_PASSWORD" if admin else "PGPASSWORD", "")
     host = os.getenv("PGHOST", "localhost")

@@ -43,18 +43,24 @@ def test_chat_without_key_is_503(monkeypatch, employee_auth_headers):
         assert res.status_code == 503
 
 
-def test_briefing_endpoint():
+def test_briefing_endpoint(employee_auth_headers):
     with TestClient(app) as client:
-        res = client.get("/api/briefing")
+        res = client.get("/api/briefing", headers=employee_auth_headers)
         assert res.status_code == 200
         body = res.json()
         assert body["factory_today"] == "2026-04-01"
         assert body["at_risk"]["count"] == 3
 
 
-def test_discovery_endpoint():
+def test_briefing_requires_auth():
     with TestClient(app) as client:
-        res = client.get("/api/discovery?limit=5")
+        res = client.get("/api/briefing")
+        assert res.status_code == 401
+
+
+def test_discovery_endpoint(employee_auth_headers):
+    with TestClient(app) as client:
+        res = client.get("/api/discovery?limit=5", headers=employee_auth_headers)
         assert res.status_code == 200
         body = res.json()
         assert body["factory_today"] == "2026-04-01"
@@ -62,6 +68,12 @@ def test_discovery_endpoint():
         assert body["total_found"] == 1
         assert body["issues"][0]["issue_id"] == "stage:ASSEMBLY"
         assert "today_priority" not in body
+
+
+def test_discovery_requires_auth():
+    with TestClient(app) as client:
+        res = client.get("/api/discovery?limit=5")
+        assert res.status_code == 401
 
 
 def test_audit_endpoint(employee_auth_headers):

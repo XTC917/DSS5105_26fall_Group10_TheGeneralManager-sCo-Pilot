@@ -8,6 +8,7 @@ Run from the project root:
 from __future__ import annotations
 
 import logging
+import os
 import time
 import asyncio
 import json
@@ -62,6 +63,14 @@ logger = logging.getLogger(__name__)
 _CHAT_WORKERS: set[asyncio.Task] = set()
 
 
+def _cors_origins() -> list[str]:
+    raw = os.getenv("CORS_ORIGINS", "")
+    origins = [item.strip().rstrip("/") for item in raw.split(",") if item.strip()]
+    if origins:
+        return origins
+    return ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     setup_logging()
@@ -84,10 +93,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -294,13 +300,13 @@ async def chat_stream(request: ChatRequest, user: CurrentUser = Depends(get_curr
 
 
 @app.get("/api/briefing")
-def briefing() -> dict:
+def briefing(_user: CurrentUser = Depends(get_current_user)) -> dict:
     """Structured morning briefing facts (no LLM)."""
     return build_morning_briefing(get_db())
 
 
 @app.get("/api/discovery")
-def discovery(limit: int = DEFAULT_LIMIT) -> dict:
+def discovery(limit: int = DEFAULT_LIMIT, _user: CurrentUser = Depends(get_current_user)) -> dict:
     """Production-log issues from defined Python rules (no LLM)."""
     if limit < 1 or limit > MAX_LIMIT:
         raise HTTPException(
