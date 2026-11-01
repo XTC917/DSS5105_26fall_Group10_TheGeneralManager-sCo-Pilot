@@ -18,7 +18,7 @@ services:
       - key: LLM_PROVIDER
         value: openai
       - key: LLM_MODEL
-        value: gpt-5.6
+        value: gpt-4o-mini
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_BASE_URL
@@ -26,18 +26,6 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: DATABASE_URL_UNPOOLED
-        sync: false
-      - key: PG_ADMIN_DATABASE_URL
-        sync: false
-      - key: PG_ADMIN_USER
-        sync: false
-      - key: PG_ADMIN_PASSWORD
-        sync: false
-      - key: PGHOST
-        sync: false
-      - key: PGPORT
-        value: "5432"
-      - key: PGDATABASE
         sync: false
       - key: PGSCHEMA
         value: app
