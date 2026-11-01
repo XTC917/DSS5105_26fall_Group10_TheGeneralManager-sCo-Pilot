@@ -17,6 +17,7 @@ export default function ConversationList({
   disabled,
   onSelect,
   onCreate,
+  scrollable = true,
 }) {
   return (
     <div className="space-y-1">
@@ -25,7 +26,7 @@ export default function ConversationList({
       ) : conversations.length === 0 ? (
         <p className="px-2 py-3 type-caption text-subtle">No saved conversations.</p>
       ) : (
-        <div className="max-h-64 space-y-1 overflow-y-auto">
+        <div className={`space-y-1 ${scrollable ? "max-h-64 overflow-y-auto" : ""}`}>
           {conversations.map((conversation) => {
             const active = conversation.id === activeConversationId;
             return (

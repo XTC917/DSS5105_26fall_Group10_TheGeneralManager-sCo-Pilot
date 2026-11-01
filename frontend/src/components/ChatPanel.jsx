@@ -76,6 +76,23 @@ function ChevronIcon({ open }) {
   );
 }
 
+function HistoryIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6M4 4v4.6h4.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 8v4.4l3 1.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function ChatPanel({
   conversationId,
   llmReady,
@@ -83,6 +100,7 @@ export default function ChatPanel({
   onBusyChange,
   onConversationUpdated,
   onOpenConversations,
+  onNewConversation,
   initialMessages = [],
 }) {
   const [input, setInput] = useState("");
@@ -231,7 +249,7 @@ export default function ChatPanel({
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   }, [input]);
 
   function assistantMessage(result) {
@@ -343,14 +361,14 @@ export default function ChatPanel({
   function renderComposer({ welcome = false } = {}) {
     return (
       <form
-        className={welcome ? "w-full" : "shrink-0 px-3 pb-3 pt-2 md:px-6 md:pb-5"}
+        className={welcome ? "w-full" : "shrink-0 px-2 pb-2 pt-1 md:px-6 md:pb-4 md:pt-2"}
         onSubmit={(e) => {
           e.preventDefault();
           submit();
         }}
       >
         <div
-          className={`composer-shell mx-auto flex w-full flex-col rounded-[26px] border border-line bg-surface shadow-soft transition-[border-color,box-shadow] duration-[var(--dur)] focus-within:border-accentText focus-within:shadow-card ${
+          className={`composer-shell mx-auto flex w-full items-end gap-1.5 rounded-[22px] border border-line bg-surface p-1.5 shadow-soft transition-[border-color,box-shadow] duration-[var(--dur)] focus-within:border-accentText focus-within:shadow-card md:gap-2 md:p-2 ${
             welcome ? "max-w-2xl" : "max-w-4xl"
           }`}
         >
@@ -359,48 +377,32 @@ export default function ChatPanel({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              const desktop = typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
+              if (desktop && e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 submit();
               }
             }}
             rows={1}
-            placeholder="Ask about orders, risk, or new-order feasibility…"
-            className="max-h-40 min-h-[52px] w-full resize-none bg-transparent px-4 pt-4 type-body text-foreground outline-none placeholder:text-subtle"
+            placeholder="Ask about orders, risk, or feasibility…"
+            className="max-h-[120px] min-h-[40px] flex-1 resize-none bg-transparent px-2.5 py-2 type-sm text-foreground outline-none placeholder:text-subtle md:min-h-[44px] md:type-body"
           />
-          <div className="flex items-center justify-between gap-2 px-3 pb-3">
-            <div className="flex min-w-0 items-center gap-2 type-caption text-subtle">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success" />
-              <span className="truncate">Grounded in factory data</span>
-              {!welcome && (
-                <button
-                  type="button"
-                  onClick={() => setSuggestionsOpen((value) => !value)}
-                  className="focus-ring ml-1 hidden shrink-0 items-center gap-1 rounded-full px-2 py-0.5 type-caption font-medium text-muted transition-colors hover:bg-surfaceMuted hover:text-foreground sm:inline-flex"
-                  aria-expanded={suggestionsOpen}
-                >
-                  Suggestions
-                  <ChevronIcon open={suggestionsOpen} />
-                </button>
-              )}
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <span className="hidden type-caption text-subtle sm:inline">Enter to send · Shift+Enter new line</span>
-              <button
-                type="submit"
-                disabled={busy || !input.trim()}
-                aria-label={busy ? "Sending" : "Send message"}
-                className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accentContrast shadow-xs transition-all duration-[var(--dur-fast)] hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {busy ? (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-accentContrast/40 border-t-accentContrast" />
-                ) : (
-                  <ArrowUpIcon />
-                )}
-              </button>
-            </div>
-          </div>
+          <button
+            type="submit"
+            disabled={busy || !input.trim()}
+            aria-label={busy ? "Sending" : "Send message"}
+            className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accentContrast shadow-xs transition-all duration-[var(--dur-fast)] hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 md:h-11 md:w-11"
+          >
+            {busy ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-accentContrast/40 border-t-accentContrast" />
+            ) : (
+              <ArrowUpIcon />
+            )}
+          </button>
         </div>
+        <p className="mx-auto mt-1.5 hidden max-w-4xl text-center type-caption text-subtle sm:block">
+          Grounded in factory data · Enter to send · Shift+Enter for a new line
+        </p>
       </form>
     );
   }
@@ -423,19 +425,67 @@ export default function ChatPanel({
     );
   }
 
+  function renderTopbar() {
+    return (
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line/60 px-3 py-1.5 md:px-6 md:py-2">
+        <div className="min-w-0">
+          <p className="truncate type-sm font-semibold text-foreground">Ask AI</p>
+          <p className="hidden truncate type-caption text-subtle sm:block">
+            {busy ? "Working…" : "Grounded factory answers"}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {onOpenConversations && (
+            <button
+              type="button"
+              onClick={onOpenConversations}
+              className="focus-ring inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 type-caption font-medium text-foreground transition-colors hover:bg-surfaceMuted md:hidden"
+              aria-label="Open conversation history"
+            >
+              <HistoryIcon />
+              <span>History</span>
+            </button>
+          )}
+          {onNewConversation && (
+            <button
+              type="button"
+              onClick={onNewConversation}
+              disabled={busy}
+              className="focus-ring inline-flex h-9 items-center gap-1.5 rounded-full bg-accent px-2.5 type-caption font-medium text-accentContrast shadow-xs transition-all hover:brightness-110 disabled:opacity-40 md:hidden"
+              aria-label="New conversation"
+            >
+              <PlusIcon />
+              <span>New</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setSuggestionsOpen((value) => !value)}
+            className="focus-ring hidden items-center gap-1 rounded-full px-2 py-1 type-caption font-medium text-muted transition-colors hover:bg-surfaceMuted hover:text-foreground sm:inline-flex"
+            aria-expanded={suggestionsOpen}
+          >
+            Suggestions
+            <ChevronIcon open={suggestionsOpen} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (messages.length === 0) {
     return (
       <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-transparent">
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-8 md:px-8">
-          <div className="w-full max-w-2xl space-y-8">
-            <div className="space-y-4 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-accentSoft text-accentText shadow-xs">
+        {renderTopbar()}
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-3 py-4 md:px-8 md:py-8">
+          <div className="w-full max-w-2xl space-y-5 md:space-y-8">
+            <div className="space-y-3 text-center md:space-y-4">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-accentSoft text-accentText shadow-xs md:h-12 md:w-12">
                 <SparkIcon />
               </div>
               <div className="space-y-2">
-                <p className="type-overline text-accentText">SweaterCo GM Co-Pilot</p>
-                <h1 className="type-display text-foreground">{greeting()}</h1>
-                <p className="mx-auto max-w-xl type-body text-muted">
+                <p className="hidden type-overline text-accentText sm:block">SweaterCo GM Co-Pilot</p>
+                <h1 className="type-h2 text-foreground sm:type-display">{greeting()}</h1>
+                <p className="mx-auto max-w-xl type-sm text-muted sm:type-body">
                   Ask about orders, production risk, feasibility and today&apos;s priorities. Answers are grounded in factory tools, not the model.
                 </p>
               </div>
@@ -476,39 +526,14 @@ export default function ChatPanel({
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-transparent">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line/60 px-4 py-2 md:px-6">
-        <div className="flex min-w-0 items-center gap-2 type-caption text-muted">
-          {onOpenConversations && (
-            <button
-              type="button"
-              onClick={onOpenConversations}
-              className="focus-ring inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2.5 py-1 type-caption font-medium text-foreground transition-colors hover:bg-surfaceMuted md:hidden"
-            >
-              Chats
-            </button>
-          )}
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success" />
-          <span className="truncate">Grounded factory answers</span>
-          {busy && <span className="working-step text-subtle">· working</span>}
-        </div>
-        <button
-          type="button"
-          onClick={() => setSuggestionsOpen((value) => !value)}
-          className="focus-ring hidden items-center gap-1 rounded-full px-2 py-1 type-caption font-medium text-muted transition-colors hover:bg-surfaceMuted hover:text-foreground sm:inline-flex"
-          aria-expanded={suggestionsOpen}
-        >
-          Suggestions
-          <ChevronIcon open={suggestionsOpen} />
-        </button>
-      </div>
-
+      {renderTopbar()}
       <div className="relative min-h-0 flex-1">
         <div
           ref={listRef}
           onScroll={handleScroll}
-          className="h-full min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-5 md:px-6"
+          className="h-full min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-3 md:px-6 md:py-5"
         >
-          <div className="mx-auto w-full max-w-4xl space-y-7">
+          <div className="mx-auto w-full max-w-4xl space-y-5 md:space-y-7">
             {messages.map((msg, idx) => (
               <MessageBubble
                 key={`${msg.role}-${idx}`}

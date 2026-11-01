@@ -307,16 +307,16 @@ export default function Home() {
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-canvas text-foreground">
-      <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-canvas/85 px-4 backdrop-blur-md md:px-6">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent text-accentContrast shadow-xs">
+      <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-line bg-canvas/85 px-3 backdrop-blur-md md:h-14 md:px-6">
+        <div className="flex min-w-0 items-center gap-2.5 md:gap-3">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-accent text-accentContrast shadow-xs md:h-9 md:w-9">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M4 7.5A3.5 3.5 0 0 1 7.5 4h9A3.5 3.5 0 0 1 20 7.5v5A3.5 3.5 0 0 1 16.5 16H11l-4.5 4v-4H7.5A3.5 3.5 0 0 1 4 12.5v-5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
             </svg>
           </span>
           <div className="min-w-0">
-            <p className="type-overline text-accentText">SweaterCo · Track 1</p>
-            <h1 className="truncate type-h3 text-foreground">General Manager&apos;s Co-Pilot</h1>
+            <p className="hidden type-overline text-accentText sm:block">SweaterCo · Track 1</p>
+            <h1 className="truncate text-[15px] font-semibold leading-tight text-foreground md:type-h3">General Manager&apos;s Co-Pilot</h1>
           </div>
         </div>
 
@@ -372,24 +372,8 @@ export default function Home() {
         <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {activeView === "copilot" && (
             <>
-              <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 md:px-6">
-                <div className="min-w-0">
-                  <p className="type-overline text-accentText">{viewMeta.eyebrow}</p>
-                  <h2 className="type-h2 text-foreground">{viewMeta.title}</h2>
-                  <p className="type-sm text-muted">{viewMeta.subtitle}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="secondary" size="sm" disabled={chatBusy} onClick={handleNewConversation}>
-                    New conversation
-                  </Button>
-                  <Button variant="subtle" size="sm" onClick={() => setBriefingOpen(true)}>
-                    Morning briefing
-                  </Button>
-                </div>
-              </div>
-
               {activeConversationId ? (
-                <div className="min-h-0 flex-1 overflow-hidden p-3 md:p-4">
+                <div className="min-h-0 flex-1 overflow-hidden">
                   <ChatPanel
                     key={activeConversationId}
                     conversationId={activeConversationId}
@@ -399,6 +383,7 @@ export default function Home() {
                     onConversationUpdated={handleConversationUpdated}
                     onBoardChanged={() => setBoardTick((n) => n + 1)}
                     onOpenConversations={() => setHistoryDrawerOpen(true)}
+                    onNewConversation={handleNewConversation}
                   />
                 </div>
               ) : (
@@ -545,11 +530,14 @@ export default function Home() {
         </main>
       </div>
 
-      <nav className="flex shrink-0 items-center justify-around border-t border-line bg-surface/95 px-2 py-2 backdrop-blur-md md:hidden" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <nav
+        className="flex shrink-0 items-center justify-around border-t border-line bg-surface/95 px-2 pt-1 backdrop-blur-md md:hidden"
+        style={{ paddingBottom: "max(0.25rem, env(safe-area-inset-bottom))" }}
+      >
         <button
           type="button"
           onClick={() => setActiveView("overview")}
-          className={`focus-ring flex min-w-0 flex-1 flex-col items-center gap-1 rounded-control px-1 py-1.5 type-caption font-medium transition-colors ${
+          className={`focus-ring flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-control px-1 py-1 type-caption font-medium transition-colors ${
             activeView === "overview" ? "text-accent" : "text-muted"
           }`}
         >
@@ -559,17 +547,18 @@ export default function Home() {
         <button
           type="button"
           onClick={() => setActiveView("copilot")}
-          className={`focus-ring -mt-5 flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-4 border-canvas bg-accent text-accentContrast shadow-float transition-transform duration-[var(--dur-fast)] active:scale-95 ${
-            activeView === "copilot" ? "scale-105" : ""
+          className={`focus-ring flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-control px-1 py-1 type-caption font-medium transition-colors ${
+            activeView === "copilot" ? "text-accent" : "text-muted"
           }`}
           aria-label="Ask AI"
         >
           <IconChat />
+          <span className="truncate">Ask AI</span>
         </button>
         <button
           type="button"
           onClick={() => setActiveView("settings")}
-          className={`focus-ring flex min-w-0 flex-1 flex-col items-center gap-1 rounded-control px-1 py-1.5 type-caption font-medium transition-colors ${
+          className={`focus-ring flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-control px-1 py-1 type-caption font-medium transition-colors ${
             activeView === "settings" ? "text-accent" : "text-muted"
           }`}
         >
@@ -579,7 +568,7 @@ export default function Home() {
       </nav>
 
       {historyDrawerOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Conversation history">
           <button
             type="button"
             aria-label="Close conversations"
@@ -587,32 +576,38 @@ export default function Home() {
             onClick={() => setHistoryDrawerOpen(false)}
           />
           <div
-            className="absolute inset-x-0 bottom-0 max-h-[72dvh] overflow-y-auto rounded-t-2xl border-t border-line bg-surface p-4 shadow-float"
-            style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+            className="absolute inset-x-0 bottom-0 flex max-h-[75dvh] flex-col rounded-t-2xl border-t border-line bg-surface px-4 pt-3 shadow-float"
+            style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
           >
-            <div className="mb-3 flex items-center justify-between">
-              <p className="type-overline text-accentText">Conversations</p>
+            <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+              <div>
+                <p className="type-overline text-accentText">Conversations</p>
+                <p className="type-caption text-subtle">Tap a conversation to restore its messages.</p>
+              </div>
               <button
                 type="button"
                 onClick={() => setHistoryDrawerOpen(false)}
-                className="focus-ring rounded-control border border-line px-2 py-1 type-caption text-muted"
+                className="focus-ring rounded-control border border-line px-2.5 py-1.5 type-caption font-medium text-muted"
               >
                 Close
               </button>
             </div>
-            <ConversationList
-              conversations={conversations}
-              activeConversationId={activeConversationId}
-              loading={conversationLoading && conversations.length === 0}
-              disabled={chatBusy || conversationLoading}
-              onCreate={handleNewConversation}
-              onSelect={openConversation}
-            />
-            {conversationError && (
-              <p className="mt-2 rounded-card border border-danger/30 bg-dangerSoft px-3 py-2 type-sm text-danger">
-                {conversationError}
-              </p>
-            )}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-1">
+              <ConversationList
+                conversations={conversations}
+                activeConversationId={activeConversationId}
+                loading={conversationLoading && conversations.length === 0}
+                disabled={chatBusy || conversationLoading}
+                onCreate={handleNewConversation}
+                onSelect={openConversation}
+                scrollable={false}
+              />
+              {conversationError && (
+                <p className="mt-2 rounded-card border border-danger/30 bg-dangerSoft px-3 py-2 type-sm text-danger">
+                  {conversationError}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}
