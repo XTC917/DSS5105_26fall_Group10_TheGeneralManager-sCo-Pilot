@@ -25,8 +25,8 @@ def database_url() -> str:
     url = os.getenv("DATABASE_URL")
     if url:
         return url
-    user = os.getenv("PGUSER", "factory_admin")
-    password = os.getenv("PGPASSWORD", "")
+    user = os.getenv("PG_ADMIN_USER") or os.getenv("PGUSER", "factory_admin")
+    password = os.getenv("PG_ADMIN_PASSWORD") or os.getenv("PGPASSWORD", "")
     host = os.getenv("PGHOST", "localhost")
     port = os.getenv("PGPORT", "5432")
     database = os.getenv("PGDATABASE", "factory_copilot_db")
