@@ -6,16 +6,15 @@ from typing import TypedDict
 
 import pytest
 from fastapi.testclient import TestClient
-from langchain_core.messages import AIMessage, HumanMessage
-from langgraph.graph import START, MessagesState, StateGraph
+from langgraph.graph import START, StateGraph
 from psycopg.errors import InsufficientPrivilege
 
 from backend.main import app
-from backend.agent import graph as graph_module
 from backend.services.checkpoint_store import postgres_checkpointer
 from backend.services.conversation_history import (
     ConversationNotFoundError,
     create_conversation,
+    delete_conversation,
     fail_chat_attempt,
     get_chat_attempt,
     get_owned_conversation,
@@ -104,7 +103,7 @@ def test_history_and_attempts_are_user_owned():
     assert failed["error_message"] == "Chat service is temporarily unavailable."
 
 
-def test_history_pagination_closes_old_clarification_and_restores_decision():
+def test_history_pagination_preserves_old_clarification_and_restores_decision():
     conversation = create_conversation(2)
     proposal = {
         "type": "create_watch",
@@ -152,7 +151,9 @@ def test_history_pagination_closes_old_clarification_and_restores_decision():
         before_turn_id=page["next_before_turn_id"],
     )
     assert [turn["id"] for turn in older["turns"]] == [first["id"]]
-    assert older["turns"][0]["response_json"].get("clarification") is None
+    assert older["turns"][0]["response_json"]["clarification"] == {
+        "options": [{"label": "TrendCart"}]
+    }
 
 
 def test_conversation_api_and_chat_are_authenticated(
@@ -177,12 +178,24 @@ def test_conversation_api_and_chat_are_authenticated(
 
         captured = {}
 
-        def fake_run_agent(message, public_id, *, clarification_reply, thread_id):
+        def fake_run_agent(
+            message,
+            public_id,
+            *,
+            clarification_reply,
+            original_question,
+            thread_id,
+            progress=None,
+            on_token=None,
+        ):
             captured.update(
                 message=message,
                 public_id=public_id,
                 clarification_reply=clarification_reply,
+                original_question=original_question,
                 thread_id=thread_id,
+                progress=progress,
+                on_token=on_token,
             )
             return {
                 "answer": "ORD-120 is in progress.",
@@ -210,6 +223,65 @@ def test_conversation_api_and_chat_are_authenticated(
         )
         assert history.status_code == 200
         assert history.json()["turns"][0]["question"] == "How is ORD-120?"
+
+
+def test_conversation_search_and_delete_api_are_user_owned(
+    employee_auth_headers,
+):
+    trendcart = create_conversation(2)
+    northwind = create_conversation(2)
+    foreign = create_conversation(1)
+
+    save_turn(
+        2,
+        trendcart["id"],
+        question="Show TrendCart orders",
+        answer="TrendCart has two active orders.",
+    )
+    save_turn(
+        2,
+        northwind["id"],
+        question="Show Northwind orders",
+        answer="Northwind has one active order.",
+    )
+    save_turn(
+        1,
+        foreign["id"],
+        question="Private TrendCart conversation",
+        answer="This belongs to another user.",
+    )
+
+    with TestClient(app) as client:
+        searched = client.get(
+            "/api/conversations",
+            params={"query": "TrendCart"},
+            headers=employee_auth_headers,
+        )
+        assert searched.status_code == 200, searched.text
+
+        ids = {item["id"] for item in searched.json()}
+        assert str(trendcart["id"]) in ids
+        assert str(northwind["id"]) not in ids
+        assert str(foreign["id"]) not in ids
+
+        foreign_delete = client.delete(
+            f"/api/conversations/{foreign['id']}",
+            headers=employee_auth_headers,
+        )
+        assert foreign_delete.status_code == 404
+
+        deleted = client.delete(
+            f"/api/conversations/{trendcart['id']}",
+            headers=employee_auth_headers,
+        )
+        assert deleted.status_code == 204
+        assert deleted.content == b""
+
+        missing = client.get(
+            f"/api/conversations/{trendcart['id']}",
+            headers=employee_auth_headers,
+        )
+        assert missing.status_code == 404
 
 
 def test_failed_chat_is_recorded_without_a_fake_turn(
@@ -248,6 +320,70 @@ class CounterState(TypedDict):
     value: int
 
 
+def test_delete_conversation_removes_langgraph_checkpoint():
+    conversation = create_conversation(2)
+    thread_id = f"user:2:conversation:{conversation['id']}"
+    config = {"configurable": {"thread_id": thread_id}}
+
+    builder = StateGraph(CounterState)
+    builder.add_node(
+        "increment",
+        lambda state: {"value": state.get("value", 0) + 1},
+    )
+    builder.add_edge(START, "increment")
+
+    with postgres_checkpointer() as checkpointer:
+        graph = builder.compile(checkpointer=checkpointer)
+        assert graph.invoke({"value": 1}, config)["value"] == 2
+
+    with connect(admin=True) as connection:
+        before = {
+            table: connection.execute(
+                f"""
+                SELECT COUNT(*) AS count
+                FROM copilot.{table}
+                WHERE thread_id = %s
+                """,
+                (thread_id,),
+            ).fetchone()["count"]
+            for table in (
+                "checkpoint_writes",
+                "checkpoint_blobs",
+                "checkpoints",
+            )
+        }
+
+    assert before["checkpoints"] > 0
+
+    delete_conversation(2, conversation["id"])
+
+    with connect(admin=True) as connection:
+        after = {
+            table: connection.execute(
+                f"""
+                SELECT COUNT(*) AS count
+                FROM copilot.{table}
+                WHERE thread_id = %s
+                """,
+                (thread_id,),
+            ).fetchone()["count"]
+            for table in (
+                "checkpoint_writes",
+                "checkpoint_blobs",
+                "checkpoints",
+            )
+        }
+
+    assert after == {
+        "checkpoint_writes": 0,
+        "checkpoint_blobs": 0,
+        "checkpoints": 0,
+    }
+
+    with pytest.raises(ConversationNotFoundError):
+        get_owned_conversation(2, conversation["id"])
+
+
 def test_postgres_checkpoint_survives_pool_restart():
     builder = StateGraph(CounterState)
     builder.add_node("increment", lambda state: {"value": state.get("value", 0) + 1})
@@ -263,29 +399,22 @@ def test_postgres_checkpoint_survives_pool_restart():
         assert graph.get_state(config).values["value"] == 5
 
 
-def test_direct_human_ai_exchange_is_checkpointed(monkeypatch):
-    builder = StateGraph(MessagesState)
-    builder.add_node("agent", lambda state: {})
-    builder.add_edge(START, "agent")
-    config = {"configurable": {"thread_id": "test:checkpoint:direct"}}
+def test_direct_answer_is_persisted_in_visible_history():
+    conversation = create_conversation(2)
+    turn = save_turn(
+        2,
+        conversation["id"],
+        question="Unsupported question",
+        answer="This request is outside the supported scope.",
+        response_json={"limitation": "unsupported"},
+    )
 
-    with postgres_checkpointer() as checkpointer:
-        compiled = builder.compile(checkpointer=checkpointer)
-        monkeypatch.setattr(graph_module, "llm_is_configured", lambda: True)
-        monkeypatch.setattr(graph_module, "get_agent", lambda: compiled)
-        graph_module._append_direct_exchange(
-            config["configurable"]["thread_id"],
-            "Unsupported question",
-            "This request is outside the supported scope.",
-        )
-
-    with postgres_checkpointer() as checkpointer:
-        compiled = builder.compile(checkpointer=checkpointer)
-        messages = compiled.get_state(config).values["messages"]
-    assert isinstance(messages[-2], HumanMessage)
-    assert isinstance(messages[-1], AIMessage)
-    assert messages[-2].content == "Unsupported question"
-    assert messages[-1].content == "This request is outside the supported scope."
+    history = read_history_window(2, conversation["id"])
+    assert [row["id"] for row in history["turns"]] == [turn["id"]]
+    assert history["turns"][0]["question"] == "Unsupported question"
+    assert history["turns"][0]["answer"] == (
+        "This request is outside the supported scope."
+    )
 
 
 def test_runtime_role_cannot_read_private_memory_tables(db):
