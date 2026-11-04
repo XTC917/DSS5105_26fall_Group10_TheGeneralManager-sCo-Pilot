@@ -130,7 +130,12 @@ function sortValue(row, key) {
   return row[key] == null ? "" : String(row[key]);
 }
 
-export default function MorningBriefingModal({ onClose, refreshToken, onAlertCreated }) {
+export default function MorningBriefingModal({
+  onClose,
+  refreshToken,
+  onAlertCreated,
+  initialPanel = "today",
+}) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -139,7 +144,7 @@ export default function MorningBriefingModal({ onClose, refreshToken, onAlertCre
   const [stage, setStage] = useState(null);
   const [selected, setSelected] = useState(null);
   const [ordersView, setOrdersView] = useState("table");
-  const [panel, setPanel] = useState("today");
+  const [panel, setPanel] = useState(initialPanel === "week" ? "week" : "today");
   const [sort, setSort] = useState(null);
   const [alertState, setAlertState] = useState({ busy: false, note: "", error: "" });
   const dialog = useRef(null);
@@ -230,7 +235,30 @@ export default function MorningBriefingModal({ onClose, refreshToken, onAlertCre
       <section ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="briefing-title" className="flex max-h-[94dvh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-[#f6f5f0] text-ink shadow-2xl outline-none">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-ink/10 bg-white px-5 py-4 sm:px-7">
           <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-teal-700">SweaterCo / Factory overview</p><h2 id="briefing-title" className="mt-1 text-2xl font-semibold">{panel === "week" ? "Last week's briefing" : "Morning briefing"}</h2><p className="mt-1 text-xs text-ink/60">{panel === "week" && data?.last_week ? `Weekly trend through the factory date · products ${data.last_week.start} – ${data.last_week.end}` : `Factory date: ${data?.factory_today || "Loading…"}`} · Sundays closed</p></div>
-          <div className="flex gap-2"><button type="button" aria-pressed={panel === "week"} onClick={() => setPanel((current) => current === "week" ? "today" : "week")} className={`rounded-lg px-3 py-2 text-xs font-semibold ${panel === "week" ? "border border-ink/20 bg-white text-ink" : "bg-ink text-paper"}`}>{panel === "week" ? "Morning briefing" : "Last week's briefing"}</button><button type="button" disabled={loading} onClick={() => setRevision((v) => v + 1)} className="rounded-lg border border-ink/20 px-3 py-2 text-xs disabled:opacity-50">{loading ? "Loading…" : "Refresh"}</button><button type="button" onClick={onClose} aria-label="Close morning briefing" className="rounded-lg border border-ink/20 px-3 py-2 text-sm">&times;</button></div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex rounded-lg border border-ink/15 bg-paper p-0.5" role="tablist" aria-label="Briefing period">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={panel === "today"}
+                onClick={() => setPanel("today")}
+                className={`rounded-md px-3 py-2 text-xs font-semibold ${panel === "today" ? "bg-ink text-paper" : "text-ink/70 hover:text-ink"}`}
+              >
+                Morning
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={panel === "week"}
+                onClick={() => setPanel("week")}
+                className={`rounded-md px-3 py-2 text-xs font-semibold ${panel === "week" ? "bg-ink text-paper" : "text-ink/70 hover:text-ink"}`}
+              >
+                Weekly
+              </button>
+            </div>
+            <button type="button" disabled={loading} onClick={() => setRevision((v) => v + 1)} className="rounded-lg border border-ink/20 px-3 py-2 text-xs disabled:opacity-50">{loading ? "Loading…" : "Refresh"}</button>
+            <button type="button" onClick={onClose} aria-label="Close briefing" className="rounded-lg border border-ink/20 px-3 py-2 text-sm">&times;</button>
+          </div>
         </header>
         <div className="overflow-y-auto p-4 sm:p-7" aria-busy={loading}>
           {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-5"><p>{error}</p><button type="button" onClick={() => setRevision((v) => v + 1)} className="mt-3 underline">Try again</button></div>}

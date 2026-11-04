@@ -10,6 +10,8 @@ import { fetchHealth } from "../services/api.js";
 import { deactivateMe } from "../services/authApi.js";
 import {
   createConversation,
+  deleteConversation,
+  detectConversationCapabilities,
   fetchConversationHistory,
   fetchConversations,
 } from "../services/conversationsApi.js";
@@ -21,6 +23,8 @@ import {
   Modal,
   ThemeSwitcher,
 } from "../components/ui/index.js";
+
+const SEARCH_DEBOUNCE_MS = 300;
 
 function storageKey(userId) {
   return `sweaterco:last-conversation:${userId}`;
@@ -142,6 +146,7 @@ const VIEW_META = {
 export default function Home() {
   const { user, logout } = useAuth();
   const [briefingOpen, setBriefingOpen] = useState(false);
+  const [briefingPanel, setBriefingPanel] = useState("today");
   const [health, setHealth] = useState(null);
   const [healthError, setHealthError] = useState("");
   const [boardTick, setBoardTick] = useState(0);
@@ -149,16 +154,30 @@ export default function Home() {
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const [deactivateBusy, setDeactivateBusy] = useState(false);
   const [deactivateError, setDeactivateError] = useState("");
-  const [conversations, setConversations] = useState([]);
+  const [conversationCatalog, setConversationCatalog] = useState([]);
+  const [searchResults, setSearchResults] = useState(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [listError, setListError] = useState("");
+  const [capabilities, setCapabilities] = useState({ search: false, delete: false });
+  const [capabilitiesReady, setCapabilitiesReady] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [initialMessages, setInitialMessages] = useState([]);
   const [conversationLoading, setConversationLoading] = useState(true);
   const [conversationError, setConversationError] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
   const historyRequest = useRef(0);
+  const searchRequest = useRef(0);
+  const searchInputRef = useRef("");
 
   const isAdmin = user?.role === "ADMIN";
+  const searching = Boolean(debouncedSearch.trim());
+  const conversations = searching ? searchResults || [] : conversationCatalog;
 
   useEffect(() => {
     fetchHealth()
@@ -167,14 +186,34 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    detectConversationCapabilities().then((next) => {
+      if (!cancelled) {
+        setCapabilities(next);
+        setCapabilitiesReady(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isAdmin && (activeView === "data" || activeView === "users")) {
       setActiveView("copilot");
     }
   }, [isAdmin, activeView]);
 
-  const refreshConversationList = useCallback(async () => {
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedSearch(searchInputRef.current);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(handle);
+  }, [searchInput]);
+
+  const refreshConversationCatalog = useCallback(async () => {
     const rows = await fetchConversations();
-    setConversations(rows);
+    setConversationCatalog(rows);
     return rows;
   }, []);
 
@@ -204,10 +243,15 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
     historyRequest.current += 1;
-    setConversations([]);
+    setConversationCatalog([]);
+    setSearchResults(null);
+    setSearchInput("");
+    searchInputRef.current = "";
+    setDebouncedSearch("");
     setActiveConversationId(null);
     setInitialMessages([]);
     setConversationError("");
+    setListError("");
     setConversationLoading(true);
 
     async function restoreConversations() {
@@ -220,7 +264,7 @@ export default function Home() {
           rows = [created];
         }
         if (cancelled) return;
-        setConversations(rows);
+        setConversationCatalog(rows);
         const remembered = localStorage.getItem(storageKey(user.id));
         const selected = rows.some((item) => item.id === remembered) ? remembered : rows[0].id;
         await openConversation(selected);
@@ -239,12 +283,66 @@ export default function Home() {
     };
   }, [openConversation, user?.id]);
 
+  useEffect(() => {
+    if (!capabilities.search) {
+      setSearchResults(null);
+      setSearchLoading(false);
+      return undefined;
+    }
+    const query = debouncedSearch.trim();
+    if (!query) {
+      setSearchResults(null);
+      setSearchLoading(false);
+      setListError("");
+      return undefined;
+    }
+
+    let cancelled = false;
+    const requestId = ++searchRequest.current;
+    setSearchLoading(true);
+    setListError("");
+
+    fetchConversations(50, query)
+      .then((rows) => {
+        if (cancelled || requestId !== searchRequest.current) return;
+        setSearchResults(rows);
+      })
+      .catch((err) => {
+        if (cancelled || requestId !== searchRequest.current) return;
+        setSearchResults([]);
+        setListError(err.message || "Search failed.");
+      })
+      .finally(() => {
+        if (!cancelled && requestId === searchRequest.current) {
+          setSearchLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [capabilities.search, debouncedSearch]);
+
+  function handleSearchChange(value) {
+    searchInputRef.current = value;
+    setSearchInput(value);
+    if (!value.trim()) {
+      setDebouncedSearch("");
+      setSearchResults(null);
+      setListError("");
+    }
+  }
+
   async function handleNewConversation() {
     if (chatBusy) return;
     setConversationError("");
     try {
       const created = await createConversation();
-      setConversations((current) => [created, ...current]);
+      setConversationCatalog((current) => [created, ...current.filter((row) => row.id !== created.id)]);
+      setSearchInput("");
+      searchInputRef.current = "";
+      setDebouncedSearch("");
+      setSearchResults(null);
       await openConversation(created.id);
     } catch (err) {
       setConversationError(err.message);
@@ -253,11 +351,83 @@ export default function Home() {
 
   async function handleConversationUpdated() {
     try {
-      await refreshConversationList();
+      await refreshConversationCatalog();
+      const query = debouncedSearch.trim();
+      if (capabilities.search && query) {
+        const requestId = ++searchRequest.current;
+        const rows = await fetchConversations(50, query);
+        if (requestId === searchRequest.current) setSearchResults(rows);
+      }
     } catch (err) {
       setConversationError(err.message);
     }
   }
+
+  async function confirmDeleteConversation() {
+    if (!pendingDelete || deletingId) return;
+    const target = pendingDelete;
+    const wasActive = target.id === activeConversationId;
+    setDeletingId(target.id);
+    setDeleteError("");
+    try {
+      await deleteConversation(target.id);
+      setPendingDelete(null);
+      const catalog = await refreshConversationCatalog();
+      const query = debouncedSearch.trim();
+      if (capabilities.search && query) {
+        const requestId = ++searchRequest.current;
+        const filtered = await fetchConversations(50, query);
+        if (requestId === searchRequest.current) setSearchResults(filtered);
+      } else {
+        setSearchResults(null);
+      }
+      if (wasActive) {
+        if (catalog.length > 0) {
+          await openConversation(catalog[0].id);
+        } else {
+          const created = await createConversation();
+          setConversationCatalog([created]);
+          setSearchInput("");
+          searchInputRef.current = "";
+          setDebouncedSearch("");
+          setSearchResults(null);
+          await openConversation(created.id);
+        }
+      }
+    } catch (err) {
+      setDeleteError(err.message || "Could not delete conversation.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  function openBriefing(panel = "today") {
+    setBriefingPanel(panel);
+    setBriefingOpen(true);
+  }
+
+  const conversationListProps = {
+    conversations,
+    activeConversationId,
+    loading: conversationLoading && conversationCatalog.length === 0,
+    searching: searchLoading,
+    searchQuery: searchInput,
+    // Hide search/delete until OpenAPI confirms the teammate backend is live.
+    searchEnabled: capabilitiesReady && capabilities.search,
+    searchUnavailable: false,
+    onSearchChange: handleSearchChange,
+    disabled: chatBusy || Boolean(deletingId),
+    canDelete: capabilitiesReady && capabilities.delete,
+    deleteUnavailable: false,
+    deletingId,
+    onCreate: handleNewConversation,
+    onSelect: openConversation,
+    onRequestDelete: (conversation) => {
+      setDeleteError("");
+      setPendingDelete(conversation);
+    },
+    listError,
+  };
 
   async function handleDeactivate() {
     setDeactivateBusy(true);
@@ -353,14 +523,7 @@ export default function Home() {
           </div>
 
           <div id="conversation-history" className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
-            <ConversationList
-              conversations={conversations}
-              activeConversationId={activeConversationId}
-              loading={conversationLoading && conversations.length === 0}
-              disabled={chatBusy || conversationLoading}
-              onCreate={handleNewConversation}
-              onSelect={openConversation}
-            />
+            <ConversationList {...conversationListProps} />
             {conversationError && (
               <p className="mt-2 rounded-card border border-danger/30 bg-dangerSoft px-3 py-2 type-sm text-danger">
                 {conversationError}
@@ -411,7 +574,7 @@ export default function Home() {
                   <p className="type-sm text-muted">{viewMeta.subtitle}</p>
                   <p className="mt-1 type-caption text-subtle">Factory date: 1 Apr 2026</p>
                 </div>
-                <Sidebar refreshToken={boardTick} onOpenBriefing={() => setBriefingOpen(true)} />
+                <Sidebar refreshToken={boardTick} onOpenBriefing={openBriefing} />
               </div>
             </div>
           )}
@@ -593,15 +756,7 @@ export default function Home() {
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-1">
-              <ConversationList
-                conversations={conversations}
-                activeConversationId={activeConversationId}
-                loading={conversationLoading && conversations.length === 0}
-                disabled={chatBusy || conversationLoading}
-                onCreate={handleNewConversation}
-                onSelect={openConversation}
-                scrollable={false}
-              />
+              <ConversationList {...conversationListProps} scrollable={false} />
               {conversationError && (
                 <p className="mt-2 rounded-card border border-danger/30 bg-dangerSoft px-3 py-2 type-sm text-danger">
                   {conversationError}
@@ -614,11 +769,61 @@ export default function Home() {
 
       {briefingOpen && (
         <MorningBriefingModal
+          key={briefingPanel}
+          initialPanel={briefingPanel}
           onClose={() => setBriefingOpen(false)}
           refreshToken={boardTick}
           onAlertCreated={() => setBoardTick((n) => n + 1)}
         />
       )}
+
+      <Modal
+        open={Boolean(pendingDelete)}
+        onClose={() => {
+          if (deletingId) return;
+          setPendingDelete(null);
+          setDeleteError("");
+        }}
+        title="Delete conversation"
+        description="This permanently removes the conversation and its saved turns for your account."
+        size="sm"
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={Boolean(deletingId)}
+              onClick={() => {
+                setPendingDelete(null);
+                setDeleteError("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              disabled={Boolean(deletingId)}
+              onClick={confirmDeleteConversation}
+            >
+              {deletingId ? "Deleting…" : "Delete"}
+            </Button>
+          </div>
+        }
+      >
+        <p className="type-sm text-foreground">
+          Delete{" "}
+          <span className="font-semibold">
+            {pendingDelete?.title || "this conversation"}
+          </span>
+          ?
+        </p>
+        {deleteError && (
+          <p className="mt-3 type-caption text-danger" role="alert">
+            {deleteError}
+          </p>
+        )}
+      </Modal>
     </div>
   );
 }

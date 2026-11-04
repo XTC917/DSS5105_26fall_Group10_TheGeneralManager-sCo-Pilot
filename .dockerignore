@@ -14,9 +14,15 @@ frontend
 node_modules
 logs
 pdfs
-evaluation
+# Keep evaluation/questions.json in the image for answer templates.
+# Exclude the rest of evaluation/ (figures, docs, KAN artifacts).
+# Pattern must leave the parent directory visible so the exception works.
+evaluation/*
+!evaluation/questions.json
 tests
 docs
 *.pptx
 *.pdf
 *.md
+data/**/*.zip
+data/examples3.0/

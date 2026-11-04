@@ -141,14 +141,24 @@ export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
 
   return (
     <aside className="space-y-3">
-      <Card title="Morning briefing">
-        <button
-          type="button"
-          onClick={onOpenBriefing}
-          className="mb-3 w-full rounded-control bg-accent px-3 py-2 type-sm font-semibold text-accentContrast transition-colors duration-[var(--dur-fast)] hover:brightness-110"
-        >
-          Open morning briefing ↗
-        </button>
+      <Card title="Factory briefings">
+        <div className="mb-3 grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => onOpenBriefing?.("today")}
+            className="w-full rounded-control bg-accent px-3 py-2 type-sm font-semibold text-accentContrast transition-colors duration-[var(--dur-fast)] hover:brightness-110"
+          >
+            Morning briefing ↗
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenBriefing?.("week")}
+            disabled={!briefing?.last_week}
+            className="w-full rounded-control border border-line bg-surface px-3 py-2 type-sm font-semibold text-foreground transition-colors duration-[var(--dur-fast)] hover:border-accentText hover:text-accentText disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Weekly briefing ↗
+          </button>
+        </div>
         {error && <p className="text-danger">API offline — ask in chat once the backend is running.</p>}
         {!error && !briefing && <p>Loading structured facts…</p>}
         {briefing && (
@@ -159,6 +169,12 @@ export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
               stalled {metrics.stalled ?? 0})
             </li>
             <li>IN_PROGRESS: {briefing.in_progress_order_count}</li>
+            {briefing.last_week && (
+              <li>
+                Last week {briefing.last_week.start} – {briefing.last_week.end}:{" "}
+                {(briefing.last_week.weeks || []).reduce((sum, row) => sum + (row.completed || 0), 0)} completed
+              </li>
+            )}
             {briefing.suspended_workshops?.length > 0 && (
               <li>
                 Suspended: {briefing.suspended_workshops.map((w) => w.name).join(", ")}
