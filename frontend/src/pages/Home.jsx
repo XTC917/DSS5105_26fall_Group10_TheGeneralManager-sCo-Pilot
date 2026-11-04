@@ -62,10 +62,18 @@ export default function Home() {
   const isAdmin = user?.role === "ADMIN";
 
   useEffect(() => {
+    let cancelled = false;
     fetchHealth()
-      .then(setHealth)
-      .catch((err) => setHealthError(err.message));
-  }, []);
+      .then((result) => {
+        if (cancelled) return;
+        setHealth(result);
+        setHealthError("");
+      })
+      .catch((err) => {
+        if (!cancelled) setHealthError(err.message);
+      });
+    return () => { cancelled = true; };
+  }, [boardTick]);
 
   // Route protection: only ADMIN may view data/users; EMPLOYEE is bounced back.
   useEffect(() => {
@@ -197,7 +205,7 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-4 text-right text-xs text-paper/70">
             <div>
-              <p>Factory date: 1 Apr 2026</p>
+              <p>Factory date: {health?.factory_today || "Loading…"}</p>
               <p>
                 {user && (
                   <span>
@@ -256,7 +264,11 @@ export default function Home() {
                   {conversationError}
                 </p>
               )}
-              <Sidebar refreshToken={boardTick} onOpenBriefing={() => setBriefingOpen(true)} />
+              <Sidebar
+                refreshToken={boardTick}
+                onOpenBriefing={() => setBriefingOpen(true)}
+                onDateChanged={() => setBoardTick((n) => n + 1)}
+              />
             </>
           )}
           <div className="rounded-lg border border-ink/10 bg-white p-3 shadow-sm">

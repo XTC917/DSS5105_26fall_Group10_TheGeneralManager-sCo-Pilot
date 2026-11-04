@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from backend.config import (
-    FACTORY_TODAY,
+    factory_date,
     ORDER_LIFECYCLE_IN_ORDER,
     PRODUCTION_DROP_RATIO,
     PRODUCTION_STAGES_IN_ORDER,
@@ -50,7 +50,7 @@ def build_morning_briefing(db: FactoryDB) -> dict[str, Any]:
     ]
 
     return {
-        "factory_today": FACTORY_TODAY.isoformat(),
+        "factory_today": factory_date().isoformat(),
         "dashboard": build_dashboard(db),
         "in_progress_order_count": len(in_progress),
         "in_progress_by_stage": by_stage,
@@ -94,8 +94,9 @@ def build_morning_briefing(db: FactoryDB) -> dict[str, Any]:
     }
 
 
-def previous_working_week(today: date = FACTORY_TODAY) -> tuple[date, date]:
+def previous_working_week(today: date | None = None) -> tuple[date, date]:
     """Monday–Saturday before the week that contains factory today."""
+    today = today or factory_date()
     monday = today - timedelta(days=today.weekday())
     start = monday - timedelta(days=7)
     return start, start + timedelta(days=5)
@@ -115,8 +116,9 @@ def _late_days(order: dict[str, Any], done: date) -> int | None:
     return (done - due).days
 
 
-def build_last_week(db: FactoryDB, today: date = FACTORY_TODAY) -> dict[str, Any]:
+def build_last_week(db: FactoryDB, today: date | None = None) -> dict[str, Any]:
     """Weekly completion mix, stage output, and last complete week's products."""
+    today = today or factory_date()
     start, end = previous_working_week(today)
     completions = []
     for order in db.find_orders(status="COMPLETE"):
@@ -221,13 +223,14 @@ def build_last_week(db: FactoryDB, today: date = FACTORY_TODAY) -> dict[str, Any
 
 
 def last_working_day_output(db: FactoryDB) -> tuple[str | None, dict[str, int]]:
+    today = factory_date()
     log = db.production_log()
     working_dates = []
     for row in log:
         parsed = parse_iso_date(row["date"])
         if parsed is None:
             continue
-        if parsed < FACTORY_TODAY and is_working_day(parsed):
+        if parsed < today and is_working_day(parsed):
             working_dates.append(parsed)
     if not working_dates:
         return None, {}
@@ -272,7 +275,7 @@ def unusual_stage_output(db: FactoryDB) -> list[dict[str, Any]]:
 
 def build_dashboard(db: FactoryDB) -> dict[str, Any]:
     """Full active-order coverage; deadline buckets are mutually exclusive."""
-    previous = FACTORY_TODAY - timedelta(days=1)
+    previous = factory_date() - timedelta(days=1)
     while not is_working_day(previous):
         previous -= timedelta(days=1)
     medians = stage_medians(db)

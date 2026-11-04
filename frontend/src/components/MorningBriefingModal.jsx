@@ -170,7 +170,15 @@ export default function MorningBriefingModal({ onClose, refreshToken, onAlertCre
     setLoading(true); setError("");
     fetchBriefing().then((result) => {
       if (!result.dashboard) throw new Error("Briefing data is unavailable. Restart the updated backend.");
-      if (!cancelled) { setData(result); setSelected(null); }
+      if (!cancelled) {
+        setData(result);
+        setSelected((previous) => {
+          if (!previous) return null;
+          const rows = previous.completed ? result.dashboard.completed_orders : result.dashboard.orders;
+          const updated = rows.find((row) => row.order_id === previous.order_id);
+          return updated ? { ...updated, completed: previous.completed } : null;
+        });
+      }
     }).catch((err) => { if (!cancelled) { setError(err.message); setData(null); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -202,7 +210,7 @@ export default function MorningBriefingModal({ onClose, refreshToken, onAlertCre
   }
 
   async function addAlert(row) {
-    const factoryToday = data?.factory_today || "2026-04-01";
+    const factoryToday = data.factory_today;
     const due = row.due_date || factoryToday;
     const checkDate = due >= factoryToday ? due : factoryToday;
     setAlertState({ busy: true, note: "", error: "" });

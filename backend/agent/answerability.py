@@ -13,6 +13,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from backend.config import factory_date
 from backend.agent.prompts import TOOL_LOOKUP_TABLE
 from backend.services.semantic import load_semantic_layer, render_semantic_prompt
 
@@ -730,6 +731,8 @@ def assess_answerability(
     data_system = _data_system(clarification_reply)
     data_user = (
         language_rule(question)
+        + f"\nFactory date: {factory_date().isoformat()}. "
+        + "Use earlier tool results for their original date. Current calculations need a fresh tool result."
         + "\n\nSemantic layer:\n"
         + render_semantic_prompt()
         + "\nPrevious tool JSON:\n"

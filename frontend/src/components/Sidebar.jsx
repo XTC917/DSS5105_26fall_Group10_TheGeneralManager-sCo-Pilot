@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchAudit, fetchBriefing, fetchDiscovery, fetchWatches } from "../services/api.js";
+import { advanceFactoryDate, fetchAudit, fetchBriefing, fetchDiscovery, fetchWatches } from "../services/api.js";
 
 function Card({ title, children }) {
   return (
@@ -21,7 +21,6 @@ function formatFactoryDate(iso) {
 
 function FiredAlert({ item }) {
   const [open, setOpen] = useState(false);
-  const snapshot = item.snapshot || {};
   return (
     <li className="rounded border border-ink/10 bg-paper px-2 py-2">
       <p className="text-xs font-semibold text-ink">Standing watch triggered</p>
@@ -42,23 +41,11 @@ function FiredAlert({ item }) {
         {open ? "Hide evidence" : "Why?"}
       </button>
       {open && (
-        <pre className="trace-pre mt-1 max-h-40 overflow-auto text-[11px] text-ink/80">
-          {JSON.stringify(
-            {
-              order_id: item.order_id,
-              condition_type: item.condition_type,
-              check_date: item.check_date,
-              as_of: snapshot.as_of || item.as_of,
-              last_activity_date: item.last_activity_date,
-              order_status: item.order_status,
-              current_stage: item.current_stage,
-              fired_at: item.fired_at,
-              formula: snapshot.formula,
-            },
-            null,
-            2,
-          )}
-        </pre>
+        <p className="mt-2 text-xs text-ink/70">
+          On {item.fired_as_of || item.as_of}, the order was still in progress.
+          Its last recorded activity was {item.last_activity_date}, before the
+          check date of {item.check_date}.
+        </p>
       )}
     </li>
   );
@@ -105,17 +92,24 @@ function IssueRow({ item }) {
   );
 }
 
-export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
+export default function Sidebar({ refreshToken = 0, onOpenBriefing, onDateChanged }) {
   const [briefing, setBriefing] = useState(null);
   const [audit, setAudit] = useState([]);
   const [watches, setWatches] = useState({ fired: [], active: [], cancelled: [] });
   const [discovery, setDiscovery] = useState({ issues: [] });
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(true);
+  const [advancing, setAdvancing] = useState(false);
+  const [advanceError, setAdvanceError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([fetchBriefing(), fetchAudit(6), fetchWatches(), fetchDiscovery(5)])
-      .then(([brief, log, board, issues]) => {
+    setRefreshing(true);
+    setError("");
+    // The watch check records the alert before the audit feed is fetched.
+    fetchWatches()
+      .then(async (board) => {
+        const [brief, log, issues] = await Promise.all([fetchBriefing(), fetchAudit(6), fetchDiscovery(5)]);
         if (cancelled) return;
         setBriefing(brief);
         setAudit(log.items || []);
@@ -128,11 +122,28 @@ export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
       })
       .catch((err) => {
         if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setRefreshing(false);
       });
     return () => {
       cancelled = true;
     };
   }, [refreshToken]);
+
+  async function advanceDate() {
+    setAdvancing(true);
+    setAdvanceError("");
+    try {
+      await advanceFactoryDate(briefing.factory_today);
+    } catch (err) {
+      setAdvanceError(err.message);
+    } finally {
+      setRefreshing(true);
+      onDateChanged();
+      setAdvancing(false);
+    }
+  }
 
   const metrics = briefing?.dashboard?.metrics || {};
   const fired = watches.fired || [];
@@ -143,7 +154,7 @@ export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
     <aside className="space-y-3">
       <Card title="Morning briefing">
         <button type="button" onClick={onOpenBriefing} className="mb-3 w-full rounded-md bg-ink px-3 py-2 text-sm font-semibold text-paper hover:bg-ink/90">Open morning briefing ↗</button>
-        {error && <p>API offline — ask in chat once the backend is running.</p>}
+        {error && <p role="alert">{error}</p>}
         {!error && !briefing && <p>Loading structured facts…</p>}
         {briefing && (
           <ul className="space-y-1">
@@ -160,6 +171,17 @@ export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
             )}
           </ul>
         )}
+        {briefing && (
+          <button
+            type="button"
+            className="mt-2 rounded border border-ink/20 px-2 py-1 text-xs font-semibold disabled:opacity-50"
+            disabled={refreshing || advancing}
+            onClick={advanceDate}
+          >
+            {advancing ? "Advancing…" : "Advance one day"}
+          </button>
+        )}
+        {advanceError && <p className="mt-1 text-xs text-red-700" role="alert">{advanceError}</p>}
       </Card>
       <Card title="Top issues">
         {(discovery.issues || []).length === 0 && (
@@ -238,6 +260,7 @@ export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
               <li key={row.id}>
                 {row.tool || row.event_type}
                 {row.target ? ` · ${row.target}` : ""} · {row.execution_status || row.confirmation_status}
+                {row.event_type === "watch_fired" && ` · ${row.factory_today}`}
               </li>
             ))}
           </ul>

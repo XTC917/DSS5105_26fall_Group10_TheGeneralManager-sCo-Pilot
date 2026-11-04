@@ -69,7 +69,7 @@ def trace_order(order_id: str) -> str:
                         "at_risk": bool(flags),
                         "flags": flags,
                         "basis": (
-                            "OVERDUE: due_date < 2026-04-01. "
+                            "OVERDUE: due_date before the active factory date. "
                             "STALLED: idle >= 3 working days. "
                             "TIGHT_DEADLINE: not overdue, due within 3 calendar days, "
                             "and days_left exceeds working days until due."
@@ -79,7 +79,7 @@ def trace_order(order_id: str) -> str:
                         "production_log.csv is factory-wide daily output by stage, "
                         "not a per-order history. Per-order stage entry dates are "
                         f"from app.snapshot. last_activity_date={order['last_activity_date']}.",
-                        f"The production log ends on {last_date}; factory today is 2026-04-01.",
+                        f"The production log ends on {last_date}; factory today is {computed['factory_today']}.",
                     ],
                 },
                 "trace": {
@@ -118,7 +118,7 @@ def trace_order(order_id: str) -> str:
                         },
                     ],
                     "basis": (
-                        "OVERDUE: due_date < 2026-04-01. "
+                        "OVERDUE: due_date before the active factory date. "
                         "STALLED: idle >= 3 working days. "
                         "TIGHT_DEADLINE: not overdue, due within 3 calendar days, "
                         "and days_left exceeds working days until due. "

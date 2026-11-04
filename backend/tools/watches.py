@@ -13,7 +13,7 @@ from typing import Optional
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from backend.config import FACTORY_TODAY
+from backend.config import factory_date
 from backend.services.audit import record_event
 from backend.services.database import get_db
 from backend.services.request_context import get_current_user_id
@@ -38,8 +38,7 @@ class CreateWatchInput(BaseModel):
         ...,
         description=(
             "Factory-calendar deadline: YYYY-MM-DD or a weekday name. "
-            "Pass Thursday or 'Thursday' as spoken; Python maps it from "
-            "factory today 2026-04-01 (Wednesday) to 2026-04-02. "
+            "Pass weekday names as spoken; Python resolves them from the active factory date. "
             "Do not compute the ISO date yourself."
         ),
     )
@@ -112,7 +111,7 @@ def create_watch(
             "condition_type": CONDITION_INACTIVE,
             "check_date": when.isoformat(),
             "message": text,
-            "factory_today": FACTORY_TODAY.isoformat(),
+            "factory_today": factory_date().isoformat(),
             "notify_channel": "local",
         }
         if not confirmed:
@@ -164,13 +163,13 @@ def create_watch(
                         "calculations": [
                             {
                                 "name": "resolve_check_date",
-                                "inputs": {"raw": check_date, "origin": FACTORY_TODAY.isoformat()},
+                                "inputs": {"raw": check_date, "origin": factory_date().isoformat()},
                                 "result": when.isoformat(),
                             }
                         ],
                         "basis": (
                             "Proposal only. Condition is not evaluated here. "
-                            "Thursday from 2026-04-01 is 2026-04-02."
+                            "Weekdays resolve from the active factory date."
                         ),
                     },
                 }
@@ -201,21 +200,21 @@ def create_watch(
                     "watch_id": watch["id"],
                     "status": watch["status"],
                     **payload,
-                    "storage": "copilot_state.db (local only)",
+                    "storage": "copilot.watches (local alert)",
                     "limitations": [
                         "Saved locally. Evaluation runs when GET /api/watches "
-                        "is called with a factory as_of date. No scheduler, no SMTP."
+                        "checks your saved factory date. Local alert only."
                     ],
                 },
                 "trace": {
                     "tool": tool_name,
-                    "source_file": "copilot_state.db",
+                    "source_file": "copilot.watches",
                     "filter": {"order_id": order["order_id"], "watch_id": watch["id"]},
                     "rows": [{"watch_id": watch["id"], "status": watch["status"]}],
                     "calculations": [
                         {
                             "name": "resolve_check_date",
-                            "inputs": {"raw": check_date, "origin": FACTORY_TODAY.isoformat()},
+                            "inputs": {"raw": check_date, "origin": factory_date().isoformat()},
                             "result": when.isoformat(),
                         }
                     ],
@@ -296,12 +295,12 @@ def list_watches(order_id: Optional[str] = None) -> str:
                 },
                 "trace": {
                     "tool": tool_name,
-                    "source_file": "copilot_state.db",
+                    "source_file": "copilot.watches",
                     "filter": {"order_id": oid},
                     "rows": all_rows,
                     "calculations": [],
                     "basis": (
-                        "All standing watches in copilot_state.db, including CANCELLED."
+                        "All standing watches in copilot.watches, including CANCELLED."
                     ),
                 },
             }
@@ -369,7 +368,7 @@ def cancel_watch(
                     },
                     "trace": {
                         "tool": tool_name,
-                        "source_file": "copilot_state.db",
+                        "source_file": "copilot.watches",
                         "filter": {"watch_id": watch["id"], "order_id": watch["order_id"]},
                         "rows": [summary],
                         "calculations": [],
@@ -406,14 +405,14 @@ def cancel_watch(
                     "check_date": (cancelled.get("params") or {}).get("check_date"),
                     "note": (
                         "Watch is CANCELLED, not deleted. The row stays in "
-                        "copilot_state.db with full history. list_watches still "
+                        "copilot.watches with full history. list_watches still "
                         "returns it. It will not evaluate again and leaves the "
                         "active/fired sidebar lists."
                     ),
                 },
                 "trace": {
                     "tool": tool_name,
-                    "source_file": "copilot_state.db",
+                    "source_file": "copilot.watches",
                     "filter": {"watch_id": cancelled["id"]},
                     "rows": [watch_summary(cancelled)],
                     "calculations": [],

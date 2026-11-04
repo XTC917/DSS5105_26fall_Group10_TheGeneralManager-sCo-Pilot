@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from contextlib import nullcontext
+from datetime import date
 from typing import Any
 
+from psycopg import Connection
+
+from backend.config import factory_date
 from backend.pg_config import COPILOT_SCHEMA
 from backend.services.pg_database import connect
 from backend.services.request_context import get_current_user_id
@@ -14,17 +18,18 @@ def record_event(*, user_id: int | None = None, event_type: str, conversation_id
                  user_query: str | None = None, tool: str | None = None, inputs: dict[str, Any] | None = None,
                  result_ok: bool | None = None, result_summary: str | None = None,
                  confirmation_status: str | None = None, execution_status: str | None = None,
-                 target: str | None = None) -> int:
+                 target: str | None = None, factory_today: date | None = None,
+                 connection: Connection | None = None) -> int:
     if user_id is None:
         try:
             user_id = get_current_user_id(required=False)
         except PermissionError:
             user_id = None
-    with connect(admin=True) as conn, conn.transaction():
+    with (nullcontext(connection) if connection is not None else connect(admin=True)) as conn:
         row = conn.execute(f"""INSERT INTO {COPILOT_SCHEMA}.audit_log
             (user_id,timestamp,factory_today,conversation_id,user_query,event_type,tool,inputs_json,result_ok,result_summary,confirmation_status,execution_status,target)
-            VALUES (%s,CURRENT_TIMESTAMP,'2026-04-01',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-            (user_id, conversation_id, user_query, event_type, tool,
+            VALUES (%s,CURRENT_TIMESTAMP,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (user_id, factory_today or factory_date(), conversation_id, user_query, event_type, tool,
              json.dumps(inputs, ensure_ascii=False, default=str) if inputs else None,
              result_ok, (result_summary or "")[:500], confirmation_status, execution_status, target)).fetchone()
     return int(row["id"])

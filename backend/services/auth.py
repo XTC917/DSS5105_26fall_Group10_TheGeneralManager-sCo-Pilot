@@ -126,6 +126,12 @@ def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(
     return CurrentUser(**dict(row))
 
 
+def get_optional_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> CurrentUser | None:
+    return get_current_user(credentials) if credentials is not None else None
+
+
 def require_admin(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
     if user.role != "ADMIN":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Administrator access required")

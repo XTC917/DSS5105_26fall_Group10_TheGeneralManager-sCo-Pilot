@@ -15,24 +15,20 @@ function notifyUnauthorized() {
   }
 }
 
-async function authed(path) {
-  const res = await fetch(path, { headers: authHeaders() });
+async function authed(path, options = {}) {
+  const res = await fetch(path, { ...options, headers: authHeaders(options.headers) });
   if (res.status === 401) {
     notifyUnauthorized();
     throw new Error("Session expired. Please log in again.");
   }
   if (!res.ok) {
-    throw new Error(`Request failed (${res.status})`);
+    throw new Error(await readError(res, `Request failed (${res.status})`));
   }
   return res.json();
 }
 
 export async function fetchHealth() {
-  const res = await fetch("/api/health");
-  if (!res.ok) {
-    throw new Error(`Health check failed (${res.status})`);
-  }
-  return res.json();
+  return authed("/api/health");
 }
 
 export async function fetchBriefing() {
@@ -47,9 +43,16 @@ export async function fetchAudit(limit = 8) {
   return authed(`/api/audit?limit=${limit}`);
 }
 
-export async function fetchWatches(asOf) {
-  const query = asOf ? `?as_of=${encodeURIComponent(asOf)}` : "";
-  return authed(`/api/watches${query}`);
+export async function fetchWatches() {
+  return authed("/api/watches");
+}
+
+export async function advanceFactoryDate(expectedDate) {
+  return authed("/api/factory-date/advance", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ expected_date: expectedDate }),
+  });
 }
 
 export async function confirmAction(action) {

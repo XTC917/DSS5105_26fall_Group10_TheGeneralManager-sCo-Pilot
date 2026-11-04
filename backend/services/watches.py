@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, Protocol
 
-from backend.config import FACTORY_TODAY
+from backend.config import factory_date
 from backend.services.audit import record_event
 from backend.pg_config import COPILOT_SCHEMA
 from backend.services.pg_database import connect
@@ -98,11 +98,10 @@ def _now_utc() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def resolve_check_date(raw: str, *, origin: date = FACTORY_TODAY) -> date:
+def resolve_check_date(raw: str, *, origin: date | None = None) -> date:
     """Map ISO dates or weekday names onto the factory calendar.
 
-    Factory today is Wednesday 2026-04-01, so Thursday → 2026-04-02.
-    Does not use the computer clock.
+    Weekdays resolve from the active factory date.
     """
     text = (raw or "").strip()
     if not text:
@@ -119,6 +118,7 @@ def resolve_check_date(raw: str, *, origin: date = FACTORY_TODAY) -> date:
             "INVALID_INPUT",
             "check_date must be YYYY-MM-DD or a weekday name (e.g. Thursday).",
         )
+    origin = origin or factory_date()
     target = _WEEKDAY_INDEX[key]
     delta = (target - origin.weekday()) % 7
     return origin + timedelta(days=delta)
@@ -288,7 +288,7 @@ def create_watch_row(
             (
                 owner_id,
                 now,
-                FACTORY_TODAY.isoformat(),
+                factory_date().isoformat(),
                 order_id,
                 CONDITION_INACTIVE,
                 json.dumps(params),
@@ -473,6 +473,25 @@ def _fire_watch(
                 ),
             )
             event_id = int(event_cur.fetchone()["id"])
+            record_event(
+                connection=conn,
+                factory_today=as_of,
+                user_id=watch.get("user_id"),
+                event_type="watch_fired",
+                tool="evaluate_active_watches",
+                inputs={
+                    "watch_id": watch["id"],
+                    "order_id": watch["order_id"],
+                    "condition_type": watch["condition_type"],
+                    "as_of": as_of.isoformat(),
+                },
+                result_ok=True,
+                result_summary=(
+                    f"{watch['order_id']} {CONDITION_INACTIVE} fired as_of={as_of.isoformat()}"
+                ),
+                execution_status="fired",
+                target=watch["order_id"],
+            )
     except UniqueViolation:
         logger.info("watch_id=%s already has a fired event", watch["id"])
         return None
@@ -486,23 +505,6 @@ def _fire_watch(
         "snapshot": snapshot,
         "delivery_status": DELIVERY_LOCAL,
     }
-    record_event(
-        user_id=watch.get("user_id"),
-        event_type="watch_fired",
-        tool="evaluate_active_watches",
-        inputs={
-            "watch_id": watch["id"],
-            "order_id": watch["order_id"],
-            "condition_type": watch["condition_type"],
-            "as_of": as_of.isoformat(),
-        },
-        result_ok=True,
-        result_summary=(
-            f"{watch['order_id']} {CONDITION_INACTIVE} fired as_of={as_of.isoformat()}"
-        ),
-        execution_status="fired",
-        target=watch["order_id"],
-    )
     try:
         notifier.notify(watch, event)
     except Exception:  # noqa: BLE001 — delivery must not un-fire
@@ -530,36 +532,28 @@ def evaluate_active_watches(
         order = lookup(watch["order_id"])
         check_raw = (watch.get("params") or {}).get("check_date")
         check_date = parse_iso_date(check_raw)
-        if order is None or check_date is None:
-            with connect(admin=True) as conn:
-                conn.execute(
-                    f"UPDATE {COPILOT_SCHEMA}.watches SET last_evaluated_as_of = %s WHERE id = %s",
-                    (as_of.isoformat(), watch["id"]),
-                )
-            continue
+        if order is not None and check_date is not None and watch["condition_type"] == CONDITION_INACTIVE:
+            met, snapshot = condition_inactive_by_date(order, check_date=check_date, as_of=as_of)
+        else:
+            met, snapshot = False, {}
 
-        if watch["condition_type"] != CONDITION_INACTIVE:
-            with connect(admin=True) as conn:
-                conn.execute(
-                    f"UPDATE {COPILOT_SCHEMA}.watches SET last_evaluated_as_of = %s WHERE id = %s",
-                    (as_of.isoformat(), watch["id"]),
-                )
-            continue
-
-        met, snapshot = condition_inactive_by_date(
-            order, check_date=check_date, as_of=as_of
-        )
         if not met:
             with connect(admin=True) as conn:
                 conn.execute(
-                    f"UPDATE {COPILOT_SCHEMA}.watches SET last_evaluated_as_of = %s WHERE id = %s",
-                    (as_of.isoformat(), watch["id"]),
+                    f"""UPDATE {COPILOT_SCHEMA}.watches
+                        SET last_evaluated_as_of = GREATEST(last_evaluated_as_of, %s)
+                        WHERE id = %s AND status = %s""",
+                    (as_of, watch["id"], STATUS_ACTIVE),
                 )
             continue
 
         event = _fire_watch(watch, as_of=as_of, snapshot=snapshot, notifier=channel)
         if event:
-            newly_fired.append(_serialize_fired({**watch, "status": STATUS_FIRED}, event))
+            fired_watch = {
+                **watch, "status": STATUS_FIRED,
+                "fired_as_of": as_of.isoformat(), "fired_at": event["timestamp"],
+            }
+            newly_fired.append(_serialize_fired(fired_watch, event))
 
     return {
         "as_of": as_of.isoformat(),
@@ -576,6 +570,7 @@ def evaluate_and_list(
 ) -> dict[str, Any]:
     """Run evaluation then return the full board (all fired + remaining active)."""
     evaluate_active_watches(as_of, get_order=get_order, notifier=notifier)
+    watches = list_watches()
     events_by_watch: dict[int, dict[str, Any]] = {}
     for event in list_watch_events():
         wid = int(event["watch_id"])
@@ -583,11 +578,11 @@ def evaluate_and_list(
             events_by_watch[wid] = event
     fired = [
         _serialize_fired(watch, events_by_watch.get(int(watch["id"])))
-        for watch in list_watches(status=STATUS_FIRED)
+        for watch in watches if watch['status'] == STATUS_FIRED
     ]
-    active = [_serialize_active(watch) for watch in list_watches(status=STATUS_ACTIVE)]
+    active = [_serialize_active(watch) for watch in watches if watch['status'] == STATUS_ACTIVE]
     cancelled = [
-        watch_summary(watch) for watch in list_watches(status=STATUS_CANCELLED)
+        watch_summary(watch) for watch in watches if watch['status'] == STATUS_CANCELLED
     ]
     return {
         "as_of": as_of.isoformat(),
