@@ -1,13 +1,13 @@
 """Local action tools. There is no SMTP or push-notification integration.
 
 Pattern: propose (confirmed=false, default) → manager confirms → persist locally
-and write an audit row. Email is never actually sent.
+and write an audit row. Real delivery is handled separately by the email API.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
@@ -18,26 +18,29 @@ from backend.services.calculations import assess_order_risk, parse_iso_date
 from backend.services.pace import flags_with_pace_tight, pace_fields, stage_medians
 from backend.services.database import get_db
 from backend.services.request_context import get_current_user_id
-from backend.tools.common import order_id_named_by_manager, tool_error, tool_json, ungrounded_order_error
+from backend.services.email_templates import EmailAudience, EmailLanguage, compose_email, email_language
+from backend.tools.common import manager_text, order_id_named_by_manager, tool_error, tool_json, ungrounded_order_error
 
 logger = logging.getLogger(__name__)
 
 NO_SMTP = (
-    "There is no email or calendar integration. Nothing was sent to a customer "
-    "or workshop. The payload is a local draft / audit record only."
+    "Nothing was sent to a customer or workshop. The payload is a draft or "
+    "simulation record. Real delivery requires the dedicated email preview."
 )
 
 
 class DraftEmailInput(BaseModel):
-    order_id: str = Field(..., description="Order id the manager wrote.")
+    order_id: str | None = Field(default=None, description="Order id the manager wrote; omit only for overdue_customers scope.")
+    language: EmailLanguage = Field(default="auto", description="Use zh/en for an explicit email language request; auto follows this turn.")
+    audience: EmailAudience = Field(default="unspecified", description="customer/internal only when specified by the manager; never infer an address.")
+    scope: Literal["single", "overdue_customers"] = Field(default="single", description="overdue_customers: draft one email per overdue order for all customers, without choosing arbitrary ids.")
 
 
 class SendEmailInput(BaseModel):
     order_id: str = Field(..., description="Order id the manager wrote.")
-    confirmed: bool = Field(
-        default=False,
-        description="Must be false unless the manager explicitly confirmed sending.",
-    )
+    language: EmailLanguage = "auto"
+    audience: EmailAudience = "unspecified"
+    confirmed: bool = Field(default=False, description="True only after explicit manager confirmation. Simulation only.")
 
 
 class AddNoteInput(BaseModel):
@@ -70,33 +73,18 @@ def _lookup_order(order_id: str) -> dict | None:
     return get_db().get_order_by_id(order_id)
 
 
-def _compose_chase_email(order: dict) -> dict:
+def _compose_chase_email(order: dict, language: EmailLanguage = "auto",
+                         audience: EmailAudience = "unspecified") -> dict:
     risk = assess_order_risk(order)
-    db = get_db()
-    pace = pace_fields(order, stage_medians(db))
+    pace = pace_fields(order, stage_medians(get_db()))
     flags = flags_with_pace_tight(list(risk["flags"]), pace)
-    flag_text = ", ".join(flags) if flags else "none recorded"
-    return {
-        "to": (
-            f"{order['customer']} — customer email is not in orders.csv; "
-            "do not invent an address"
-        ),
-        "subject": f"SweaterCo order {order['order_id']} ({order['product']}) needs attention",
-        "body": (
-            f"Order {order['order_id']} for {order['customer']}: "
-            f"{order['pieces']} {order['product']}, status {order['status']}, "
-            f"stage {order['current_stage']}, due {order['due_date']}, "
-            f"last activity {order['last_activity_date']}. "
-            f"Risk flags from factory rules: {flag_text}."
-        ),
-        "order_id": order["order_id"],
-        "customer": order["customer"],
-        "risk_flags": flags,
-    }
+    return compose_email(order, flags, language=email_language(language, manager_text()), audience=audience)
 
 
 @tool(args_schema=DraftEmailInput)
-def draft_chase_email(order_id: str) -> str:
+def draft_chase_email(order_id: str | None = None, language: EmailLanguage = "auto",
+                      audience: EmailAudience = "unspecified",
+                      scope: Literal["single", "overdue_customers"] = "single") -> str:
     """Prepare a chase-up email draft from order fields. Does not send anything.
 
     Use when the manager asks to draft or write an email about an order.
@@ -104,16 +92,36 @@ def draft_chase_email(order_id: str) -> str:
     """
     tool_name = "draft_chase_email"
     try:
+        if scope == "overdue_customers":
+            if order_id or audience == "internal":
+                return tool_error(tool_name, "INVALID_INPUT", "overdue_customers cannot be combined with order_id or internal audience.")
+            orders = [row for row in get_db().in_progress_orders()
+                      if "OVERDUE" in assess_order_risk(row)["flags"]]
+            drafts = [_compose_chase_email(row, language, "customer") for row in orders]
+            record_event(event_type="action_proposal", tool=tool_name,
+                         inputs={"scope": scope, "language": language}, result_ok=True,
+                         result_summary=f"{len(drafts)} customer drafts prepared, not sent",
+                         confirmation_status="not_required_for_draft", execution_status="not_sent")
+            return tool_json({"ok": True, "tool": tool_name,
+                              "data": {"sent": False, "channel": "local_draft_only",
+                                       "needs_confirmation": False, "draft_only": True,
+                                       "drafts": drafts, "count": len(drafts),
+                                       "grouping": "one_draft_per_order", "limitations": [NO_SMTP]},
+                              "trace": {"tool": tool_name, "source_file": "orders.csv",
+                                        "filter": {"scope": scope}, "rows": orders,
+                                        "calculations": [], "basis": "Existing OVERDUE rule; one draft per order; nothing sent."}})
+        if not order_id or not order_id.strip():
+            return tool_error(tool_name, "INVALID_INPUT", "order_id is required for a single-order draft.")
         if not order_id_named_by_manager(order_id):
             return ungrounded_order_error(tool_name, order_id)
         order = _lookup_order(order_id)
         if not order:
             return tool_error(tool_name, "NOT_FOUND", "No order with that id in orders.csv.")
-        draft = _compose_chase_email(order)
+        draft = _compose_chase_email(order, language, audience)
         record_event(
             event_type="action_proposal",
             tool=tool_name,
-            inputs={"order_id": order["order_id"]},
+            inputs={"order_id": order["order_id"], "language": draft["language"], "audience": audience},
             result_ok=True,
             result_summary="email draft prepared, not sent",
             confirmation_status="not_required_for_draft",
@@ -128,19 +136,15 @@ def draft_chase_email(order_id: str) -> str:
                     "sent": False,
                     "channel": "local_draft_only",
                     "draft": draft,
-                    "proposed_action": {
-                        "type": "send_email",
-                        "order_id": order["order_id"],
-                        "requires_confirmation": True,
-                        "confirmed": False,
-                    },
+                    "needs_confirmation": False,
+                    "draft_only": True,
                     "limitations": [NO_SMTP],
                 },
                 "trace": {
                     "tool": tool_name,
                     "source_file": "orders.csv",
                     "filter": {"order_id": order["order_id"]},
-                    "rows": [{"order_id": order["order_id"], "customer": order["customer"]}],
+                    "rows": [order],
                     "calculations": [],
                     "basis": NO_SMTP,
                 },
@@ -152,7 +156,8 @@ def draft_chase_email(order_id: str) -> str:
 
 
 @tool(args_schema=SendEmailInput)
-def send_email(order_id: str, confirmed: bool = False) -> str:
+def send_email(order_id: str, confirmed: bool = False, language: EmailLanguage = "auto",
+               audience: EmailAudience = "unspecified") -> str:
     """Record a simulated send. Never claims a real email left the system.
 
     Call only after draft_chase_email, and only with confirmed=true after the
@@ -165,7 +170,7 @@ def send_email(order_id: str, confirmed: bool = False) -> str:
         order = _lookup_order(order_id)
         if not order:
             return tool_error(tool_name, "NOT_FOUND", "No order with that id in orders.csv.")
-        draft = _compose_chase_email(order)
+        draft = _compose_chase_email(order, language, audience)
         if not confirmed:
             record_event(
                 event_type="action_proposal",
@@ -188,6 +193,8 @@ def send_email(order_id: str, confirmed: bool = False) -> str:
                         "proposed_action": {
                             "type": "send_email",
                             "order_id": order["order_id"],
+                            "language": draft["language"],
+                            "audience": audience,
                             "requires_confirmation": True,
                             "confirmed": False,
                         },

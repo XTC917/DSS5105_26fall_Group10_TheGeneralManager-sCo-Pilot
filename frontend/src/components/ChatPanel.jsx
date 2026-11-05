@@ -353,6 +353,8 @@ export default function ChatPanel({
       traces: result.traces || [],
       limitation: result.limitation,
       proposedActions: result.proposed_actions || [],
+      emailDrafts: result.email_drafts || [],
+      turnId: result.turn_id,
       charts: result.charts || [],
       tables: result.tables || [],
       clarification: result.clarification || null,

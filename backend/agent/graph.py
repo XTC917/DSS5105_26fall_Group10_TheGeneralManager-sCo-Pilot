@@ -155,10 +155,14 @@ def _react_prompt(state: dict[str, Any]):
     turn = _latest_turn(messages)
     if any(isinstance(msg, ToolMessage) for msg in turn):
         called = set(_tools_from_turn(turn))
+        # Email tool results are correspondence, not numeric lookup rows.
+        # Do not force them through the generic chart/table step (also on error).
+        email_result = bool(called & {"draft_chase_email", "send_email"})
         charted = bool(called & {"draw", "render_table"})
         empty_lookup = _turn_lookups_are_empty(turn)
         hold_for_chart = (
             not charted
+            and not email_result
             and not empty_lookup
             and not _EXPLAIN_PRIOR.get()
             and not _REUSE_PRIOR.get()
@@ -217,6 +221,15 @@ def _react_prompt(state: dict[str, Any]):
                     "Copy only values already in that JSON. Do not calculate. "
                     "Do not answer in text on this step."
                 )
+        elif email_result:
+            system += (
+                "\n\nAn email tool returned this turn. Present its subject and body as "
+                "an email with paragraphs, preserving the returned language and facts. "
+                "Show its draft-only disclaimer separately. Do not call draw or render_table "
+                "for the email, and do not replace it with a status table. If the tool "
+                "returned an error, explain the error instead of inventing a draft. "
+                "Drafting alone does not require a confirmation or a send_email call."
+            )
         else:
             query = _TEMPLATE_QUERY.get()
             hits = retrieve_answer_templates(query)
@@ -661,6 +674,7 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
     charts: list[dict[str, Any]] = []
     tables: list[dict[str, Any]] = []
     evidence_results: list[dict[str, Any]] = []
+    email_drafts: list[dict[str, Any]] = []
     evidence_limitations: list[str] = []
     limitation = None
     ungrounded_message = None
@@ -681,6 +695,11 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
             )
             if payload.get("ok") and tool_name not in _DISPLAY_TOOLS:
                 evidence_results.append({"tool": tool_name, "data": data})
+            if payload.get("ok") and tool_name in {"draft_chase_email", "send_email"}:
+                drafts = data.get("drafts") or [data.get("draft")]
+                for draft in drafts:
+                    if isinstance(draft, dict) and draft not in email_drafts:
+                        email_drafts.append(draft)
             proposal = data.get("proposed_action")
             if isinstance(proposal, dict):
                 proposed_actions.append(proposal)
@@ -750,6 +769,7 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
         "evidence_results": evidence_results,
         "evidence_limitations": evidence_limitations,
         "proposed_actions": proposed_actions,
+        "email_drafts": email_drafts,
         "charts": charts,
         "tables": tables,
         "clarification": None,

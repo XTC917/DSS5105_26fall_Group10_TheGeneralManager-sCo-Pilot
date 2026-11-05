@@ -44,6 +44,8 @@ function messagesFromTurns(turns) {
         traces: metadata.traces || [],
         limitation: metadata.limitation || null,
         proposedActions: metadata.proposed_actions || [],
+        emailDrafts: metadata.email_drafts || [],
+        turnId: turn.id,
         charts: metadata.charts || [],
         tables: metadata.tables || [],
         clarification: metadata.clarification || null,
