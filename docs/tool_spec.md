@@ -243,6 +243,28 @@ re-checks factory data, and the row never auto-fires.
 
 **Unsupported:** inventing a customer email address; claiming an external send.
 
+**Email draft update (2026-11-01):** `draft_chase_email` accepts optional
+`language=auto|zh|en`, `audience=unspecified|internal|customer`, and
+`scope=single|overdue_customers`. Single scope requires an order_id. For an
+explicit request covering all overdue customers, omit order_id and use
+overdue_customers; Python selects existing OVERDUE orders and returns one
+draft per order in data.drafts (same-customer orders are separate).
+Default language follows this turn's first line; explicit email language
+requests should pass zh/en. Subject, greeting, facts, requested action and
+closing use the selected template. The disclaimer is a separate draft field.
+Missing email addresses are null, never inferred. Drafting returns
+needs_confirmation=false and no proposed_action. Draft content is returned
+in the conversation, not saved to an external mailbox. Email results bypass
+the generic forced chart/table presentation. send_email remains SIMULATED;
+real delivery is available from an owned chat turn via Open email draft,
+Save and preview, and Confirm and send. Apply the existing migrations through
+the current head before using the editor. To enable delivery, set
+EMAIL_DELIVERY_ENABLED=true, EMAIL_FROM, EMAIL_TEST_RECIPIENT and RESEND_API_KEY.
+The API checks that the recipient matches the configured test address.
+Each saved draft version can be submitted once, and SUBMITTED indicates
+provider acceptance. UNKNOWN requires checking the provider before taking
+further action. The chat tool cannot call the real-send endpoint.
+
 ---
 
 ## `create_watch` (standing watch, V1)

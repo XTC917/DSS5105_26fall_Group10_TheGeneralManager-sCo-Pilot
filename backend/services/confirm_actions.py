@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 ALLOWED_ACTIONS: dict[str, tuple[Any, tuple[str, ...]]] = {
     "create_watch": (create_watch, ("order_id", "condition_type", "check_date", "message")),
     "cancel_watch": (cancel_watch, ("order_id", "watch_id")),
-    "send_email": (send_email, ("order_id",)),
+    "send_email": (send_email, ("order_id", "language", "audience")),
     "add_order_note": (add_order_note, ("order_id", "note")),
     "create_reminder": (create_reminder, ("order_id", "remind_on", "message")),
 }

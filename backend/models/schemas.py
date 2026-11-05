@@ -81,6 +81,8 @@ class ChatResponse(BaseModel):
     tools_used: list[str] = Field(default_factory=list)
     traces: list[dict[str, Any]] = Field(default_factory=list)
     proposed_actions: list[dict[str, Any]] = Field(default_factory=list)
+    email_drafts: list[dict[str, Any]] = Field(default_factory=list)
+    turn_id: int | None = None
     charts: list[dict[str, Any]] = Field(default_factory=list)
     tables: list[dict[str, Any]] = Field(default_factory=list)
     clarification: dict[str, Any] | None = None
