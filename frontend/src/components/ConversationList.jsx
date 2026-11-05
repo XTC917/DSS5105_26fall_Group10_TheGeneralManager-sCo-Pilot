@@ -12,6 +12,20 @@ function formatUpdatedAt(value) {
   }).format(date);
 }
 
+function PinIcon({ filled }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M9 3.5h6l-.8 6.2H17L12 20.5 7 9.7h2.8L9 3.5z"
+        fill={filled ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function MenuIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -30,6 +44,8 @@ function ConversationRow({
   canDelete,
   deleting,
   menuOpen,
+  pinned = false,
+  onTogglePin,
   onSelect,
   onToggleMenu,
   onRequestDelete,
@@ -54,6 +70,21 @@ function ConversationRow({
           {" · "}
           {formatUpdatedAt(conversation.updated_at)}
         </span>
+      </button>
+      <button
+        type="button"
+        aria-label={pinned ? `Unpin ${conversation.title}` : `Pin ${conversation.title}`}
+        aria-pressed={pinned}
+        disabled={disabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          onTogglePin?.(conversation.id);
+        }}
+        className={`focus-ring shrink-0 self-center rounded-control p-1.5 transition-colors disabled:opacity-50 ${
+          pinned ? "text-accentText" : "text-muted hover:bg-surface hover:text-foreground"
+        }`}
+      >
+        <PinIcon filled={pinned} />
       </button>
       {canDelete && (
         <div className="relative shrink-0 self-center pr-1">
@@ -112,6 +143,8 @@ export default function ConversationList({
   canDelete = false,
   deleteUnavailable = false,
   deletingId = null,
+  pinnedIds,
+  onTogglePin,
   onSelect,
   onCreate,
   onRequestDelete,
@@ -212,12 +245,16 @@ export default function ConversationList({
         <p className="px-2 py-3 type-caption text-subtle">{emptyLabel || defaultEmpty}</p>
       ) : (
         <div className={`space-y-1 ${scrollable ? "max-h-64 overflow-y-auto" : ""}`}>
-          {conversations.map((conversation) => (
+          {[...conversations]
+            .sort((a, b) => Number(pinnedIds?.has(b.id)) - Number(pinnedIds?.has(a.id)))
+            .map((conversation) => (
             <ConversationRow
               key={conversation.id}
               conversation={conversation}
               active={conversation.id === activeConversationId}
               disabled={disabled}
+              pinned={pinnedIds?.has(conversation.id)}
+              onTogglePin={onTogglePin}
               deleteDisabled={busyIds?.has(conversation.id)}
               canDelete={canDelete}
               deleting={deletingId === conversation.id}

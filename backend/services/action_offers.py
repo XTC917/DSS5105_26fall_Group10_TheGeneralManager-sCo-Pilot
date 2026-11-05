@@ -71,28 +71,10 @@ def _watch_offer(order: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def _email_offer(order: dict[str, Any]) -> dict[str, Any] | None:
-    if order.get("status") != "IN_PROGRESS":
-        return None
-    if "send_email" not in ALLOWED_ACTIONS:
-        return None
-    order_id = str(order["order_id"]).upper()
-    customer = str(order.get("customer") or "").strip()
-    who = f" for {customer}" if customer else ""
-    return {
-        "id": f"send_email:{order_id}",
-        "prompt": f"Need me to record a chase email for {order_id}{who}?",
-        "action": {
-            "type": "send_email",
-            "order_id": order_id,
-            "requires_confirmation": True,
-            "confirmed": False,
-        },
-    }
-
-
 # Add a builder here when a future tool should be offerable. The UI stays the same.
-OFFER_BUILDERS = (_watch_offer, _email_offer)
+# Chase-email offers stay off: a question that already asks for an email gets the
+# draft in the answer, and a second "record a chase email?" card repeats it.
+OFFER_BUILDERS = (_watch_offer,)
 
 
 def _same_card(action: dict[str, Any], proposed_actions: list[dict[str, Any]] | None) -> bool:

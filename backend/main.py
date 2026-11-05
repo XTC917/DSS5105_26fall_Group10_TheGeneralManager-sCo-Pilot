@@ -118,7 +118,7 @@ app.include_router(users_router)
 app.include_router(conversations_router)
 app.include_router(email_router)
 
-_UNSTORED_LIMITATIONS = frozenset({"needs_clarification", "missing_data", "no_tool"})
+_PROBLEM_ANSWER = "I couldn't finish that answer. Please try again."
 
 
 @app.get("/api/health")
@@ -240,12 +240,12 @@ def _complete_chat(
             duration_ms=duration_ms(),
         )
         response.turn_id = saved_turn["id"]
-        response.proposed_actions = [
-            {**action, "_turn_id": saved_turn["id"]}
-            for action in response.proposed_actions
-        ]
-        return response
-    except ConversationNotFoundError as exc:
+            logger.error("chat service is not configured")
+            return _problem_response(
+                request,
+                user,
+                attempt_id=attempt_id,
+                duration_ms=duration_ms(),
         raise HTTPException(status_code=404, detail="Conversation not found") from exc
     except HTTPException:
         raise
@@ -273,71 +273,48 @@ def chat(
 ) -> ChatResponse:
     return _complete_chat(request, user)
 
+        try:
+            why = prepared if isinstance(prepared, dict) else explain_why(request.message, result)
+        except Exception:  # noqa: BLE001
+            logger.exception("why explanation failed")
+            why = None
+        response = ChatResponse(**{**result, "why": why})
+        return _store_chat_turn(
+            user,
+            request,
+            response,
+            attempt_id=attempt_id,
+            duration_ms=duration_ms(),
+        )
+    except ConversationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Conversation not found") from exc
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("chat failed")
+        if attempt_id is not None:
+            return _problem_response(
+                request,
+                user,
+                attempt_id=attempt_id,
+                duration_ms=duration_ms(),
+                answer=_PROBLEM_ANSWER,
+            )
+        record_failure("CHAT_SERVICE_UNAVAILABLE", _PROBLEM_ANSWER)
+        raise HTTPException(status_code=503, detail=_PROBLEM_ANSWER) from exc
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+def chat(
+    request: ChatRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> ChatResponse:
+    return _complete_chat(request, user)
+
 
 @app.post("/api/chat/stream")
 async def chat_stream(request: ChatRequest, user: CurrentUser = Depends(get_current_user)):
     """Same chat turn as /api/chat, with live progress and answer text."""
-    if not llm_is_configured():
-        raise HTTPException(status_code=503, detail="Chat service is not configured.")
-
-    async def events():
-        queue: asyncio.Queue = asyncio.Queue()
-        loop = asyncio.get_running_loop()
-
-        def progress(text: str) -> None:
-            loop.call_soon_threadsafe(queue.put_nowait, ("progress", {"message": text}))
-
-        def on_token(piece) -> None:
-            if isinstance(piece, dict) and piece.get("reset"):
-                loop.call_soon_threadsafe(queue.put_nowait, ("token", {"reset": True}))
-                return
-            if piece:
-                loop.call_soon_threadsafe(queue.put_nowait, ("token", {"text": piece}))
-
-        async def produce() -> None:
-            try:
-                response = await asyncio.to_thread(
-                    _complete_chat, request, user, progress, on_token
-                )
-                await queue.put(("done", response.model_dump(mode="json")))
-            except HTTPException as exc:
-                detail = exc.detail if isinstance(exc.detail, str) else "Chat failed. Please try again."
-                await queue.put(("error", {"message": detail}))
-            except Exception:
-                logger.exception("chat stream failed")
-                await queue.put(("error", {"message": "Chat failed. Please try again."}))
-
-        worker = asyncio.create_task(produce())
-        _CHAT_WORKERS.add(worker)
-        worker.add_done_callback(_CHAT_WORKERS.discard)
-        try:
-            yield 'event: progress\ndata: {"message":"Checking the question…"}\n\n'
-            while True:
-                try:
-                    event, data = await asyncio.wait_for(queue.get(), timeout=10)
-                except asyncio.TimeoutError:
-                    yield ": keep-alive\n\n"
-                    continue
-                yield f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-                if event in {"done", "error"}:
-                    break
-        finally:
-            if not worker.done():
-                worker.add_done_callback(lambda task: task.exception() if not task.cancelled() else None)
-
-    return StreamingResponse(
-        events(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@app.post("/api/suggestions", response_model=SuggestionResponse)
-def suggestions(
-    request: SuggestionRequest,
-    _user: CurrentUser = Depends(get_current_user),
-) -> SuggestionResponse:
-    """Deep-dive questions. Called beside answer rendering, not inside the answer."""
     asked = [text.strip()[:400] for text in request.asked if str(text or "").strip()][-12:]
     return SuggestionResponse(
         suggestions=compose_deep_dive_questions(

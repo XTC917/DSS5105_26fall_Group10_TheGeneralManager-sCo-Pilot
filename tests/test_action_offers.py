@@ -26,9 +26,9 @@ def _lookup(order_id: str) -> dict:
     return {**ORDER, "order_id": order_id}
 
 
-def test_one_in_progress_order_can_be_watched_or_emailed():
+def test_one_in_progress_order_can_be_watched():
     found = offers.candidate_offers(_traces({"order_id": "ORD-120"}), lookup=_lookup)
-    assert [item["id"] for item in found] == ["create_watch:ORD-120", "send_email:ORD-120"]
+    assert [item["id"] for item in found] == ["create_watch:ORD-120"]
     assert found[0]["action"]["check_date"] == "2026-04-01"
     assert found[0]["action"]["order_id"] == "ORD-120"
 

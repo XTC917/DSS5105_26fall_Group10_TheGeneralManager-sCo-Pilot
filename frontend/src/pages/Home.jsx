@@ -32,6 +32,20 @@ function storageKey(userId) {
   return `sweaterco:last-conversation:${userId}`;
 }
 
+function pinStorageKey(userId) {
+  return `sweaterco:pinned-conversations:${userId}`;
+}
+
+function readPinnedIds(userId) {
+  if (!userId) return new Set();
+  try {
+    const parsed = JSON.parse(localStorage.getItem(pinStorageKey(userId)) || "[]");
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
 function messagesFromTurns(turns) {
   return turns.flatMap((turn) => {
     const metadata = turn.response_json || {};
@@ -190,6 +204,7 @@ export default function Home() {
   const [conversationLoading, setConversationLoading] = useState(true);
   const [conversationError, setConversationError] = useState("");
   const [busyIds, setBusyIds] = useState(() => new Set());
+  const [pinnedConversationIds, setPinnedConversationIds] = useState(() => new Set());
   const busyIdsRef = useRef(busyIds);
   busyIdsRef.current = busyIds;
   const watchSaveHolds = useRef(0);
@@ -453,6 +468,21 @@ export default function Home() {
   }, [openConversation, user?.id]);
 
   useEffect(() => {
+    setPinnedConversationIds(readPinnedIds(user?.id));
+  }, [user?.id]);
+
+  function togglePinnedConversation(conversationId) {
+    if (!user?.id || !conversationId) return;
+    setPinnedConversationIds((current) => {
+      const next = new Set(current);
+      if (next.has(conversationId)) next.delete(conversationId);
+      else next.add(conversationId);
+      localStorage.setItem(pinStorageKey(user.id), JSON.stringify([...next]));
+      return next;
+    });
+  }
+
+  useEffect(() => {
     if (!capabilities.search) {
       setSearchResults(null);
       setSearchLoading(false);
@@ -661,6 +691,8 @@ export default function Home() {
     onSearchChange: handleSearchChange,
     disabled: Boolean(deletingId),
     busyIds,
+    pinnedIds: pinnedConversationIds,
+    onTogglePin: togglePinnedConversation,
     canDelete: capabilitiesReady && capabilities.delete,
     deleteUnavailable: false,
     deletingId,
