@@ -2,6 +2,7 @@ import { useState } from "react";
 import ChartView from "./ChartView.jsx";
 import TableView from "./TableView.jsx";
 import TracePanel from "./TracePanel.jsx";
+import EmailDraft from "./EmailDraft.jsx";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -234,6 +235,10 @@ export default function MessageBubble({
           )}
         </div>
 
+        {message.turnId && message.emailDrafts?.map((draft, index) => (
+          <EmailDraft key={`${message.turnId}-${index}`} draft={draft}
+            turnId={message.turnId} index={index} />
+        ))}
         <MessageMeta message={message} />
 
         {charts.map((chart, idx) => (

@@ -19,10 +19,12 @@ def test_draft_chase_email_uses_order_fields_and_is_not_sent(db, clean_state):
     data = payload["data"]
     assert data["sent"] is False
     assert data["draft"]["order_id"] == "ORD-120"
-    assert "TrendCart" in data["draft"]["to"]
+    assert data["draft"]["to"] is None
+    assert data["draft"]["customer"] == "TrendCart"
     assert "1500" in data["draft"]["body"]
     assert "ORD-120" in data["draft"]["subject"]
-    assert "not in orders.csv" in data["draft"]["to"]
+    assert data["draft"]["recipient_status"] == "missing"
+    assert "proposed_action" not in data
     assert any("not" in item.lower() and "sent" in item.lower() for item in data["limitations"])
 
 

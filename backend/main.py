@@ -58,6 +58,7 @@ from backend.services.why import build_why
 from backend.tools.registry import MVP_TOOLS
 from backend.routers.auth import router as auth_router, users_router
 from backend.routers.conversations import router as conversations_router
+from backend.routers.email import router as email_router
 
 logger = logging.getLogger(__name__)
 _CHAT_WORKERS: set[asyncio.Task] = set()
@@ -106,6 +107,7 @@ app.include_router(query_router)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(conversations_router)
+app.include_router(email_router)
 
 _UNSTORED_LIMITATIONS = frozenset({"needs_clarification", "missing_data", "no_tool"})
 
@@ -195,7 +197,7 @@ def _complete_chat(
             )
             return response
         response_json = response.model_dump(
-            exclude={"answer", "conversation_id"},
+            exclude={"answer", "conversation_id", "turn_id"},
             mode="json",
         )
         saved_turn = save_turn(
@@ -207,6 +209,7 @@ def _complete_chat(
             attempt_id=attempt_id,
             duration_ms=duration_ms(),
         )
+        response.turn_id = saved_turn["id"]
         response.proposed_actions = [
             {**action, "_turn_id": saved_turn["id"]}
             for action in response.proposed_actions
