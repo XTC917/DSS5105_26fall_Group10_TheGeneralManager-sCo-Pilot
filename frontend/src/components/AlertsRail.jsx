@@ -74,15 +74,12 @@ function WatchActions({ item, disabled, menuOpen, onToggleMenu, onRequestCancel 
 }
 
 /**
- * Compact alerts strip above Conversations.
- * Hidden (no layout cost) when there are no active watches or fired alerts.
+ * Compact watch and alerts strip above Conversations.
  * Cancel uses POST /api/actions/confirm { type: cancel_watch } — not chat.
  */
 export default function AlertsRail({
   watches = { fired: [], active: [], cancelled: [] },
-  loading = false,
   compact = false,
-  persistHistory = false,
   onWatchChanged,
 }) {
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -98,7 +95,6 @@ export default function AlertsRail({
   const active = watches.active || [];
   const cancelled = watches.cancelled || [];
   const hasAlerts = fired.length > 0 || active.length > 0;
-  const hasHistory = cancelled.length > 0;
 
   useEffect(() => {
     if (!expanded && menuWatchId == null) return undefined;
@@ -152,14 +148,6 @@ export default function AlertsRail({
     }
   }
 
-  if (loading && !hasAlerts && !hasHistory && !persistHistory) {
-    return null;
-  }
-
-  if (!hasAlerts && !hasHistory && !persistHistory) {
-    return null;
-  }
-
   function renderWatchRow(item, { triggered = false } = {}) {
     const busy = cancellingId === Number(item.watch_id);
     return (
@@ -207,7 +195,11 @@ export default function AlertsRail({
       <div className={`flex items-start gap-2 ${compact ? "px-0 py-1" : "px-3 py-2"}`}>
         <div className="min-w-0 flex-1">
           {!hasAlerts ? (
-            <p className="type-caption text-subtle">{hasHistory || persistHistory ? "No active alerts" : "No alerts"}</p>
+            <div>
+              <p className="type-overline text-foreground">Active Watches</p>
+              <p className="mt-1 type-caption text-subtle">No active watches</p>
+              <p className="mt-0.5 type-caption text-subtle">New watches will appear here.</p>
+            </div>
           ) : (
             <button
               type="button"
@@ -217,7 +209,8 @@ export default function AlertsRail({
               className="focus-ring w-full rounded-control text-left"
             >
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="type-overline text-danger">Alerts</span>
+                <span className="type-overline text-foreground">Active Watches</span>
+                {fired.length > 0 && <span className="type-overline text-danger">Alerts</span>}
                 {fired.length > 0 && (
                   <Badge variant="danger" size="sm" dot>
                     {fired.length} triggered

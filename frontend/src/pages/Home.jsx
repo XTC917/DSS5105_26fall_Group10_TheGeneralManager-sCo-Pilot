@@ -659,7 +659,7 @@ export default function Home() {
                     llmReady={Boolean(health?.llm_configured)}
                     onBusyChange={setChatBusy}
                     onConversationUpdated={handleConversationUpdated}
-                    onBoardChanged={() => setBoardTick((n) => n + 1)}
+                    onBoardChanged={handleWatchChanged}
                     onOpenConversations={() => setHistoryDrawerOpen(true)}
                     onNewConversation={handleNewConversation}
                     onDraftChange={setComposerDraft}

@@ -62,21 +62,6 @@ function ArrowUpIcon() {
   );
 }
 
-function ChevronIcon({ open }) {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      className={`transition-transform duration-[var(--dur-fast)] ${open ? "rotate-180" : ""}`}
-    >
-      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 function HistoryIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -132,7 +117,6 @@ export default function ChatPanel({
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [isAtBottom, setIsAtBottom] = useState(true);
-  const [morePromptsOpen, setMorePromptsOpen] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [suggestionsPos, setSuggestionsPos] = useState(null);
   const listRef = useRef(null);
@@ -400,7 +384,13 @@ export default function ChatPanel({
             : msg,
         ),
       );
-      onBoardChanged?.();
+      if (
+        result?.ok &&
+        ((action?.type === "create_watch" && result?.data?.saved === true) ||
+          (action?.type === "cancel_watch" && result?.data?.cancelled === true))
+      ) {
+        onBoardChanged?.();
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -435,6 +425,13 @@ export default function ChatPanel({
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }
 
+  function chooseSuggestion(question) {
+    if (input.trim() && !window.confirm("Replace your current draft with this suggestion?")) return;
+    setInput(question);
+    setSuggestionsOpen(false);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }
+
   function renderSuggestionsPopover() {
     if (!suggestionsOpen || !suggestionsPos || typeof document === "undefined") return null;
     const prompts = [...FEATURED_STARTERS, ...MORE_STARTERS];
@@ -457,10 +454,7 @@ export default function ChatPanel({
             <button
               key={question}
               type="button"
-              onClick={() => {
-                setSuggestionsOpen(false);
-                submit(question);
-              }}
+              onClick={() => chooseSuggestion(question)}
               className="focus-ring block w-full rounded-control px-2.5 py-2 text-left type-caption text-foreground transition-colors hover:bg-accentSoft/50"
             >
               {question}
@@ -542,24 +536,6 @@ export default function ChatPanel({
           Grounded in factory data · Enter to send · Shift+Enter for a new line
         </p>
       </form>
-    );
-  }
-
-  function renderStarterButtons(items, { compact = false } = {}) {
-    return (
-      <div className={compact ? "grid gap-2" : "grid gap-2 sm:grid-cols-2"}>
-        {items.map((question) => (
-          <button
-            key={question}
-            type="button"
-            onClick={() => submit(question)}
-            className="group flex items-center justify-between gap-3 rounded-2xl border border-line/70 bg-surface/70 px-4 py-3 text-left type-sm text-foreground transition-all duration-[var(--dur-fast)] hover:-translate-y-0.5 hover:border-accentText/50 hover:bg-surface hover:shadow-soft"
-          >
-            <span>{question}</span>
-            <span className="text-muted transition-transform duration-[var(--dur-fast)] group-hover:translate-x-0.5 group-hover:text-accentText">→</span>
-          </button>
-        ))}
-      </div>
     );
   }
 
@@ -647,25 +623,6 @@ export default function ChatPanel({
               </p>
             )}
 
-            <div className="space-y-3">
-              {renderStarterButtons(FEATURED_STARTERS)}
-              <div className="flex justify-center">
-                <button
-                  type="button"
-                  onClick={() => setMorePromptsOpen((value) => !value)}
-                  className="focus-ring inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 type-caption font-medium text-muted transition-colors hover:bg-surfaceMuted hover:text-foreground"
-                  aria-expanded={morePromptsOpen}
-                >
-                  {morePromptsOpen ? "Show fewer prompts" : "More prompts"}
-                  <ChevronIcon open={morePromptsOpen} />
-                </button>
-              </div>
-              {morePromptsOpen && (
-                <div className="animate-fade-in">
-                  {renderStarterButtons(MORE_STARTERS, { compact: true })}
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </section>
