@@ -15,7 +15,7 @@ import {
   fetchConversationHistory,
   fetchConversations,
 } from "../services/conversationsApi.js";
-import { loadOverviewData, peekOverviewCache } from "../services/overviewCache.js";
+import { invalidateOverviewCache, loadOverviewData, peekOverviewCache } from "../services/overviewCache.js";
 import { friendlyAuthError } from "../services/authErrors.js";
 import {
   Badge,
@@ -435,6 +435,11 @@ export default function Home() {
     handleNewConversation({ fromAskAi: true });
   }
 
+  function handleWatchChanged() {
+    invalidateOverviewCache();
+    setBoardTick((n) => n + 1);
+  }
+
   async function handleConversationUpdated() {
     try {
       await refreshConversationCatalog();
@@ -618,7 +623,7 @@ export default function Home() {
             {navItems.map(navButton)}
           </nav>
 
-          <AlertsRail watches={watches} loading={watchesLoading} />
+          <AlertsRail watches={watches} loading={watchesLoading} onWatchChanged={handleWatchChanged} />
 
           <div className="flex shrink-0 items-center justify-between gap-2 border-t border-line px-3 py-2">
             <p className="type-overline text-muted">Conversations</p>
@@ -882,7 +887,12 @@ export default function Home() {
               </button>
             </div>
             <div className="mb-2 shrink-0 border-b border-line pb-2">
-              <AlertsRail watches={watches} loading={watchesLoading} compact />
+              <AlertsRail
+                watches={watches}
+                loading={watchesLoading}
+                compact
+                onWatchChanged={handleWatchChanged}
+              />
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-1">
               <ConversationList {...conversationListProps} scrollable={false} />
@@ -922,7 +932,13 @@ export default function Home() {
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-1">
-              <AlertsRail watches={watches} loading={watchesLoading} compact persistHistory />
+              <AlertsRail
+                watches={watches}
+                loading={watchesLoading}
+                compact
+                persistHistory
+                onWatchChanged={handleWatchChanged}
+              />
             </div>
           </div>
         </div>

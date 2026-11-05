@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { confirmAction, declineAction, sendChatStream } from "../services/api.js";
 import MessageBubble from "./MessageBubble.jsx";
 
@@ -96,8 +97,18 @@ function PlusIcon() {
 function SuggestIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M8 4h8a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3h-3.2L8 20v-4H8a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M9 9h6M9 12h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path
+        d="M12 3l1.2 3.6L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.4L12 3z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M18.5 13.5l.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1zM6.2 14.8l.55 1.65 1.65.55-1.65.55-.55 1.65-.55-1.65-1.65-.55 1.65-.55.55-1.65z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -123,9 +134,11 @@ export default function ChatPanel({
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [morePromptsOpen, setMorePromptsOpen] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [suggestionsPos, setSuggestionsPos] = useState(null);
   const listRef = useRef(null);
   const textareaRef = useRef(null);
   const suggestionsRef = useRef(null);
+  const suggestionsPopoverRef = useRef(null);
   const stickToBottomRef = useRef(true);
   const typer = useRef({
     chars: [],
@@ -240,12 +253,41 @@ export default function ChatPanel({
     onDraftChange?.(input);
   }, [input, onDraftChange]);
 
+  useLayoutEffect(() => {
+    if (!suggestionsOpen) {
+      setSuggestionsPos(null);
+      return undefined;
+    }
+    function syncPosition() {
+      const anchor = suggestionsRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const width = Math.min(22 * 16, Math.max(16 * 16, window.innerWidth - 16));
+      const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
+      const spaceAbove = rect.top - 8;
+      const maxHeight = Math.min(16 * 16, Math.max(10 * 16, spaceAbove));
+      setSuggestionsPos({
+        left,
+        width,
+        maxHeight,
+        bottom: window.innerHeight - rect.top + 8,
+      });
+    }
+    syncPosition();
+    window.addEventListener("resize", syncPosition);
+    window.addEventListener("scroll", syncPosition, true);
+    return () => {
+      window.removeEventListener("resize", syncPosition);
+      window.removeEventListener("scroll", syncPosition, true);
+    };
+  }, [suggestionsOpen]);
+
   useEffect(() => {
     if (!suggestionsOpen) return undefined;
     function onPointerDown(event) {
-      if (!suggestionsRef.current?.contains(event.target)) {
-        setSuggestionsOpen(false);
-      }
+      const inButton = suggestionsRef.current?.contains(event.target);
+      const inPopover = suggestionsPopoverRef.current?.contains(event.target);
+      if (!inButton && !inPopover) setSuggestionsOpen(false);
     }
     function onKeyDown(event) {
       if (event.key === "Escape") setSuggestionsOpen(false);
@@ -394,12 +436,20 @@ export default function ChatPanel({
   }
 
   function renderSuggestionsPopover() {
+    if (!suggestionsOpen || !suggestionsPos || typeof document === "undefined") return null;
     const prompts = [...FEATURED_STARTERS, ...MORE_STARTERS];
-    return (
+    return createPortal(
       <div
+        ref={suggestionsPopoverRef}
         role="dialog"
         aria-label="Suggested prompts"
-        className="absolute bottom-[calc(100%+0.5rem)] left-0 z-30 w-[min(22rem,calc(100vw-2rem))] max-h-64 overflow-y-auto rounded-card border border-line bg-surface p-2 shadow-float"
+        className="fixed z-[80] overflow-y-auto overscroll-contain rounded-card border border-line bg-surface p-2 shadow-float"
+        style={{
+          left: suggestionsPos.left,
+          bottom: suggestionsPos.bottom,
+          width: suggestionsPos.width,
+          maxHeight: suggestionsPos.maxHeight,
+        }}
       >
         <p className="px-2 pb-1.5 type-overline text-muted">Suggested prompts</p>
         <div className="space-y-1">
@@ -407,14 +457,18 @@ export default function ChatPanel({
             <button
               key={question}
               type="button"
-              onClick={() => submit(question)}
+              onClick={() => {
+                setSuggestionsOpen(false);
+                submit(question);
+              }}
               className="focus-ring block w-full rounded-control px-2.5 py-2 text-left type-caption text-foreground transition-colors hover:bg-accentSoft/50"
             >
               {question}
             </button>
           ))}
         </div>
-      </div>
+      </div>,
+      document.body,
     );
   }
 
@@ -435,7 +489,8 @@ export default function ChatPanel({
           <div ref={suggestionsRef} className="relative shrink-0 self-end">
             <button
               type="button"
-              aria-label="Suggested prompts"
+              aria-label="Suggestions — click for recommended questions"
+              title="Suggestions — recommended questions"
               aria-expanded={suggestionsOpen}
               aria-haspopup="dialog"
               onClick={() => setSuggestionsOpen((value) => !value)}
@@ -444,15 +499,16 @@ export default function ChatPanel({
                   setSuggestionsOpen(true);
                 }
               }}
-              className={`focus-ring inline-flex h-10 w-10 items-center justify-center rounded-full border transition-colors md:h-11 md:w-11 ${
+              className={`focus-ring inline-flex h-10 items-center justify-center gap-1.5 rounded-full border px-2.5 transition-colors md:h-11 md:px-3 ${
                 suggestionsOpen
                   ? "border-accentText bg-accentSoft text-accentText"
                   : "border-line bg-surfaceMuted text-muted hover:border-accentText hover:text-accentText"
               }`}
             >
               <SuggestIcon />
+              <span className="hidden type-caption font-semibold sm:inline">Suggestions</span>
             </button>
-            {suggestionsOpen && renderSuggestionsPopover()}
+            {renderSuggestionsPopover()}
           </div>
           <textarea
             ref={textareaRef}
