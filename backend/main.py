@@ -135,18 +135,69 @@ def health(user: CurrentUser | None = Depends(get_optional_current_user)) -> dic
     }
 
 
-def _leave_out_of_memory(result: dict) -> bool:
-    """Refusals that never enter the agent stay out of history.
+def _answer_text(response: ChatResponse) -> str:
+    answer = (response.answer or "").strip()
+    if response.clarification and not answer:
+        answer = str((response.clarification or {}).get("prompt") or "Which of these did you mean?").strip()
+    return answer or _PROBLEM_ANSWER
 
-    A clarification card is kept, so reopening the conversation can show the
-    options and which one was chosen.
-    """
-    if result.get("clarification"):
-        return False
-    limitation = result.get("limitation")
-    if limitation in _UNSTORED_LIMITATIONS:
-        return True
-    return not result.get("tools_used") and not result.get("traces") and bool(limitation)
+
+def _store_chat_turn(
+    user: CurrentUser,
+    request: ChatRequest,
+    response: ChatResponse,
+    *,
+    attempt_id: int,
+    duration_ms: int,
+) -> ChatResponse:
+    """Save this turn, including a refusal or a user-facing error."""
+    response_json = response.model_dump(
+        exclude={"answer", "conversation_id", "turn_id"},
+        mode="json",
+    )
+    saved_turn = save_turn(
+        user.id,
+        request.conversation_id,
+        question=request.message,
+        answer=_answer_text(response),
+        response_json=response_json,
+        attempt_id=attempt_id,
+        duration_ms=duration_ms,
+    )
+    response.turn_id = saved_turn["id"]
+    response.proposed_actions = [
+        {**action, "_turn_id": saved_turn["id"]}
+        for action in response.proposed_actions
+    ]
+    return response
+
+
+def _problem_response(
+    request: ChatRequest,
+    user: CurrentUser,
+    *,
+    attempt_id: int | None,
+    duration_ms: int,
+    answer: str,
+) -> ChatResponse:
+    response = ChatResponse(
+        answer=answer,
+        conversation_id=str(request.conversation_id),
+        limitation="error",
+    )
+    if attempt_id is None:
+        return response
+    try:
+        return _store_chat_turn(
+            user,
+            request,
+            response,
+            attempt_id=attempt_id,
+            duration_ms=duration_ms,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("could not store the failed chat turn")
+        return response
 
 
 def _complete_chat(
@@ -187,9 +238,13 @@ def _complete_chat(
         attempt_id = int(attempt["id"])
 
         if not llm_is_configured():
-            message = "Chat service is not configured."
-            record_failure("LLM_NOT_CONFIGURED", message)
-            raise HTTPException(status_code=503, detail=message)
+            return _problem_response(
+                request,
+                user,
+                attempt_id=attempt_id,
+                duration_ms=duration_ms(),
+                answer="Chat is not ready yet. Please try again later.",
+            )
 
         if request.clarification_reply:
             record_clarification_choice(
@@ -215,64 +270,6 @@ def _complete_chat(
             set_current_user(None)
 
         prepared = result.get("why")
-        why = prepared if isinstance(prepared, dict) else explain_why(request.message, result)
-        response = ChatResponse(**{**result, "why": why})
-        if _leave_out_of_memory(result):
-            record_failure(
-                "NOT_STORED",
-                "Clarification cards and refusals that stop before the agent are not stored.",
-            )
-            return response
-        response_json = response.model_dump(
-            exclude={"answer", "conversation_id", "turn_id"},
-            mode="json",
-        )
-        answer = (response.answer or "").strip()
-        if response.clarification and not answer:
-            answer = str((response.clarification or {}).get("prompt") or "Which of these did you mean?").strip()
-        saved_turn = save_turn(
-            user.id,
-            request.conversation_id,
-            question=request.message,
-            answer=answer,
-            response_json=response_json,
-            attempt_id=attempt_id,
-            duration_ms=duration_ms(),
-        )
-        response.turn_id = saved_turn["id"]
-            logger.error("chat service is not configured")
-            return _problem_response(
-                request,
-                user,
-                attempt_id=attempt_id,
-                duration_ms=duration_ms(),
-        raise HTTPException(status_code=404, detail="Conversation not found") from exc
-    except HTTPException:
-        raise
-    except ValidationError as exc:
-        logger.exception("agent returned an invalid response")
-        message = "Chat service returned an invalid response."
-        record_failure("INVALID_AGENT_RESPONSE", message)
-        raise HTTPException(status_code=500, detail=message) from exc
-    except psycopg.Error as exc:
-        logger.exception("chat database operation failed")
-        message = "Chat service is temporarily unavailable."
-        record_failure("DATABASE_UNAVAILABLE", message)
-        raise HTTPException(status_code=503, detail=message) from exc
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("chat failed")
-        message = "Chat service is temporarily unavailable."
-        record_failure("CHAT_SERVICE_UNAVAILABLE", message)
-        raise HTTPException(status_code=503, detail=message) from exc
-
-
-@app.post("/api/chat", response_model=ChatResponse)
-def chat(
-    request: ChatRequest,
-    user: CurrentUser = Depends(get_current_user),
-) -> ChatResponse:
-    return _complete_chat(request, user)
-
         try:
             why = prepared if isinstance(prepared, dict) else explain_why(request.message, result)
         except Exception:  # noqa: BLE001
@@ -315,6 +312,65 @@ def chat(
 @app.post("/api/chat/stream")
 async def chat_stream(request: ChatRequest, user: CurrentUser = Depends(get_current_user)):
     """Same chat turn as /api/chat, with live progress and answer text."""
+
+    async def events():
+        queue: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+
+        def progress(text: str) -> None:
+            loop.call_soon_threadsafe(queue.put_nowait, ("progress", {"message": text}))
+
+        def on_token(piece) -> None:
+            if isinstance(piece, dict) and piece.get("reset"):
+                loop.call_soon_threadsafe(queue.put_nowait, ("token", {"reset": True}))
+                return
+            if piece:
+                loop.call_soon_threadsafe(queue.put_nowait, ("token", {"text": piece}))
+
+        async def produce() -> None:
+            try:
+                response = await asyncio.to_thread(
+                    _complete_chat, request, user, progress, on_token
+                )
+                await queue.put(("done", response.model_dump(mode="json")))
+            except HTTPException as exc:
+                detail = exc.detail if isinstance(exc.detail, str) else "Chat failed. Please try again."
+                await queue.put(("error", {"message": detail}))
+            except Exception:
+                logger.exception("chat stream failed")
+                await queue.put(("error", {"message": "Chat failed. Please try again."}))
+
+        worker = asyncio.create_task(produce())
+        _CHAT_WORKERS.add(worker)
+        worker.add_done_callback(_CHAT_WORKERS.discard)
+        try:
+            yield 'event: progress\ndata: {"message":"Checking the question…"}\n\n'
+            while True:
+                try:
+                    event, data = await asyncio.wait_for(queue.get(), timeout=10)
+                except asyncio.TimeoutError:
+                    yield ": keep-alive\n\n"
+                    continue
+                yield f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+                if event in {"done", "error"}:
+                    break
+        finally:
+            if not worker.done():
+                worker.add_done_callback(lambda task: task.exception() if not task.cancelled() else None)
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/suggestions", response_model=SuggestionResponse)
+def suggestions(
+    request: SuggestionRequest,
+    _user: CurrentUser = Depends(get_current_user),
+) -> SuggestionResponse:
+    """Deep-dive questions. Called beside answer rendering, not inside the answer."""
     asked = [text.strip()[:400] for text in request.asked if str(text or "").strip()][-12:]
     return SuggestionResponse(
         suggestions=compose_deep_dive_questions(
