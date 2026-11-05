@@ -18,7 +18,7 @@ services:
       - key: LLM_PROVIDER
         value: openai
       - key: LLM_MODEL
-        value: gpt-4o-mini
+        value: gpt-5.6
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_BASE_URL
