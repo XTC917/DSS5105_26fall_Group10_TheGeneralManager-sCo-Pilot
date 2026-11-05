@@ -93,6 +93,15 @@ function PlusIcon() {
   );
 }
 
+function SuggestIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M8 4h8a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3h-3.2L8 20v-4H8a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M9 9h6M9 12h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function ChatPanel({
   conversationId,
   llmReady,
@@ -101,6 +110,9 @@ export default function ChatPanel({
   onConversationUpdated,
   onOpenConversations,
   onNewConversation,
+  onDraftChange,
+  notice = "",
+  onDismissNotice,
   initialMessages = [],
 }) {
   const [input, setInput] = useState("");
@@ -113,6 +125,7 @@ export default function ChatPanel({
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const listRef = useRef(null);
   const textareaRef = useRef(null);
+  const suggestionsRef = useRef(null);
   const stickToBottomRef = useRef(true);
   const typer = useRef({
     chars: [],
@@ -222,6 +235,28 @@ export default function ChatPanel({
     onBusyChange?.(busy);
     return () => onBusyChange?.(false);
   }, [busy, onBusyChange]);
+
+  useEffect(() => {
+    onDraftChange?.(input);
+  }, [input, onDraftChange]);
+
+  useEffect(() => {
+    if (!suggestionsOpen) return undefined;
+    function onPointerDown(event) {
+      if (!suggestionsRef.current?.contains(event.target)) {
+        setSuggestionsOpen(false);
+      }
+    }
+    function onKeyDown(event) {
+      if (event.key === "Escape") setSuggestionsOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [suggestionsOpen]);
 
   function handleScroll() {
     const el = listRef.current;
@@ -358,6 +393,31 @@ export default function ChatPanel({
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }
 
+  function renderSuggestionsPopover() {
+    const prompts = [...FEATURED_STARTERS, ...MORE_STARTERS];
+    return (
+      <div
+        role="dialog"
+        aria-label="Suggested prompts"
+        className="absolute bottom-[calc(100%+0.5rem)] left-0 z-30 w-[min(22rem,calc(100vw-2rem))] max-h-64 overflow-y-auto rounded-card border border-line bg-surface p-2 shadow-float"
+      >
+        <p className="px-2 pb-1.5 type-overline text-muted">Suggested prompts</p>
+        <div className="space-y-1">
+          {prompts.map((question) => (
+            <button
+              key={question}
+              type="button"
+              onClick={() => submit(question)}
+              className="focus-ring block w-full rounded-control px-2.5 py-2 text-left type-caption text-foreground transition-colors hover:bg-accentSoft/50"
+            >
+              {question}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   function renderComposer({ welcome = false } = {}) {
     return (
       <form
@@ -368,10 +428,32 @@ export default function ChatPanel({
         }}
       >
         <div
-          className={`composer-shell mx-auto flex w-full items-end gap-1.5 rounded-[22px] border border-line bg-surface p-1.5 shadow-soft transition-[border-color,box-shadow] duration-[var(--dur)] focus-within:border-accentText focus-within:shadow-card md:gap-2 md:p-2 ${
+          className={`composer-shell relative mx-auto flex w-full items-end gap-1.5 rounded-[22px] border border-line bg-surface p-1.5 shadow-soft transition-[border-color,box-shadow] duration-[var(--dur)] focus-within:border-accentText focus-within:shadow-card md:gap-2 md:p-2 ${
             welcome ? "max-w-2xl" : "max-w-4xl"
           }`}
         >
+          <div ref={suggestionsRef} className="relative shrink-0 self-end">
+            <button
+              type="button"
+              aria-label="Suggested prompts"
+              aria-expanded={suggestionsOpen}
+              aria-haspopup="dialog"
+              onClick={() => setSuggestionsOpen((value) => !value)}
+              onMouseEnter={() => {
+                if (typeof window !== "undefined" && window.matchMedia("(hover: hover)").matches) {
+                  setSuggestionsOpen(true);
+                }
+              }}
+              className={`focus-ring inline-flex h-10 w-10 items-center justify-center rounded-full border transition-colors md:h-11 md:w-11 ${
+                suggestionsOpen
+                  ? "border-accentText bg-accentSoft text-accentText"
+                  : "border-line bg-surfaceMuted text-muted hover:border-accentText hover:text-accentText"
+              }`}
+            >
+              <SuggestIcon />
+            </button>
+            {suggestionsOpen && renderSuggestionsPopover()}
+          </div>
           <textarea
             ref={textareaRef}
             value={input}
@@ -427,47 +509,57 @@ export default function ChatPanel({
 
   function renderTopbar() {
     return (
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line/60 px-3 py-1.5 md:px-6 md:py-2">
-        <div className="min-w-0">
-          <p className="truncate type-sm font-semibold text-foreground">Ask AI</p>
-          <p className="hidden truncate type-caption text-subtle sm:block">
-            {busy ? "Working…" : "Grounded factory answers"}
-          </p>
+      <div className="shrink-0 border-b border-line/60">
+        <div className="flex items-center justify-between gap-2 px-3 py-1.5 md:px-6 md:py-2">
+          <div className="min-w-0">
+            <p className="truncate type-sm font-semibold text-foreground">Ask AI</p>
+            <p className="hidden truncate type-caption text-subtle sm:block">
+              {busy ? "Working…" : "Grounded factory answers"}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {onOpenConversations && (
+              <button
+                type="button"
+                onClick={onOpenConversations}
+                className="focus-ring inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 type-caption font-medium text-foreground transition-colors hover:bg-surfaceMuted md:hidden"
+                aria-label="Open conversation history"
+              >
+                <HistoryIcon />
+                <span>History</span>
+              </button>
+            )}
+            {onNewConversation && (
+              <button
+                type="button"
+                onClick={onNewConversation}
+                disabled={busy}
+                className="focus-ring inline-flex h-9 items-center gap-1.5 rounded-full bg-accent px-2.5 type-caption font-medium text-accentContrast shadow-xs transition-all hover:brightness-110 disabled:opacity-40 md:hidden"
+                aria-label="New conversation"
+              >
+                <PlusIcon />
+                <span>New</span>
+              </button>
+            )}
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {onOpenConversations && (
-            <button
-              type="button"
-              onClick={onOpenConversations}
-              className="focus-ring inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 type-caption font-medium text-foreground transition-colors hover:bg-surfaceMuted md:hidden"
-              aria-label="Open conversation history"
-            >
-              <HistoryIcon />
-              <span>History</span>
-            </button>
-          )}
-          {onNewConversation && (
-            <button
-              type="button"
-              onClick={onNewConversation}
-              disabled={busy}
-              className="focus-ring inline-flex h-9 items-center gap-1.5 rounded-full bg-accent px-2.5 type-caption font-medium text-accentContrast shadow-xs transition-all hover:brightness-110 disabled:opacity-40 md:hidden"
-              aria-label="New conversation"
-            >
-              <PlusIcon />
-              <span>New</span>
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setSuggestionsOpen((value) => !value)}
-            className="focus-ring hidden items-center gap-1 rounded-full px-2 py-1 type-caption font-medium text-muted transition-colors hover:bg-surfaceMuted hover:text-foreground sm:inline-flex"
-            aria-expanded={suggestionsOpen}
+        {notice ? (
+          <div
+            role="status"
+            className="flex items-start justify-between gap-3 border-t border-warning/25 bg-warningSoft px-3 py-2 md:px-6"
           >
-            Suggestions
-            <ChevronIcon open={suggestionsOpen} />
-          </button>
-        </div>
+            <p className="type-caption text-warning">{notice}</p>
+            {onDismissNotice && (
+              <button
+                type="button"
+                onClick={onDismissNotice}
+                className="focus-ring shrink-0 rounded-control px-1.5 type-caption font-medium text-warning"
+              >
+                Dismiss
+              </button>
+            )}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -570,26 +662,6 @@ export default function ChatPanel({
           </button>
         )}
       </div>
-
-      {suggestionsOpen && (
-        <div className="shrink-0 border-t border-line/60 bg-surface/70 px-4 py-3 md:px-6">
-          <div className="mx-auto w-full max-w-4xl space-y-2">
-            <p className="type-overline text-muted">Suggested prompts</p>
-            <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto">
-              {[...FEATURED_STARTERS, ...MORE_STARTERS].map((question) => (
-                <button
-                  key={question}
-                  type="button"
-                  onClick={() => submit(question)}
-                  className="rounded-full border border-line bg-surfaceMuted px-3 py-1 type-caption text-foreground transition-colors hover:border-accentText hover:bg-accentSoft/40"
-                >
-                  {question}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {error && (
         <div className="mx-3 mb-2 flex items-start justify-between gap-3 rounded-2xl border border-danger/30 bg-dangerSoft px-4 py-2.5 type-caption text-danger md:mx-6">

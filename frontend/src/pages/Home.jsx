@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import MorningBriefingModal from "../components/MorningBriefingModal.jsx";
 import Sidebar from "../components/Sidebar.jsx";
 import ChatPanel from "../components/ChatPanel.jsx";
 import ConversationList from "../components/ConversationList.jsx";
+import AlertsRail from "../components/AlertsRail.jsx";
 import DataManagement from "./DataManagement.jsx";
 import UserManagement from "./UserManagement.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
@@ -15,8 +15,10 @@ import {
   fetchConversationHistory,
   fetchConversations,
 } from "../services/conversationsApi.js";
+import { loadOverviewData, peekOverviewCache } from "../services/overviewCache.js";
 import { friendlyAuthError } from "../services/authErrors.js";
 import {
+  Badge,
   Button,
   Card,
   LoadingState,
@@ -98,6 +100,15 @@ function IconSettings() {
   );
 }
 
+function IconAlerts() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 3a6 6 0 0 0-6 6v2.2c0 .7-.2 1.4-.6 2L4.2 15.4A1 1 0 0 0 5 17h14a1 1 0 0 0 .8-1.6L18.6 13.2c-.4-.6-.6-1.3-.6-2V9a6 6 0 0 0-6-6z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M10 17a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function IconTheme() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -115,6 +126,15 @@ function IconLogout() {
   );
 }
 
+function formatFactoryDateLabel(iso) {
+  if (!iso) return "";
+  const parts = String(iso).slice(0, 10).split("-");
+  if (parts.length !== 3) return iso;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const month = months[Number(parts[1]) - 1];
+  return month ? `${Number(parts[2])} ${month} ${parts[0]}` : iso;
+}
+
 const VIEW_META = {
   copilot: {
     eyebrow: "AI Workspace",
@@ -124,7 +144,7 @@ const VIEW_META = {
   overview: {
     eyebrow: "Insights",
     title: "Overview",
-    subtitle: "Morning briefing, discovery issues, alerts, watches and audit trail.",
+    subtitle: "Top issues with morning and weekly factory briefing.",
   },
   data: {
     eyebrow: "Administration",
@@ -145,8 +165,6 @@ const VIEW_META = {
 
 export default function Home() {
   const { user, logout } = useAuth();
-  const [briefingOpen, setBriefingOpen] = useState(false);
-  const [briefingPanel, setBriefingPanel] = useState("today");
   const [health, setHealth] = useState(null);
   const [healthError, setHealthError] = useState("");
   const [boardTick, setBoardTick] = useState(0);
@@ -167,13 +185,20 @@ export default function Home() {
   const [conversationLoading, setConversationLoading] = useState(true);
   const [conversationError, setConversationError] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
+  const [composerDraft, setComposerDraft] = useState("");
+  const [factoryDate, setFactoryDate] = useState(() => peekOverviewCache()?.briefing?.factory_today || "");
+  const [watches, setWatches] = useState(() => peekOverviewCache()?.watches || { fired: [], active: [], cancelled: [] });
+  const [watchesLoading, setWatchesLoading] = useState(false);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+  const [alertsDrawerOpen, setAlertsDrawerOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [deleteError, setDeleteError] = useState("");
+  const [askAiNotice, setAskAiNotice] = useState("");
   const historyRequest = useRef(0);
   const searchRequest = useRef(0);
   const searchInputRef = useRef("");
+  const bootstrappedRef = useRef(false);
 
   const isAdmin = user?.role === "ADMIN";
   const searching = Boolean(debouncedSearch.trim());
@@ -184,6 +209,30 @@ export default function Home() {
       .then(setHealth)
       .catch((err) => setHealthError(err.message));
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setWatchesLoading(true);
+    loadOverviewData({ force: !peekOverviewCache()?.briefing })
+      .then((payload) => {
+        if (cancelled) return;
+        if (payload.briefing?.factory_today) setFactoryDate(payload.briefing.factory_today);
+        setWatches(payload.watches || { fired: [], active: [], cancelled: [] });
+      })
+      .catch(() => {
+        const cached = peekOverviewCache();
+        if (!cancelled && cached) {
+          if (cached.briefing?.factory_today) setFactoryDate(cached.briefing.factory_today);
+          setWatches(cached.watches || { fired: [], active: [], cancelled: [] });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setWatchesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [boardTick]);
 
   useEffect(() => {
     let cancelled = false;
@@ -230,6 +279,7 @@ export default function Home() {
         setInitialMessages(messagesFromTurns(history.turns));
         localStorage.setItem(storageKey(user.id), history.conversation.id);
         setActiveView("copilot");
+        setAskAiNotice("");
         setHistoryDrawerOpen(false);
       } catch (err) {
         if (requestId === historyRequest.current) setConversationError(err.message);
@@ -253,6 +303,7 @@ export default function Home() {
     setConversationError("");
     setListError("");
     setConversationLoading(true);
+    bootstrappedRef.current = false;
 
     async function restoreConversations() {
       if (!user?.id) return;
@@ -268,6 +319,7 @@ export default function Home() {
         const remembered = localStorage.getItem(storageKey(user.id));
         const selected = rows.some((item) => item.id === remembered) ? remembered : rows[0].id;
         await openConversation(selected);
+        bootstrappedRef.current = true;
       } catch (err) {
         if (!cancelled) {
           setConversationError(err.message);
@@ -333,9 +385,36 @@ export default function Home() {
     }
   }
 
-  async function handleNewConversation() {
-    if (chatBusy) return;
+  async function handleNewConversation({ fromAskAi = false } = {}) {
+    if (chatBusy) {
+      if (fromAskAi) {
+        setActiveView("copilot");
+        setAskAiNotice("Wait for the current answer to finish before starting a new chat.");
+      }
+      return;
+    }
+    if (composerDraft.trim()) {
+      if (fromAskAi) {
+        setActiveView("copilot");
+        setAskAiNotice("Unsent draft kept — clear the composer or send it before starting a new chat.");
+      }
+      return;
+    }
+    // Reuse an already-empty conversation instead of creating duplicates.
+    if (activeConversationId && initialMessages.length === 0) {
+      setActiveView("copilot");
+      setAskAiNotice("");
+      setHistoryDrawerOpen(false);
+      return;
+    }
+    const emptyExisting = conversationCatalog.find((row) => row.id === activeConversationId && (row.turn_count || 0) === 0);
+    if (emptyExisting && initialMessages.length === 0) {
+      setActiveView("copilot");
+      setAskAiNotice("");
+      return;
+    }
     setConversationError("");
+    setAskAiNotice("");
     try {
       const created = await createConversation();
       setConversationCatalog((current) => [created, ...current.filter((row) => row.id !== created.id)]);
@@ -343,10 +422,17 @@ export default function Home() {
       searchInputRef.current = "";
       setDebouncedSearch("");
       setSearchResults(null);
+      setComposerDraft("");
       await openConversation(created.id);
     } catch (err) {
       setConversationError(err.message);
     }
+  }
+
+  function handleAskAiNav() {
+    setActiveView("copilot");
+    if (!bootstrappedRef.current || conversationLoading) return;
+    handleNewConversation({ fromAskAi: true });
   }
 
   async function handleConversationUpdated() {
@@ -401,11 +487,6 @@ export default function Home() {
     }
   }
 
-  function openBriefing(panel = "today") {
-    setBriefingPanel(panel);
-    setBriefingOpen(true);
-  }
-
   const conversationListProps = {
     conversations,
     activeConversationId,
@@ -443,6 +524,11 @@ export default function Home() {
   }
 
   function handleNav(key) {
+    if (key === "copilot") {
+      handleAskAiNav();
+      return;
+    }
+    setAskAiNotice("");
     setActiveView(key);
   }
 
@@ -453,6 +539,8 @@ export default function Home() {
     ...(isAdmin ? [{ key: "users", label: "User Management", icon: <IconUsers /> }] : []),
     { key: "settings", label: "Settings", icon: <IconSettings /> },
   ];
+
+  const alertCount = (watches.fired?.length || 0) + (watches.active?.length || 0);
 
   const navButton = (item) => {
     const active = activeView === item.key;
@@ -491,6 +579,26 @@ export default function Home() {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          {factoryDate ? (
+            <Badge variant="accent" size="sm" className="max-w-[11rem] truncate sm:max-w-none" title={`Factory date ${factoryDate}`}>
+              Factory · {formatFactoryDateLabel(factoryDate)}
+            </Badge>
+          ) : (
+            <Badge variant="neutral" size="sm" className="hidden sm:inline-flex">
+              Factory date…
+            </Badge>
+          )}
+          {alertCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setAlertsDrawerOpen(true)}
+              className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-danger/30 bg-dangerSoft px-2.5 py-1 type-caption font-medium text-danger md:hidden"
+              aria-label={`${alertCount} alerts`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-danger" />
+              {alertCount}
+            </button>
+          )}
           <div className="hidden items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 md:flex">
             <span
               className={`h-2 w-2 rounded-full ${
@@ -510,12 +618,14 @@ export default function Home() {
             {navItems.map(navButton)}
           </nav>
 
+          <AlertsRail watches={watches} loading={watchesLoading} />
+
           <div className="flex shrink-0 items-center justify-between gap-2 border-t border-line px-3 py-2">
             <p className="type-overline text-muted">Conversations</p>
             <button
               type="button"
               disabled={chatBusy || conversationLoading}
-              onClick={handleNewConversation}
+              onClick={() => handleNewConversation()}
               className="focus-ring rounded-control border border-line px-2 py-1 type-caption font-medium text-foreground transition-colors hover:border-accentText hover:text-accentText disabled:opacity-50"
             >
               New
@@ -523,7 +633,7 @@ export default function Home() {
           </div>
 
           <div id="conversation-history" className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
-            <ConversationList {...conversationListProps} />
+            <ConversationList {...conversationListProps} scrollable={false} />
             {conversationError && (
               <p className="mt-2 rounded-card border border-danger/30 bg-dangerSoft px-3 py-2 type-sm text-danger">
                 {conversationError}
@@ -547,6 +657,9 @@ export default function Home() {
                     onBoardChanged={() => setBoardTick((n) => n + 1)}
                     onOpenConversations={() => setHistoryDrawerOpen(true)}
                     onNewConversation={handleNewConversation}
+                    onDraftChange={setComposerDraft}
+                    notice={askAiNotice}
+                    onDismissNotice={() => setAskAiNotice("")}
                   />
                 </div>
               ) : (
@@ -567,15 +680,12 @@ export default function Home() {
 
           {activeView === "overview" && (
             <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
-              <div className="mx-auto max-w-5xl space-y-4">
-                <div className="mb-2">
-                  <p className="type-overline text-accentText">{viewMeta.eyebrow}</p>
-                  <h2 className="type-h2 text-foreground">{viewMeta.title}</h2>
-                  <p className="type-sm text-muted">{viewMeta.subtitle}</p>
-                  <p className="mt-1 type-caption text-subtle">Factory date: 1 Apr 2026</p>
-                </div>
-                <Sidebar refreshToken={boardTick} onOpenBriefing={openBriefing} />
-              </div>
+              <Sidebar
+                refreshToken={boardTick}
+                onFactoryDate={(value) => {
+                  if (value) setFactoryDate(value);
+                }}
+              />
             </div>
           )}
 
@@ -699,7 +809,7 @@ export default function Home() {
       >
         <button
           type="button"
-          onClick={() => setActiveView("overview")}
+          onClick={() => handleNav("overview")}
           className={`focus-ring flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-control px-1 py-1 type-caption font-medium transition-colors ${
             activeView === "overview" ? "text-accent" : "text-muted"
           }`}
@@ -709,7 +819,7 @@ export default function Home() {
         </button>
         <button
           type="button"
-          onClick={() => setActiveView("copilot")}
+          onClick={() => handleNav("copilot")}
           className={`focus-ring flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-control px-1 py-1 type-caption font-medium transition-colors ${
             activeView === "copilot" ? "text-accent" : "text-muted"
           }`}
@@ -720,7 +830,23 @@ export default function Home() {
         </button>
         <button
           type="button"
-          onClick={() => setActiveView("settings")}
+          onClick={() => setAlertsDrawerOpen(true)}
+          className={`focus-ring relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-control px-1 py-1 type-caption font-medium transition-colors ${
+            alertsDrawerOpen ? "text-accent" : "text-muted"
+          }`}
+          aria-label={alertCount > 0 ? `Alerts, ${alertCount}` : "Alerts"}
+        >
+          <IconAlerts />
+          <span className="truncate">Alerts</span>
+          {alertCount > 0 && (
+            <span className="absolute right-3 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-accentContrast">
+              {alertCount}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleNav("settings")}
           className={`focus-ring flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-control px-1 py-1 type-caption font-medium transition-colors ${
             activeView === "settings" ? "text-accent" : "text-muted"
           }`}
@@ -755,6 +881,9 @@ export default function Home() {
                 Close
               </button>
             </div>
+            <div className="mb-2 shrink-0 border-b border-line pb-2">
+              <AlertsRail watches={watches} loading={watchesLoading} compact />
+            </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-1">
               <ConversationList {...conversationListProps} scrollable={false} />
               {conversationError && (
@@ -767,14 +896,36 @@ export default function Home() {
         </div>
       )}
 
-      {briefingOpen && (
-        <MorningBriefingModal
-          key={briefingPanel}
-          initialPanel={briefingPanel}
-          onClose={() => setBriefingOpen(false)}
-          refreshToken={boardTick}
-          onAlertCreated={() => setBoardTick((n) => n + 1)}
-        />
+      {alertsDrawerOpen && (
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Alerts and watch history">
+          <button
+            type="button"
+            aria-label="Close alerts"
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setAlertsDrawerOpen(false)}
+          />
+          <div
+            className="absolute inset-x-0 bottom-0 flex max-h-[70dvh] flex-col rounded-t-2xl border-t border-line bg-surface px-4 pt-3 shadow-float"
+            style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+          >
+            <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+              <div>
+                <p className="type-overline text-accentText">Alerts</p>
+                <p className="type-caption text-subtle">Active watches and watch history.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAlertsDrawerOpen(false)}
+                className="focus-ring rounded-control border border-line px-2.5 py-1.5 type-caption font-medium text-muted"
+              >
+                Close
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-1">
+              <AlertsRail watches={watches} loading={watchesLoading} compact persistHistory />
+            </div>
+          </div>
+        </div>
       )}
 
       <Modal
