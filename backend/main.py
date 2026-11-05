@@ -28,6 +28,10 @@ from backend.models.schemas import (
     ChatResponse,
     ConfirmActionRequest,
     ConfirmActionResponse,
+    ActionOfferRequest,
+    ActionOfferResponse,
+    SuggestionRequest,
+    SuggestionResponse,
 )
 from backend.services.audit import list_audit
 from backend.services.auth import CurrentUser, get_current_user
@@ -47,7 +51,9 @@ from backend.services.conversation_history import (
 )
 from backend.services.database import get_db, init_db
 from backend.services.request_context import set_current_user
+from backend.services.action_offers import compose_action_offer
 from backend.services.discovery import DEFAULT_LIMIT, MAX_LIMIT, discover_factory_issues
+from backend.services.question_templates import compose_deep_dive_questions
 from backend.routers.data_admin import (
     datasource_router,
     query_router,
@@ -187,7 +193,9 @@ def _complete_chat(
         finally:
             set_current_user(None)
 
-        response = ChatResponse(**{**result, "why": build_why(request.message, result)})
+        prepared = result.get("why")
+        why = prepared if isinstance(prepared, dict) else build_why(request.message, result)
+        response = ChatResponse(**{**result, "why": why})
         if _leave_out_of_memory(result):
             record_failure(
                 "NOT_STORED",
@@ -297,6 +305,39 @@ async def chat_stream(request: ChatRequest, user: CurrentUser = Depends(get_curr
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.post("/api/suggestions", response_model=SuggestionResponse)
+def suggestions(
+    request: SuggestionRequest,
+    _user: CurrentUser = Depends(get_current_user),
+) -> SuggestionResponse:
+    """Deep-dive questions. Called beside answer rendering, not inside the answer."""
+    asked = [text.strip()[:400] for text in request.asked if str(text or "").strip()][-12:]
+    return SuggestionResponse(
+        suggestions=compose_deep_dive_questions(
+            request.query.strip()[:400],
+            asked=asked,
+        )
+    )
+
+
+@app.post("/api/action-offers", response_model=ActionOfferResponse)
+def action_offers(
+    request: ActionOfferRequest,
+    _user: CurrentUser = Depends(get_current_user),
+) -> ActionOfferResponse:
+    """One yes/no action after the answer. Not called while the answer is still running."""
+    offer = compose_action_offer(
+        request.question.strip()[:400],
+        request.answer.strip()[:800],
+        request.traces[:8],
+        tools_used=request.tools_used[:12],
+        proposed_actions=request.proposed_actions[:6],
+    )
+    if not offer:
+        return ActionOfferResponse()
+    return ActionOfferResponse(prompt=offer["prompt"], action=offer["action"])
 
 
 @app.get("/api/briefing")

@@ -236,7 +236,8 @@ def production_attention(db: FactoryDB) -> dict[str, Any]:
         "flagged_stages": flagged,
         "basis": (
             "Queue counts are IN_PROGRESS orders by current_stage. "
-            "Output is factory-wide production_log, last working day vs 30-day median."
+            "working_days is the factory-wide production_log median window. "
+            "flagged compares only the last working day with 0.70 × that median."
         ),
     }
 

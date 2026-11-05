@@ -1,10 +1,36 @@
+import katex from "katex";
+import "katex/dist/katex.min.css";
+
+const PACE_LATEX = String.raw`\mathrm{days}_{\mathrm{left}}=\max\left(\sum_{\text{remaining stages}}\frac{\text{pieces}}{\mathrm{median}_{30\mathrm{d}}},\ \text{remaining stages}\right)`;
+
+function isPaceFormula(item) {
+  return item.includes(String.raw`\mathrm{days}_{\mathrm{left}}`)
+    || item.startsWith("days_left = max")
+    || item.startsWith("Estimated working days still needed is the larger")
+    || item.startsWith("预计仍需工作日取两个数");
+}
+
+function PaceFormula() {
+  const html = katex.renderToString(PACE_LATEX, { throwOnError: false, displayMode: true });
+  return (
+    <div
+      className="pace-formula mt-1 text-foreground"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
 function SourceRows({ source, zh }) {
   const rows = (source.rows || []).filter((row) => Object.keys(row).length);
   const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  const label = `${source.name} · ${source.row_count ?? rows.length} ${zh ? "条来源记录" : "source records"}`;
+  if (source.summary_only) {
+    return <p className="rounded-control border border-line bg-surface p-3 type-caption font-medium">{label}</p>;
+  }
   return (
     <details className="rounded-control border border-line bg-surface p-3">
       <summary className="cursor-pointer type-caption font-medium">
-        {source.name} · {source.row_count ?? rows.length} {zh ? "条来源记录" : "source records"}
+        {label}
       </summary>
       {rows.length > 0 ? (
         <div className="mt-2 max-h-64 overflow-auto" tabIndex={0} role="region" aria-label={source.name}>
@@ -38,7 +64,9 @@ export default function TracePanel({ traces = [], why }) {
           <li key={i} className="flex gap-3">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent type-caption text-accentContrast">{i + 1}</span>
             <div className="min-w-0"><h3 className="type-sm font-semibold">{step.title}</h3>
-              {step.items.map((item, j) => <p key={j} className="mt-1 whitespace-pre-wrap break-words type-caption leading-relaxed text-foreground/75">{item}</p>)}
+              {step.items.map((item, j) => (
+                isPaceFormula(item) ? <PaceFormula key={j} /> : <p key={j} className="mt-1 whitespace-pre-wrap break-words type-caption leading-relaxed text-foreground/75">{item}</p>
+              ))}
             </div>
           </li>
         ))}

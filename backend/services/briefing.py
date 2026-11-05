@@ -239,20 +239,40 @@ def last_working_day_output(db: FactoryDB) -> tuple[str | None, dict[str, int]]:
     return last.isoformat(), by_stage
 
 
+def _pieces_by_stage_date(db: FactoryDB, dates: set[date]) -> dict[str, dict[str, int]]:
+    """Recorded pieces for each stage on the given working days. Missing days stay absent."""
+    by_stage: dict[str, dict[str, int]] = {stage: {} for stage in PRODUCTION_STAGES_IN_ORDER}
+    for row in db.production_log():
+        parsed = parse_iso_date(row.get("date"))
+        stage = row.get("stage")
+        if parsed is None or parsed not in dates or stage not in by_stage:
+            continue
+        by_stage[stage][parsed.isoformat()] = int(row["pieces_completed"])
+    return by_stage
+
+
 def unusual_stage_output(db: FactoryDB) -> list[dict[str, Any]]:
     """Last working day vs the same 30-day median used by feasibility.
 
-    Flag if last-day pieces < PRODUCTION_DROP_RATIO × lookback median.
+    Each stage also includes that median window, one row per working day.
+    Flag still means only the last working day is below PRODUCTION_DROP_RATIO × median.
     production_log is factory-wide (date × stage), not per order.
     """
     throughput = stage_throughput_medians(db)
     last_date, last_by_stage = last_working_day_output(db)
+    window = {
+        parsed
+        for item in throughput.get("lookback_dates") or []
+        if (parsed := parse_iso_date(item)) is not None
+    }
+    series = _pieces_by_stage_date(db, window)
     unusual: list[dict[str, Any]] = []
     for stage in PRODUCTION_STAGES_IN_ORDER:
         median = throughput["medians_pieces_per_working_day"].get(stage)
         last_pieces = last_by_stage.get(stage)
         if median and last_pieces is not None and median > 0:
             ratio = last_pieces / median
+            recorded = series.get(stage) or {}
             unusual.append(
                 {
                     "stage": stage,
@@ -260,6 +280,10 @@ def unusual_stage_output(db: FactoryDB) -> list[dict[str, Any]]:
                     "last_day_pieces": last_pieces,
                     "lookback_median": median,
                     "ratio_to_median": round(ratio, 3),
+                    "working_days": [
+                        {"date": day, "pieces": recorded[day]}
+                        for day in sorted(recorded)
+                    ],
                     "flagged": ratio < PRODUCTION_DROP_RATIO,
                     "rule": (
                         f"flag if last working day pieces < "

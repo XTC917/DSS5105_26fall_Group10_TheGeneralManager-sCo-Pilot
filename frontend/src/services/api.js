@@ -88,6 +88,46 @@ export async function declineAction(action) {
   return body;
 }
 
+export async function fetchActionOffer({ question, answer, traces, toolsUsed, proposedActions }) {
+  const res = await fetch("/api/action-offers", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      question,
+      answer,
+      traces,
+      tools_used: toolsUsed,
+      proposed_actions: proposedActions,
+    }),
+  });
+  if (res.status === 401) {
+    notifyUnauthorized();
+    throw new Error("Session expired. Please log in again.");
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(`Action offer failed (${res.status})`);
+  }
+  return body;
+}
+
+export async function fetchSuggestions({ query, asked, focus }) {
+  const res = await fetch("/api/suggestions", {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ query, asked, focus }),
+  });
+  if (res.status === 401) {
+    notifyUnauthorized();
+    throw new Error("Session expired. Please log in again.");
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(`Suggestions failed (${res.status})`);
+  }
+  return body;
+}
+
 export async function sendChat(message, conversationId, clarificationReply = false, originalQuestion = "") {
   const res = await fetch("/api/chat", {
     method: "POST",

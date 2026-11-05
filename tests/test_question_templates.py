@@ -11,10 +11,14 @@ from backend.agent.graph import _TEMPLATE_QUERY, _react_prompt
 from backend.agent.prompts import format_retrieved_templates
 from backend.services import question_templates as qt
 from backend.services.question_templates import (
+    accept_grounded_rewrite,
+    compose_deep_dive_questions,
     retrieve_answer_templates,
+    suggest_followups,
     supplement_templates_for_tools,
     without_foreign_order_templates,
 )
+from backend.services import question_templates as qt
 
 
 def test_exact_question_is_top_hit():
@@ -181,3 +185,98 @@ def test_concern_turn_supplements_at_risk_template():
         assert "Q001" in text
     finally:
         _TEMPLATE_QUERY.reset(token)
+
+
+def test_followups_skip_the_question_just_asked():
+    question = "Which orders are likely to miss their due dates?"
+    hits = suggest_followups(question, asked=[question], focus="ORD-029 is due today.")
+    assert hits
+    assert len(hits) <= 3
+    assert question not in hits
+
+
+def test_followup_uses_the_order_from_this_turn():
+    question = "How is ORD-107 doing?"
+    hits = suggest_followups(question, asked=[question], focus="ORD-107 is in Packing.")
+    assert hits
+    assert question not in hits
+    assert any("ORD-107" in hit for hit in hits)
+
+
+def test_followups_are_local_and_empty_without_a_query():
+    assert suggest_followups("") == []
+    assert suggest_followups("   ", asked=["Which orders are at risk?"]) == []
+
+
+def test_grounded_rewrite_replaces_only_the_named_order():
+    template = "Why is ORD-061 considered risky?"
+    asked = ["How is ORD-062 doing?"]
+    assert accept_grounded_rewrite(template, "Why is ORD-062 considered risky?", asked)
+    assert not accept_grounded_rewrite(template, "Why is ORD-061 considered risky?", asked)
+    assert not accept_grounded_rewrite(template, "What is the margin of ORD-062?", asked)
+    assert not accept_grounded_rewrite(template, "Why is ORD-062 considered risky?", ["Compare ORD-062 and ORD-063"])
+
+
+def test_compose_drops_invented_questions_and_keeps_a_grounded_rewrite(monkeypatch):
+    monkeypatch.setattr(
+        qt,
+        "_ranked_followups",
+        lambda *args, **kwargs: [
+            {
+                "id": "T1",
+                "question": "Why is ORD-061 considered risky?",
+                "relevant_tool": "trace_order",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        qt,
+        "_draft_with_model",
+        lambda *args, **kwargs: [
+            {"source_id": "T1", "question": "What is the margin of ORD-062?"},
+            {"source_id": "T1", "question": "Why is ORD-062 considered risky?"},
+        ],
+    )
+    assert compose_deep_dive_questions("How is ORD-062 doing?") == [
+        "Why is ORD-062 considered risky?"
+    ]
+
+
+def test_compose_drops_a_same_kind_order_swap(monkeypatch):
+    monkeypatch.setattr(
+        qt,
+        "_ranked_followups",
+        lambda *args, **kwargs: [
+            {
+                "id": "T1",
+                "question": "How is ORD-061 doing?",
+                "relevant_tool": "get_order_status",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        qt,
+        "_draft_with_model",
+        lambda *args, **kwargs: [
+            {"source_id": "T1", "question": "How is ORD-062 doing?"},
+        ],
+    )
+    assert compose_deep_dive_questions("How is ORD-062 doing?") == []
+
+
+def test_compose_rewrites_a_foreign_template_order_without_the_model(monkeypatch):
+    monkeypatch.setattr(
+        qt,
+        "_ranked_followups",
+        lambda *args, **kwargs: [
+            {
+                "id": "T1",
+                "question": "Why is ORD-061 considered risky?",
+                "relevant_tool": "trace_order",
+            }
+        ],
+    )
+    monkeypatch.setattr(qt, "_draft_with_model", lambda *args, **kwargs: [])
+    hits = compose_deep_dive_questions("How is ORD-062 doing?")
+    assert hits == ["Why is ORD-062 considered risky?"]
+    assert all("ORD-061" not in hit for hit in hits)

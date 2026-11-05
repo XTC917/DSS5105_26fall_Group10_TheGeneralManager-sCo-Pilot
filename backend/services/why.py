@@ -22,6 +22,7 @@ _CALCS = {
     "remaining_stage_count": ("Stages remaining", "剩余工序数"),
     "remaining_stages": ("Stages remaining", "剩余工序"),
     "estimated_remaining_working_days": ("Estimated working days still needed", "预计仍需工作日"),
+    "days_left": ("Estimated working days still needed", "预计仍需工作日"),
     "factory_window_capacity": ("Factory capacity before the due date (pieces)", "交期前工厂产能（件）"),
     "spare_factory_capacity": ("Spare factory capacity after existing commitments (pieces)", "扣除现有订单后的剩余产能（件）"),
     "workshop_overflow": ("External workshop capacity (pieces)", "外部工坊产能（件）"),
@@ -29,6 +30,29 @@ _CALCS = {
     "stalled": ("No activity for at least three working days", "至少三个工作日未活动"),
     "tight_deadline": ("Remaining work exceeds the time available", "剩余工作超过可用时间"),
 }
+# Same pace estimate under either name. The method sentence is shared; raw formula
+# strings are not shown, because some of them point at internal code.
+_PACE_ESTIMATE_NAMES = frozenset({"days_left", "estimated_remaining_working_days"})
+_PACE_FORMULA = (
+    r"\mathrm{days}_{\mathrm{left}}=\max\left("
+    r"\sum_{\text{remaining stages}}\frac{\text{pieces}}{\mathrm{median}_{30\mathrm{d}}},"
+    r"\ \text{remaining stages}\right)"
+)
+
+
+def _has_pace_estimate(value: Any) -> bool:
+    """True when this turn's evidence carries the pace estimate, under either name."""
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == "name" and item in _PACE_ESTIMATE_NAMES:
+                return True
+            if key in _PACE_ESTIMATE_NAMES and item is not None:
+                return True
+            if _has_pace_estimate(item):
+                return True
+    elif isinstance(value, list):
+        return any(_has_pace_estimate(item) for item in value)
+    return False
 
 
 def _value(value: Any, zh: bool) -> str:
@@ -62,16 +86,16 @@ def build_why(question: str, response: dict[str, Any]) -> dict[str, Any]:
         for calc in trace.get("calculations", []):
             if not isinstance(calc, dict) or calc.get("name") not in _CALCS:
                 continue
-            value = _value(calc.get("result"), zh)
+            result = calc.get("result")
+            if calc["name"] in _PACE_ESTIMATE_NAMES and not isinstance(result, (int, float)):
+                continue
+            value = _value(result, zh)
             if not value:
                 continue
             text = f"{_CALCS[calc['name']][idx]}: {value}."
             comparisons.append(text)
-            if calc["name"] in {"overdue", "stalled", "tight_deadline"} and calc.get("result") is True:
+            if calc["name"] in {"overdue", "stalled", "tight_deadline"} and result is True:
                 reasons.append(text)
-        if any(c.get("name") == "estimated_remaining_working_days" for c in trace.get("calculations", []) if isinstance(c, dict)):
-            comparisons.append("剩余工期根据各未完成工序过去30天的中位产速估算，且每道剩余工序至少计一个工作日。" if zh else
-                               "Remaining work is estimated from the last 30 days of median output at each unfinished stage, allowing at least one working day per remaining stage.")
         if any(str(c.get("name", "")).startswith("working_days") for c in trace.get("calculations", []) if isinstance(c, dict)):
             comparisons.append("工作日计算排除周日，并采用工具中的工厂日期。" if zh else
                                "Working-day checks exclude Sundays and use the tool's factory date.")
@@ -107,6 +131,8 @@ def build_why(question: str, response: dict[str, Any]) -> dict[str, Any]:
         if tool == "get_order_status" and (data.get("computed") or {}).get("is_overdue") is True:
             reasons.append("订单仍未完成且已过交期，因此被判定为逾期。" if zh else
                            "The order is still in progress and its due date has passed, so it is overdue.")
+    if _has_pace_estimate(traces) or _has_pace_estimate(response.get("evidence_results")):
+        comparisons.insert(0, _PACE_FORMULA)
     if not facts:
         facts = ["此回答没有附带可展示的来源行；不能据此声称完成了数据核验。" if zh else
                  "No displayable source rows were attached to this answer; source verification is unavailable."]

@@ -54,6 +54,15 @@ body {
   }
 }
 
+.pace-formula .katex-display {
+  margin: 0.35rem 0 0;
+  overflow: visible;
+}
+
+.pace-formula .katex {
+  font-size: 1.05em;
+}
+
 .stream-dot {
   animation: stream-dot 1.4s ease-in-out infinite;
 }

@@ -40,8 +40,8 @@ PRIORITY_BY_TYPE = {
 SEVERITY_BY_PRIORITY = {1: "high", 2: "medium", 3: "low"}
 
 LIMITATIONS = [
-    "V1 flags stage output below 0.70 × the 30-day median from production_log.",
-    "production is the factory-wide queue and last-day vs 30-day median picture.",
+    "A stage is flagged when its last working day is below 0.70 × the 30-day median from production_log.",
+    "production includes the queue and each stage's median window as working_days of date and pieces.",
     "Not a general anomaly detector. Issues the CSVs cannot define are omitted.",
     "production_log.csv is factory-wide (date × stage), not per order.",
     "Sort order is computed in Python. The model must not rerank.",
@@ -196,8 +196,7 @@ def discover_factory_issues(db: FactoryDB, limit: int = DEFAULT_LIMIT) -> dict[s
     empty_message = None
     if not collected:
         empty_message = (
-            "No issues matched the V1 discovery rules "
-            "(stage output below 0.70 × 30-day median)."
+            "No issues found."
         )
     return {
         "factory_today": FACTORY_TODAY.isoformat(),

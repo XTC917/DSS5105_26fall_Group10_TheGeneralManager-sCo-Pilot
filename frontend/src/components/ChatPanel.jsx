@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { confirmAction, declineAction, sendChatStream } from "../services/api.js";
+import { confirmAction, declineAction, fetchActionOffer, fetchSuggestions, sendChatStream } from "../services/api.js";
 import MessageBubble from "./MessageBubble.jsx";
 
 const CHAR_MS = 28;
@@ -110,8 +110,11 @@ export default function ChatPanel({
   const [error, setError] = useState("");
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [morePromptsOpen, setMorePromptsOpen] = useState(false);
-  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [followups, setFollowups] = useState([]);
+  const [actionOffer, setActionOffer] = useState(null);
+  const [actionNote, setActionNote] = useState("");
   const listRef = useRef(null);
+  const suggestSeq = useRef(0);
   const textareaRef = useRef(null);
   const stickToBottomRef = useRef(true);
   const typer = useRef({
@@ -137,6 +140,31 @@ export default function ChatPanel({
   }
 
   useEffect(() => resetTyper, []);
+
+  async function loadFollowups(query, asked) {
+    const seq = ++suggestSeq.current;
+    try {
+      const data = await fetchSuggestions({ query, asked, focus: "" });
+      const suggestions = Array.isArray(data.suggestions) ? data.suggestions.slice(0, 3) : [];
+      return { seq, suggestions };
+    } catch {
+      return { seq, suggestions: [] };
+    }
+  }
+
+  useEffect(() => {
+    const users = (initialMessages || []).filter((item) => item.role === "user").map((item) => item.content);
+    const lastUser = users.at(-1);
+    const lastAssistant = [...(initialMessages || [])].reverse().find((item) => item.role === "assistant");
+    if (!lastUser || !lastAssistant || lastAssistant.clarification) return;
+    let active = true;
+    loadFollowups(lastUser, users).then((pending) => {
+      if (active && pending.seq === suggestSeq.current) setFollowups(pending.suggestions);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function paintTyped() {
     const content = typer.current.chars.slice(0, typer.current.shown).join("");
@@ -185,8 +213,11 @@ export default function ChatPanel({
     if (state.official) commitOfficial();
   }
 
-  function startTyper() {
-    if (!typer.current.timer) typer.current.timer = setInterval(tickTyper, CHAR_MS);
+  function startTyper(interval = CHAR_MS) {
+    if (typer.current.timer && typer.current.interval === interval) return;
+    stopTyper();
+    typer.current.interval = interval;
+    typer.current.timer = setInterval(tickTyper, interval);
   }
 
   function queueAnswer(text) {
@@ -194,7 +225,7 @@ export default function ChatPanel({
     startTyper();
   }
 
-  function revealOfficial(official) {
+  function revealOfficial(official, interval = CHAR_MS) {
     const state = typer.current;
     const target = Array.from(official.content || "");
     const typed = state.chars.join("");
@@ -214,7 +245,7 @@ export default function ChatPanel({
     }
     return new Promise((resolve) => {
       state.resolve = resolve;
-      startTyper();
+      startTyper(interval);
     });
   }
 
@@ -273,7 +304,12 @@ export default function ChatPanel({
     setInput("");
     setError("");
     setProgress("");
-    setSuggestionsOpen(false);
+    suggestSeq.current += 1;
+    setFollowups([]);
+    setActionOffer(null);
+    setActionNote("");
+    const prior = messages.filter((item) => item.role === "user").map((item) => item.content);
+    const asked = [...prior, content];
     const userMsg = { role: "user", content };
     stickToBottomRef.current = true;
     setMessages((prev) => [...prev, userMsg]);
@@ -290,8 +326,27 @@ export default function ChatPanel({
           if (token?.text) queueAnswer(token.text);
         },
       });
-      await revealOfficial(assistantMessage(result));
+      const official = assistantMessage(result);
+      const pending = result.clarification ? null : loadFollowups(content, asked);
+      const offerPromise = result.clarification
+        ? null
+        : fetchActionOffer({
+            question: content,
+            answer: result.answer || "",
+            traces: result.traces || [],
+            toolsUsed: result.tools_used || [],
+            proposedActions: result.proposed_actions || [],
+          }).catch(() => null);
+      await revealOfficial(official, result.instant ? CHAR_MS / 4 : CHAR_MS);
       onConversationUpdated?.();
+      if (pending) {
+        const done = await pending;
+        if (done.seq === suggestSeq.current) setFollowups(done.suggestions);
+      }
+      if (offerPromise) {
+        const offer = await offerPromise;
+        if (offer?.prompt && offer?.action) setActionOffer(offer);
+      }
     } catch (err) {
       resetTyper();
       setMessages((prev) => (prev[prev.length - 1]?.streaming ? prev.slice(0, -1) : prev));
@@ -303,6 +358,22 @@ export default function ChatPanel({
         const el = listRef.current;
         if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
       });
+    }
+  }
+
+  async function acceptOffer() {
+    if (!actionOffer || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await confirmAction(actionOffer.action);
+      setActionNote(result.summary || "Done.");
+      setActionOffer(null);
+      onBoardChanged?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -458,15 +529,6 @@ export default function ChatPanel({
               <span>New</span>
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => setSuggestionsOpen((value) => !value)}
-            className="focus-ring hidden items-center gap-1 rounded-full px-2 py-1 type-caption font-medium text-muted transition-colors hover:bg-surfaceMuted hover:text-foreground sm:inline-flex"
-            aria-expanded={suggestionsOpen}
-          >
-            Suggestions
-            <ChevronIcon open={suggestionsOpen} />
-          </button>
         </div>
       </div>
     );
@@ -549,6 +611,10 @@ export default function ChatPanel({
                   submit(text, true, original);
                 }}
                 clarificationOpen={idx === messages.length - 1}
+                actionOffer={idx === messages.length - 1 && !msg.clarification ? actionOffer : null}
+                actionNote={idx === messages.length - 1 ? actionNote : ""}
+                onAcceptOffer={acceptOffer}
+                onDeclineOffer={() => setActionOffer(null)}
               />
             ))}
             {busy && !(messages.at(-1)?.streaming && messages.at(-1)?.content) && (
@@ -571,17 +637,18 @@ export default function ChatPanel({
         )}
       </div>
 
-      {suggestionsOpen && (
-        <div className="shrink-0 border-t border-line/60 bg-surface/70 px-4 py-3 md:px-6">
+      {followups.length > 0 && (
+        <div className="shrink-0 px-3 pt-2 md:px-6">
           <div className="mx-auto w-full max-w-4xl space-y-2">
-            <p className="type-overline text-muted">Suggested prompts</p>
+            <p className="type-overline text-muted">Go deeper</p>
             <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto">
-              {[...FEATURED_STARTERS, ...MORE_STARTERS].map((question) => (
+              {followups.map((question) => (
                 <button
                   key={question}
                   type="button"
+                  disabled={busy}
                   onClick={() => submit(question)}
-                  className="rounded-full border border-line bg-surfaceMuted px-3 py-1 type-caption text-foreground transition-colors hover:border-accentText hover:bg-accentSoft/40"
+                  className="rounded-full border border-line bg-surfaceMuted px-3 py-1 text-left type-caption text-foreground transition-colors hover:border-accentText hover:bg-accentSoft/40 disabled:cursor-default disabled:opacity-70"
                 >
                   {question}
                 </button>

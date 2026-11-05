@@ -53,6 +53,7 @@ def _index_at(mtime: float) -> tuple[tuple[dict[str, str], ...], dict[str, int],
                 "question": question,
                 "expected_answer": str(row.get("expected_answer") or "").strip(),
                 "relevant_tool": str(row.get("relevant_tool") or "").strip(),
+                "category": str(row.get("category") or "").strip(),
             }
         )
     docs = [_tokens(item["question"]) for item in items]
@@ -198,3 +199,440 @@ def supplement_templates_for_tools(
     if extras:
         logger.info("supplemented answer templates %s query=%r", extras, (query or "")[:120])
     return merged
+
+
+_SKIP_CATEGORIES = frozenset(
+    {
+        "unsupported",
+        "out_of_scope",
+        "security",
+        "empty_result",
+        "not_found_lookup",
+        "edge_case",
+        "audit",
+        "clarification",
+    }
+)
+_DISPLAY_ONLY = frozenset({"draw", "render_table", "filter_rows", "summarize_rows"})
+_ACTION_TOOLS = frozenset(
+    {
+        "create_reminder",
+        "create_watch",
+        "cancel_watch",
+        "draft_chase_email",
+        "send_email",
+        "add_order_note",
+    }
+)
+_BLOCK_PHRASES = ("dismiss this proposal", "test sprint")
+_CJK = re.compile(r"[\u4e00-\u9fff]")
+_SPACE = re.compile(r"\s+")
+
+
+def _norm(text: str) -> str:
+    return _SPACE.sub(" ", (text or "").strip().lower())
+
+
+def _order_ids(text: str) -> list[str]:
+    return list(dict.fromkeys(match.group(0).upper() for match in _ORDER_ID.finditer(text or "")))
+
+
+def _has_cjk(text: str) -> bool:
+    return _CJK.search(text or "") is not None
+
+
+def _registered_suggestion_tools() -> set[str]:
+    from backend.tools.registry import MVP_TOOLS
+
+    return {str(getattr(tool, "name", tool)) for tool in MVP_TOOLS} - _DISPLAY_ONLY
+
+
+def _family(item: dict[str, str]) -> str:
+    question = (item.get("question") or "").lower()
+    tool = item.get("relevant_tool") or ""
+    category = item.get("category") or ""
+    if any(word in question for word in ("risk", "miss", "due date", "overdue", "stall", "priority", "resequence", "briefing")):
+        return "risk"
+    if category.startswith("anomaly") or tool in {"discover_factory_issues", "get_stage_output"}:
+        return "anomaly"
+    if category == "feasibility" or tool == "check_feasibility":
+        return "feasibility"
+    if category.startswith("action_") or tool in _ACTION_TOOLS:
+        return "action"
+    if category.startswith("risk") or category == "priority" or tool in {"get_orders_at_risk", "get_today_priority", "get_morning_briefing"}:
+        return "risk"
+    return "order"
+
+
+def _skipped(item: dict[str, str], registered: set[str]) -> bool:
+    if (item.get("category") or "") in _SKIP_CATEGORIES:
+        return True
+    tool = (item.get("relevant_tool") or "").strip()
+    if not tool or tool in _DISPLAY_ONLY:
+        return True
+    names = [part.strip() for part in tool.split("+") if part.strip()]
+    return any(name not in registered for name in names)
+
+
+def _slot_fill(question: str, slot_id: str | None) -> str:
+    ids = _order_ids(question)
+    if slot_id and len(ids) == 1 and ids[0] != slot_id:
+        return re.sub(re.escape(ids[0]), slot_id, question, flags=re.IGNORECASE)
+    return question
+
+
+def _ranked_followups(
+    query: str,
+    asked: list[str] | None = None,
+    focus: str = "",
+    pool: int = 6,
+) -> list[dict[str, str]]:
+    """Template questions for the next step, still in their original wording."""
+    items, _, matrix, _ = _index()
+    query = (query or "").strip()
+    if not items or not query or matrix.size == 0:
+        return []
+    pool = max(0, min(int(pool), 8))
+    if pool == 0:
+        return []
+    scores = _query_scores(query)
+    if scores is None:
+        return []
+    asked_list = [text.strip() for text in (asked or []) if str(text or "").strip()][-12:]
+    if query not in asked_list:
+        asked_list.append(query)
+    asked_norm = {_norm(text) for text in asked_list}
+    asked_max = np.zeros(len(items), dtype=np.float64)
+    for text in asked_list:
+        row = _query_scores(text)
+        if row is not None:
+            asked_max = np.maximum(asked_max, row)
+    best = int(np.argmax(scores))
+    anchored = float(scores[best]) > 0.12
+    current_family = _family(items[best]) if anchored else ""
+    slot_id = (_order_ids(query) or _order_ids(focus) or [None])[0]
+    registered = _registered_suggestion_tools()
+    query_cjk = _has_cjk(query)
+    ranked: list[tuple[tuple, int, str]] = []
+    for index, item in enumerate(items):
+        if _skipped(item, registered):
+            continue
+        if float(asked_max[index]) > 0.92:
+            continue
+        if _norm(item["question"]) in asked_norm:
+            continue
+        lowered = (item.get("question") or "").lower()
+        if any(phrase in lowered for phrase in _BLOCK_PHRASES):
+            continue
+        same_family = bool(current_family) and _family(item) == current_family
+        if float(scores[index]) <= 0.08 and not same_family:
+            continue
+        key = (
+            0 if _has_cjk(item["question"]) == query_cjk else 1,
+            0 if same_family else 1,
+            -float(scores[index]),
+        )
+        ranked.append((key, index, item["question"]))
+    ranked.sort(key=lambda row: row[0])
+    picked: list[dict[str, str]] = []
+    picked_index: list[int] = []
+    for _, index, _text in ranked:
+        question = items[index]["question"]
+        if any(_norm(question) == _norm(previous["question"]) for previous in picked):
+            continue
+        if any(float(matrix[index] @ matrix[previous]) > 0.88 for previous in picked_index):
+            continue
+        picked.append(
+            {
+                "id": items[index]["id"],
+                "question": question,
+                "relevant_tool": items[index].get("relevant_tool") or "",
+            }
+        )
+        picked_index.append(index)
+        if len(picked) >= pool:
+            break
+    return picked
+
+
+def suggest_followups(
+    query: str,
+    asked: list[str] | None = None,
+    focus: str = "",
+    k: int = 3,
+) -> list[str]:
+    """Deterministic template follow-ups. Prefer compose_deep_dive_questions for the product."""
+    query = (query or "").strip()
+    k = max(0, min(int(k), 3))
+    slot_id = (_order_ids(query) or _order_ids(focus) or [None])[0]
+    asked_norm = {_norm(text) for text in (asked or []) if str(text or "").strip()}
+    asked_norm.add(_norm(query))
+    picked: list[str] = []
+    for item in _ranked_followups(query, asked=asked, focus=focus, pool=max(k, 1)):
+        text = _slot_fill(item["question"], slot_id)
+        if not text or _norm(text) in asked_norm or text in picked:
+            continue
+        picked.append(text)
+        if len(picked) >= k:
+            break
+    return picked
+
+
+_STAGES = ("knitting", "assembly", "washing", "packing")
+_STAGE_RE = re.compile(r"\b(knitting|assembly|washing|packing)\b", re.IGNORECASE)
+
+
+def _stages(text: str) -> list[str]:
+    seen: list[str] = []
+    for match in _STAGE_RE.finditer(text or ""):
+        stage = match.group(1).capitalize()
+        if stage.lower() not in {item.lower() for item in seen}:
+            seen.append(stage)
+    return seen
+
+
+def _anchor_order_ids(questions: list[str]) -> list[str] | None:
+    """One clear order id, an empty list when none was named, or None when unclear."""
+    if not questions:
+        return []
+    latest = _order_ids(questions[-1])
+    if len(latest) > 1:
+        return None
+    if len(latest) == 1:
+        return latest
+    seen: list[str] = []
+    for text in questions:
+        for order_id in _order_ids(text):
+            if order_id not in seen:
+                seen.append(order_id)
+    if len(seen) > 1:
+        return None
+    return seen
+
+
+def _anchor_stage(questions: list[str]) -> str | None:
+    """One clear stage, empty when none was named, or None when several were named."""
+    if not questions:
+        return ""
+    latest = _stages(questions[-1])
+    if len(latest) > 1:
+        return None
+    if len(latest) == 1:
+        return latest[0]
+    seen: list[str] = []
+    for text in questions:
+        for stage in _stages(text):
+            if stage.lower() not in {item.lower() for item in seen}:
+                seen.append(stage)
+    if len(seen) > 1:
+        return None
+    return seen[0] if seen else ""
+
+
+def _entity_span(text: str) -> bool:
+    span = (text or "").strip()
+    if _ORDER_ID.fullmatch(span):
+        return True
+    if _STAGE_RE.fullmatch(span):
+        return True
+    if re.fullmatch(r"\d+", span):
+        return True
+    return any(char.isupper() for char in span)
+
+
+def accept_grounded_rewrite(template: str, proposed: str, questions: list[str]) -> bool:
+    """True when proposed is the template with entities taken from the manager's questions."""
+    from difflib import SequenceMatcher
+
+    corpus = "\n".join(questions)
+    corpus_ids = set(_order_ids(corpus))
+    proposed_ids = _order_ids(proposed)
+    if any(order_id not in corpus_ids for order_id in proposed_ids):
+        return False
+    template_ids = _order_ids(template)
+    anchor = _anchor_order_ids(questions)
+    if template_ids:
+        if not anchor or len(anchor) != 1 or set(proposed_ids) != set(anchor):
+            return False
+    matcher = SequenceMatcher(None, template.lower(), (proposed or "").lower())
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+        old = template[i1:i2].strip()
+        new = proposed[j1:j2].strip()
+        if not old or not new or new.lower() not in corpus.lower():
+            return False
+        if not _entity_span(old):
+            return False
+        if _ORDER_ID.fullmatch(old) and not _ORDER_ID.fullmatch(new):
+            return False
+        if _STAGE_RE.fullmatch(old) and not _STAGE_RE.fullmatch(new):
+            return False
+    return True
+
+
+def _apply_grounded_edits(template: str, questions: list[str]) -> str | None:
+    proposed = template
+    template_ids = list(dict.fromkeys(_order_ids(template)))
+    anchor = _anchor_order_ids(questions)
+    if template_ids:
+        if not anchor or len(anchor) != 1 or len(template_ids) != 1:
+            return None
+        if template_ids[0] != anchor[0]:
+            proposed = re.sub(re.escape(template_ids[0]), anchor[0], proposed, flags=re.IGNORECASE)
+    stage = _anchor_stage(questions)
+    template_stages = list(dict.fromkeys(item.lower() for item in _stages(template)))
+    if stage and len(template_stages) == 1 and template_stages != [stage.lower()]:
+        proposed = re.sub(template_stages[0], stage, proposed, flags=re.IGNORECASE)
+    if not accept_grounded_rewrite(template, proposed, questions):
+        return None
+    return proposed
+
+
+def _message_text(result: Any) -> str:
+    content = getattr(result, "content", result)
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text") or ""))
+            elif isinstance(block, str):
+                parts.append(block)
+        content = "\n".join(parts)
+    return str(content or "").strip()
+
+
+def _draft_with_model(
+    query: str,
+    asked: list[str],
+    candidates: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """Ask the model to rewrite the next disclosure step. Invalid output is discarded."""
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    from backend.agent.graph import build_model, llm_is_configured
+
+    if not candidates or not llm_is_configured():
+        return []
+    catalog = "\n".join(f"- {item['id']}: {item['question']}" for item in candidates)
+    history = "\n".join(f"- {text}" for text in asked[-6:])
+    system = (
+        "You choose the next progressive-disclosure questions for a factory manager. "
+        "Read the latest question and the screened templates. "
+        "You decide which templates reveal the next useful detail. "
+        "There is no fixed list of steps. "
+        "Select at most 3 templates, then rewrite only those. "
+        "Do not rephrase the latest question. "
+        "Do not choose a template that asks the same kind of question. "
+        "Swapping the order, stage, customer, product, or number is not a deeper question. Skip it. "
+        "Do not pick three templates that ask the same thing. "
+        "Change an order id, a stage (Knitting, Assembly, Washing, Packing), "
+        "a customer or product name, or a number only when that value already "
+        "appears in the manager's questions. "
+        "Do not invent a question, an order id, or a name. "
+        "If a template names one order and the manager named a different one, replace it. "
+        "If the manager named several orders, skip templates that need a single order. "
+        'Return JSON only: {"questions":[{"source_id":"...","question":"..."}]}. '
+        "Keep each template's language."
+    )
+    user = f"Latest question:\n{query}\n\nRecent questions:\n{history}\n\nTemplates:\n{catalog}"
+    try:
+        result = build_model().invoke(
+            [SystemMessage(content=system), HumanMessage(content=user)]
+        )
+    except Exception:
+        logger.exception("deep-dive suggestion model failed")
+        return []
+    text = _message_text(result)
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.IGNORECASE).strip()
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        logger.info("deep-dive suggestion was not JSON")
+        return []
+    rows = payload.get("questions") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        return []
+    drafted: list[dict[str, str]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        drafted.append(
+            {
+                "source_id": str(row.get("source_id") or "").strip(),
+                "question": str(row.get("question") or "").strip(),
+            }
+        )
+    return drafted
+
+
+def _kind_key(text: str) -> str:
+    masked = (text or "").lower()
+    masked = _ORDER_ID.sub(" {order} ", masked)
+    masked = _STAGE_RE.sub(" {stage} ", masked)
+    masked = re.sub(r"\d+", " {n} ", masked)
+    return _SPACE.sub(" ", masked).strip()
+
+
+def same_kind(left: str, right: str) -> bool:
+    """True when the questions match once order, stage, and number swaps are ignored."""
+    from difflib import SequenceMatcher
+
+    kind_left = _kind_key(left)
+    kind_right = _kind_key(right)
+    if not kind_left or not kind_right:
+        return False
+    if kind_left == kind_right:
+        return True
+    return SequenceMatcher(None, kind_left, kind_right).ratio() >= 0.84
+
+
+def _lateral_replacement(proposed: str, asked: list[str], accepted: list[str]) -> bool:
+    return any(same_kind(proposed, previous) for previous in [*asked, *accepted])
+
+
+def compose_deep_dive_questions(
+    query: str,
+    asked: list[str] | None = None,
+    k: int = 3,
+) -> list[str]:
+    """Model rewrites template keywords. A question that is unclear or ungrounded is dropped."""
+    query = (query or "").strip()
+    if not query:
+        return []
+    asked_list = [text.strip() for text in (asked or []) if str(text or "").strip()][-12:]
+    if query not in asked_list:
+        asked_list.append(query)
+    asked_norm = {_norm(text) for text in asked_list}
+    k = max(0, min(int(k), 3))
+    candidates = _ranked_followups(query, asked=asked_list, pool=8)
+    if not candidates:
+        return []
+    by_id = {item["id"]: item["question"] for item in candidates}
+    accepted: list[str] = []
+    for row in _draft_with_model(query, asked_list, candidates):
+        template = by_id.get(row.get("source_id") or "")
+        proposed = row.get("question") or ""
+        if not template or not proposed or _norm(proposed) in asked_norm:
+            continue
+        if not accept_grounded_rewrite(template, proposed, asked_list):
+            logger.info("dropped ungrounded deep-dive suggestion %r", proposed[:160])
+            continue
+        if _lateral_replacement(proposed, asked_list, accepted):
+            logger.info("dropped same-kind deep-dive suggestion %r", proposed[:160])
+            continue
+        if proposed not in accepted:
+            accepted.append(proposed)
+        if len(accepted) >= k:
+            return accepted
+    for item in candidates:
+        fallback = _apply_grounded_edits(item["question"], asked_list)
+        if not fallback or _norm(fallback) in asked_norm or fallback in accepted:
+            continue
+        if _lateral_replacement(fallback, asked_list, accepted):
+            continue
+        accepted.append(fallback)
+        if len(accepted) >= k:
+            break
+    logger.info("deep-dive suggestions %s query=%r", accepted, query[:120])
+    return accepted

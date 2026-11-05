@@ -75,6 +75,29 @@ class ConfirmActionResponse(BaseModel):
     declined: bool | None = None
 
 
+class SuggestionRequest(BaseModel):
+    query: str = ""
+    asked: list[str] = Field(default_factory=list)
+    focus: str = ""
+
+
+class SuggestionResponse(BaseModel):
+    suggestions: list[str] = Field(default_factory=list)
+
+
+class ActionOfferRequest(BaseModel):
+    question: str = ""
+    answer: str = ""
+    traces: list[dict[str, Any]] = Field(default_factory=list)
+    tools_used: list[str] = Field(default_factory=list)
+    proposed_actions: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ActionOfferResponse(BaseModel):
+    prompt: str | None = None
+    action: dict[str, Any] | None = None
+
+
 class ChatResponse(BaseModel):
     answer: str
     conversation_id: str
@@ -87,3 +110,4 @@ class ChatResponse(BaseModel):
     limitation: str | None = None
     routing_intent: str | None = None
     why: dict[str, Any] | None = None
+    instant: bool = False

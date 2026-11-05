@@ -183,8 +183,10 @@ class DiscoverFactoryIssuesInput(BaseModel):
 def discover_factory_issues(limit: int = DEFAULT_LIMIT) -> str:
     """Production snapshot and ranked production_log stage issues.
 
-    Copy data.production (queue by stage, last working day vs 30-day median)
-    and data.issues. Do not answer with an order-priority list.
+    Copy data.production and data.issues. stage_vs_30day_median lists each
+    stage's 30 working days as date and pieces next to its median. Read that
+    series for a sustained high or low. flagged is only the last working day.
+    Do not answer with an order-priority list.
     """
     tool_name = "discover_factory_issues"
     try:
@@ -241,8 +243,9 @@ def discover_factory_issues(limit: int = DEFAULT_LIMIT) -> str:
                         },
                     ],
                     "basis": (
-                        "Stage issues reuse the briefing last-day vs "
-                        "0.70 × 30-day-median rule on production_log.csv."
+                        "Stage issues flag the last working day against "
+                        "0.70 × the 30-day median. working_days is that same "
+                        "median window, one date and pieces per working day."
                     ),
                 },
             }

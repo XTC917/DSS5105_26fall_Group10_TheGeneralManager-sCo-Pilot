@@ -110,10 +110,13 @@ export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
   const [audit, setAudit] = useState([]);
   const [watches, setWatches] = useState({ fired: [], active: [], cancelled: [] });
   const [discovery, setDiscovery] = useState({ issues: [] });
+  const [discoveryState, setDiscoveryState] = useState("loading");
   const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
+    setDiscoveryState("loading");
+    setError("");
     Promise.all([fetchBriefing(), fetchAudit(6), fetchWatches(), fetchDiscovery(5)])
       .then(([brief, log, board, issues]) => {
         if (cancelled) return;
@@ -125,9 +128,13 @@ export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
           cancelled: board.cancelled || [],
         });
         setDiscovery(issues);
+        setDiscoveryState("ready");
       })
       .catch((err) => {
-        if (!cancelled) setError(err.message);
+        if (!cancelled) {
+          setError(err.message);
+          setDiscoveryState("error");
+        }
       });
     return () => {
       cancelled = true;
@@ -168,13 +175,12 @@ export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
         )}
       </Card>
       <Card title="Top issues">
-        {(discovery.issues || []).length === 0 && (
-          <p>
-            No V1 discovery issues on the current tables, or the API is still loading.
-            Ask in chat what to be concerned about.
-          </p>
+        {discoveryState === "loading" && <p>Checking for issues…</p>}
+        {discoveryState === "ready" && (discovery.issues || []).length === 0 && (
+          <p>No issues found.</p>
         )}
-        {(discovery.issues || []).length > 0 && (
+        {discoveryState === "error" && <p>Could not check for issues.</p>}
+        {discoveryState === "ready" && (discovery.issues || []).length > 0 && (
           <ul className="space-y-2">
             {discovery.issues.map((item) => (
               <IssueRow key={item.issue_id} item={item} />

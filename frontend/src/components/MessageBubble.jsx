@@ -182,6 +182,10 @@ export default function MessageBubble({
   onClarify,
   busy,
   clarificationOpen = false,
+  actionOffer = null,
+  actionNote = "",
+  onAcceptOffer,
+  onDeclineOffer,
 }) {
   const isUser = message.role === "user";
   const [open, setOpen] = useState(false);
@@ -237,7 +241,7 @@ export default function MessageBubble({
         <MessageMeta message={message} />
 
         {charts.map((chart, idx) => (
-          <div key={`${chart.type}-${idx}`} className="w-full min-w-0">
+          <div key={`${chart.type || "chart"}-${idx}`} className="w-full min-w-0">
             <ChartView chart={chart} />
           </div>
         ))}
@@ -341,6 +345,35 @@ export default function MessageBubble({
         )}
         {decision?.status === "dismissed" && (
           <p className="type-caption text-muted">Dismissed. Nothing was saved.</p>
+        )}
+
+        {(actionOffer || actionNote) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-l-2 border-accent pl-3">
+            {actionOffer && (
+              <>
+                <p className="min-w-0 flex-1 type-sm leading-6 text-foreground">{actionOffer.prompt}</p>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={onAcceptOffer}
+                    className="rounded-full bg-foreground px-3 py-1 type-caption font-medium text-surface transition-opacity hover:opacity-80 disabled:opacity-40"
+                  >
+                    Yes
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={onDeclineOffer}
+                    className="rounded-full px-2.5 py-1 type-caption text-muted transition-colors hover:text-foreground disabled:opacity-40"
+                  >
+                    No
+                  </button>
+                </div>
+              </>
+            )}
+            {actionNote && <p className="type-caption text-muted">{actionNote}</p>}
+          </div>
         )}
 
         {(message.why || traces.length > 0) && (

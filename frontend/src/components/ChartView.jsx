@@ -7,6 +7,7 @@ import {
   CartesianGrid,
   Cell,
   ComposedChart,
+  LabelList,
   Legend,
   Line,
   LineChart,
@@ -113,12 +114,131 @@ function PieChartView({ chart }) {
   );
 }
 
+function StageDailyChart({ chart }) {
+  const stage = (Array.isArray(chart.stages) ? chart.stages : [])[0] || {};
+  const data = Array.isArray(chart.data) ? chart.data : [];
+  const color = stage.color || "#4c78a8";
+  const alertColor = chart.threshold_color || "#bf5145";
+  const [hidden, setHidden] = useState(() => new Set());
+  const number = (value) => Number(value || 0).toLocaleString();
+  function toggle(key) {
+    setHidden((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+  const items = [
+    ["ASSEMBLY", "ASSEMBLY", color, false],
+    ["median", "30-day median", color, true],
+    ["alert_threshold", "Alert threshold", alertColor, true],
+  ];
+  return (
+    <figure className="mt-3 max-w-full overflow-hidden border-t border-line pt-3" aria-label={chart.title || "Assembly complete pieces"}>
+      <figcaption className="text-center">
+        <span className="block type-sm font-semibold text-foreground">{chart.title || "Assembly complete pieces"}</span>
+        {chart.subtitle && <span className="mt-1 block type-caption text-muted">{chart.subtitle}</span>}
+      </figcaption>
+      <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 type-caption">
+        {items.map(([key, name, swatch, dashed]) => {
+          const off = hidden.has(key);
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={!off}
+              onClick={() => toggle(key)}
+              className={`inline-flex items-center gap-1.5 ${off ? "text-subtle line-through" : "text-foreground"}`}
+            >
+              <span
+                className="inline-block h-0.5 w-4 border-t-2"
+                style={{ borderColor: swatch, borderTopStyle: dashed ? "dashed" : "solid", opacity: off ? 0.35 : 1 }}
+              />
+              {name}
+            </button>
+          );
+        })}
+      </div>
+      {data.length ? (
+        <div className="mt-2 h-80 w-full min-w-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ top: 20, right: 12, left: 0, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e6e8e5" />
+              <XAxis
+                dataKey="date"
+                interval={1}
+                angle={-40}
+                textAnchor="end"
+                height={58}
+                tick={{ fontSize: 10 }}
+                tickFormatter={(value) => String(value).slice(5)}
+              />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip labelFormatter={(value) => String(value)} formatter={(value, name) => [number(value), name]} />
+              {!hidden.has("ASSEMBLY") && (
+                <Line
+                  dataKey="ASSEMBLY"
+                  name="ASSEMBLY"
+                  stroke={color}
+                  strokeWidth={2}
+                  dot={{ r: 2, fill: color, stroke: color }}
+                  activeDot={{ r: 3, fill: color, stroke: color }}
+                  isAnimationActive={false}
+                >
+                  <LabelList
+                    dataKey="ASSEMBLY"
+                    content={({ x, y, value, index }) => {
+                      const row = data[index];
+                      if (!row || row.date !== chart.label_date) return null;
+                      return (
+                        <text x={x} y={y - 8} textAnchor="middle" fontSize="11" fontWeight="700" fill={color}>
+                          {number(value)}
+                        </text>
+                      );
+                    }}
+                  />
+                </Line>
+              )}
+              {!hidden.has("median") && (
+                <Line
+                  dataKey="median"
+                  name="30-day median"
+                  stroke={color}
+                  strokeWidth={1.5}
+                  strokeDasharray="5 4"
+                  dot={false}
+                  activeDot={false}
+                  isAnimationActive={false}
+                />
+              )}
+              {!hidden.has("alert_threshold") && (
+                <Line
+                  dataKey="alert_threshold"
+                  name="Alert threshold"
+                  stroke={alertColor}
+                  strokeWidth={1.5}
+                  strokeDasharray="5 4"
+                  dot={false}
+                  activeDot={false}
+                  isAnimationActive={false}
+                />
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      ) : <p className="py-6 text-center type-sm text-muted">No stage output is recorded.</p>}
+    </figure>
+  );
+}
+
 export default function ChartView({ chart }) {
   const [page, setPage] = useState(0);
   useEffect(() => {
     setPage(0);
   }, [chart]);
 
+  if (chart?.type === "stage_daily") return <StageDailyChart chart={chart} />;
   if (!chart || !TYPES[chart.type] || !Array.isArray(chart.data) || !chart.data.length) return null;
   if (!chart.category_key || !Array.isArray(chart.value_keys) || !chart.value_keys.length) return null;
 

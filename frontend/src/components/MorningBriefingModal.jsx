@@ -56,12 +56,26 @@ function LastWeekBriefing({ week }) {
         {weeks.length ? (
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={weeks} margin={{ top: 28, right: 8, left: 0, bottom: 0 }}>
+              <ComposedChart data={weeks} margin={{ top: 28, right: 8, left: 0, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e6e8e5" />
-                <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                <XAxis
+                  dataKey="start"
+                  interval={0}
+                  angle={-40}
+                  textAnchor="end"
+                  height={56}
+                  tick={{ fontSize: 10 }}
+                  tickFormatter={(value) => String(value).slice(5)}
+                />
                 <YAxis yAxisId="count" allowDecimals={false} tick={{ fontSize: 11 }} />
                 <YAxis yAxisId="share" orientation="right" domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(value, name) => [typeof value === "number" && name.includes("%") ? `${value}%` : number(value), name]} />
+                <Tooltip
+                  labelFormatter={(_, payload) => {
+                    const row = payload?.[0]?.payload;
+                    return row ? `${row.start} – ${row.end}` : "";
+                  }}
+                  formatter={(value, name) => [typeof value === "number" && name.includes("%") ? `${value}%` : number(value), name]}
+                />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar yAxisId="count" dataKey="on_time" name="Done on time" stackId="done" fill="#9ccc7c" isAnimationActive={false}>
                   <LabelList dataKey="on_time_percent" position="center" formatter={percentLabel} style={{ fontSize: 10, fill: "#245c32" }} />
@@ -83,11 +97,25 @@ function LastWeekBriefing({ week }) {
         {weeks.length ? (
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={weeks} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}>
+              <ComposedChart data={weeks} margin={{ top: 12, right: 8, left: 0, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e6e8e5" />
-                <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                <XAxis
+                  dataKey="start"
+                  interval={0}
+                  angle={-40}
+                  textAnchor="end"
+                  height={56}
+                  tick={{ fontSize: 10 }}
+                  tickFormatter={(value) => String(value).slice(5)}
+                />
                 <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(value) => number(value)} />
+                <Tooltip
+                  labelFormatter={(_, payload) => {
+                    const row = payload?.[0]?.payload;
+                    return row ? `${row.start} – ${row.end}` : "";
+                  }}
+                  formatter={(value) => number(value)}
+                />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {STAGE_LINE.map(([stage, color]) => (
                   <Line key={stage} dataKey={stage} name={stage} stroke={color} strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />

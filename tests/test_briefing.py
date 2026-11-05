@@ -43,6 +43,11 @@ def test_briefing_stage_drop_rule_is_inspectable(db):
     assert assembly["last_working_date"] == "2026-03-31"
     expected_flag = assembly["last_day_pieces"] < 0.70 * assembly["lookback_median"]
     assert assembly["flagged"] is expected_flag
+    days = {row["date"]: row["pieces"] for row in assembly["working_days"]}
+    assert days["2026-03-25"] == 394
+    assert days["2026-03-31"] == assembly["last_day_pieces"]
+    assert "2026-03-29" not in days
+    assert len(assembly["working_days"]) == 30
 
 
 def test_last_week_tracks_every_factory_week(db):

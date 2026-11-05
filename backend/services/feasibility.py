@@ -177,6 +177,7 @@ def stage_throughput_medians(db: FactoryDB, today: date = FACTORY_TODAY) -> dict
 
     return {
         "lookback_working_days": THROUGHPUT_LOOKBACK_WORKING_DAYS,
+        "lookback_dates": [day.isoformat() for day in sorted(lookback_dates)],
         "lookback_date_from": min(lookback_dates).isoformat() if lookback_dates else None,
         "lookback_date_to": max(lookback_dates).isoformat() if lookback_dates else None,
         "medians_pieces_per_working_day": medians,
