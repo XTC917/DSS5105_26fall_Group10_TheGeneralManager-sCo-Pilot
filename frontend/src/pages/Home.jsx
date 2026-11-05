@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import MorningBriefingModal from "../components/MorningBriefingModal.jsx";
 import Sidebar from "../components/Sidebar.jsx";
 import ChatPanel from "../components/ChatPanel.jsx";
 import ConversationList from "../components/ConversationList.jsx";
+import AlertsRail from "../components/AlertsRail.jsx";
 import DataManagement from "./DataManagement.jsx";
 import UserManagement from "./UserManagement.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
@@ -10,17 +10,23 @@ import { fetchHealth } from "../services/api.js";
 import { deactivateMe } from "../services/authApi.js";
 import {
   createConversation,
+  deleteConversation,
+  detectConversationCapabilities,
   fetchConversationHistory,
   fetchConversations,
 } from "../services/conversationsApi.js";
+import { invalidateOverviewCache, loadOverviewData, peekOverviewCache } from "../services/overviewCache.js";
 import { friendlyAuthError } from "../services/authErrors.js";
 import {
+  Badge,
   Button,
   Card,
   LoadingState,
   Modal,
   ThemeSwitcher,
 } from "../components/ui/index.js";
+
+const SEARCH_DEBOUNCE_MS = 300;
 
 function storageKey(userId) {
   return `sweaterco:last-conversation:${userId}`;
@@ -94,6 +100,15 @@ function IconSettings() {
   );
 }
 
+function IconAlerts() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 3a6 6 0 0 0-6 6v2.2c0 .7-.2 1.4-.6 2L4.2 15.4A1 1 0 0 0 5 17h14a1 1 0 0 0 .8-1.6L18.6 13.2c-.4-.6-.6-1.3-.6-2V9a6 6 0 0 0-6-6z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M10 17a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function IconTheme() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -111,6 +126,15 @@ function IconLogout() {
   );
 }
 
+function formatFactoryDateLabel(iso) {
+  if (!iso) return "";
+  const parts = String(iso).slice(0, 10).split("-");
+  if (parts.length !== 3) return iso;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const month = months[Number(parts[1]) - 1];
+  return month ? `${Number(parts[2])} ${month} ${parts[0]}` : iso;
+}
+
 const VIEW_META = {
   copilot: {
     eyebrow: "AI Workspace",
@@ -120,7 +144,7 @@ const VIEW_META = {
   overview: {
     eyebrow: "Insights",
     title: "Overview",
-    subtitle: "Morning briefing, discovery issues, alerts, watches and audit trail.",
+    subtitle: "Top issues with morning and weekly factory briefing.",
   },
   data: {
     eyebrow: "Administration",
@@ -141,7 +165,6 @@ const VIEW_META = {
 
 export default function Home() {
   const { user, logout } = useAuth();
-  const [briefingOpen, setBriefingOpen] = useState(false);
   const [health, setHealth] = useState(null);
   const [healthError, setHealthError] = useState("");
   const [boardTick, setBoardTick] = useState(0);
@@ -149,16 +172,37 @@ export default function Home() {
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const [deactivateBusy, setDeactivateBusy] = useState(false);
   const [deactivateError, setDeactivateError] = useState("");
-  const [conversations, setConversations] = useState([]);
+  const [conversationCatalog, setConversationCatalog] = useState([]);
+  const [searchResults, setSearchResults] = useState(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [listError, setListError] = useState("");
+  const [capabilities, setCapabilities] = useState({ search: false, delete: false });
+  const [capabilitiesReady, setCapabilitiesReady] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [initialMessages, setInitialMessages] = useState([]);
   const [conversationLoading, setConversationLoading] = useState(true);
   const [conversationError, setConversationError] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
+  const [composerDraft, setComposerDraft] = useState("");
+  const [factoryDate, setFactoryDate] = useState(() => peekOverviewCache()?.briefing?.factory_today || "");
+  const [watches, setWatches] = useState(() => peekOverviewCache()?.watches || { fired: [], active: [], cancelled: [] });
+  const [watchesLoading, setWatchesLoading] = useState(false);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+  const [alertsDrawerOpen, setAlertsDrawerOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [askAiNotice, setAskAiNotice] = useState("");
   const historyRequest = useRef(0);
+  const searchRequest = useRef(0);
+  const searchInputRef = useRef("");
+  const bootstrappedRef = useRef(false);
 
   const isAdmin = user?.role === "ADMIN";
+  const searching = Boolean(debouncedSearch.trim());
+  const conversations = searching ? searchResults || [] : conversationCatalog;
 
   useEffect(() => {
     fetchHealth()
@@ -167,14 +211,58 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    setWatchesLoading(true);
+    loadOverviewData({ force: !peekOverviewCache()?.briefing })
+      .then((payload) => {
+        if (cancelled) return;
+        if (payload.briefing?.factory_today) setFactoryDate(payload.briefing.factory_today);
+        setWatches(payload.watches || { fired: [], active: [], cancelled: [] });
+      })
+      .catch(() => {
+        const cached = peekOverviewCache();
+        if (!cancelled && cached) {
+          if (cached.briefing?.factory_today) setFactoryDate(cached.briefing.factory_today);
+          setWatches(cached.watches || { fired: [], active: [], cancelled: [] });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setWatchesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [boardTick]);
+
+  useEffect(() => {
+    let cancelled = false;
+    detectConversationCapabilities().then((next) => {
+      if (!cancelled) {
+        setCapabilities(next);
+        setCapabilitiesReady(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isAdmin && (activeView === "data" || activeView === "users")) {
       setActiveView("copilot");
     }
   }, [isAdmin, activeView]);
 
-  const refreshConversationList = useCallback(async () => {
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedSearch(searchInputRef.current);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(handle);
+  }, [searchInput]);
+
+  const refreshConversationCatalog = useCallback(async () => {
     const rows = await fetchConversations();
-    setConversations(rows);
+    setConversationCatalog(rows);
     return rows;
   }, []);
 
@@ -191,6 +279,7 @@ export default function Home() {
         setInitialMessages(messagesFromTurns(history.turns));
         localStorage.setItem(storageKey(user.id), history.conversation.id);
         setActiveView("copilot");
+        setAskAiNotice("");
         setHistoryDrawerOpen(false);
       } catch (err) {
         if (requestId === historyRequest.current) setConversationError(err.message);
@@ -204,11 +293,17 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
     historyRequest.current += 1;
-    setConversations([]);
+    setConversationCatalog([]);
+    setSearchResults(null);
+    setSearchInput("");
+    searchInputRef.current = "";
+    setDebouncedSearch("");
     setActiveConversationId(null);
     setInitialMessages([]);
     setConversationError("");
+    setListError("");
     setConversationLoading(true);
+    bootstrappedRef.current = false;
 
     async function restoreConversations() {
       if (!user?.id) return;
@@ -220,10 +315,11 @@ export default function Home() {
           rows = [created];
         }
         if (cancelled) return;
-        setConversations(rows);
+        setConversationCatalog(rows);
         const remembered = localStorage.getItem(storageKey(user.id));
         const selected = rows.some((item) => item.id === remembered) ? remembered : rows[0].id;
         await openConversation(selected);
+        bootstrappedRef.current = true;
       } catch (err) {
         if (!cancelled) {
           setConversationError(err.message);
@@ -239,25 +335,185 @@ export default function Home() {
     };
   }, [openConversation, user?.id]);
 
-  async function handleNewConversation() {
-    if (chatBusy) return;
+  useEffect(() => {
+    if (!capabilities.search) {
+      setSearchResults(null);
+      setSearchLoading(false);
+      return undefined;
+    }
+    const query = debouncedSearch.trim();
+    if (!query) {
+      setSearchResults(null);
+      setSearchLoading(false);
+      setListError("");
+      return undefined;
+    }
+
+    let cancelled = false;
+    const requestId = ++searchRequest.current;
+    setSearchLoading(true);
+    setListError("");
+
+    fetchConversations(50, query)
+      .then((rows) => {
+        if (cancelled || requestId !== searchRequest.current) return;
+        setSearchResults(rows);
+      })
+      .catch((err) => {
+        if (cancelled || requestId !== searchRequest.current) return;
+        setSearchResults([]);
+        setListError(err.message || "Search failed.");
+      })
+      .finally(() => {
+        if (!cancelled && requestId === searchRequest.current) {
+          setSearchLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [capabilities.search, debouncedSearch]);
+
+  function handleSearchChange(value) {
+    searchInputRef.current = value;
+    setSearchInput(value);
+    if (!value.trim()) {
+      setDebouncedSearch("");
+      setSearchResults(null);
+      setListError("");
+    }
+  }
+
+  async function handleNewConversation({ fromAskAi = false } = {}) {
+    if (chatBusy) {
+      if (fromAskAi) {
+        setActiveView("copilot");
+        setAskAiNotice("Wait for the current answer to finish before starting a new chat.");
+      }
+      return;
+    }
+    if (composerDraft.trim()) {
+      if (fromAskAi) {
+        setActiveView("copilot");
+        setAskAiNotice("Unsent draft kept — clear the composer or send it before starting a new chat.");
+      }
+      return;
+    }
+    // Reuse an already-empty conversation instead of creating duplicates.
+    if (activeConversationId && initialMessages.length === 0) {
+      setActiveView("copilot");
+      setAskAiNotice("");
+      setHistoryDrawerOpen(false);
+      return;
+    }
+    const emptyExisting = conversationCatalog.find((row) => row.id === activeConversationId && (row.turn_count || 0) === 0);
+    if (emptyExisting && initialMessages.length === 0) {
+      setActiveView("copilot");
+      setAskAiNotice("");
+      return;
+    }
     setConversationError("");
+    setAskAiNotice("");
     try {
       const created = await createConversation();
-      setConversations((current) => [created, ...current]);
+      setConversationCatalog((current) => [created, ...current.filter((row) => row.id !== created.id)]);
+      setSearchInput("");
+      searchInputRef.current = "";
+      setDebouncedSearch("");
+      setSearchResults(null);
+      setComposerDraft("");
       await openConversation(created.id);
     } catch (err) {
       setConversationError(err.message);
     }
   }
 
+  function handleAskAiNav() {
+    setActiveView("copilot");
+    if (!bootstrappedRef.current || conversationLoading) return;
+    handleNewConversation({ fromAskAi: true });
+  }
+
+  function handleWatchChanged() {
+    invalidateOverviewCache();
+    setBoardTick((n) => n + 1);
+  }
+
   async function handleConversationUpdated() {
     try {
-      await refreshConversationList();
+      await refreshConversationCatalog();
+      const query = debouncedSearch.trim();
+      if (capabilities.search && query) {
+        const requestId = ++searchRequest.current;
+        const rows = await fetchConversations(50, query);
+        if (requestId === searchRequest.current) setSearchResults(rows);
+      }
     } catch (err) {
       setConversationError(err.message);
     }
   }
+
+  async function confirmDeleteConversation() {
+    if (!pendingDelete || deletingId) return;
+    const target = pendingDelete;
+    const wasActive = target.id === activeConversationId;
+    setDeletingId(target.id);
+    setDeleteError("");
+    try {
+      await deleteConversation(target.id);
+      setPendingDelete(null);
+      const catalog = await refreshConversationCatalog();
+      const query = debouncedSearch.trim();
+      if (capabilities.search && query) {
+        const requestId = ++searchRequest.current;
+        const filtered = await fetchConversations(50, query);
+        if (requestId === searchRequest.current) setSearchResults(filtered);
+      } else {
+        setSearchResults(null);
+      }
+      if (wasActive) {
+        if (catalog.length > 0) {
+          await openConversation(catalog[0].id);
+        } else {
+          const created = await createConversation();
+          setConversationCatalog([created]);
+          setSearchInput("");
+          searchInputRef.current = "";
+          setDebouncedSearch("");
+          setSearchResults(null);
+          await openConversation(created.id);
+        }
+      }
+    } catch (err) {
+      setDeleteError(err.message || "Could not delete conversation.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  const conversationListProps = {
+    conversations,
+    activeConversationId,
+    loading: conversationLoading && conversationCatalog.length === 0,
+    searching: searchLoading,
+    searchQuery: searchInput,
+    // Hide search/delete until OpenAPI confirms the teammate backend is live.
+    searchEnabled: capabilitiesReady && capabilities.search,
+    searchUnavailable: false,
+    onSearchChange: handleSearchChange,
+    disabled: chatBusy || Boolean(deletingId),
+    canDelete: capabilitiesReady && capabilities.delete,
+    deleteUnavailable: false,
+    deletingId,
+    onCreate: handleNewConversation,
+    onSelect: openConversation,
+    onRequestDelete: (conversation) => {
+      setDeleteError("");
+      setPendingDelete(conversation);
+    },
+    listError,
+  };
 
   async function handleDeactivate() {
     setDeactivateBusy(true);
@@ -273,6 +529,11 @@ export default function Home() {
   }
 
   function handleNav(key) {
+    if (key === "copilot") {
+      handleAskAiNav();
+      return;
+    }
+    setAskAiNotice("");
     setActiveView(key);
   }
 
@@ -283,6 +544,8 @@ export default function Home() {
     ...(isAdmin ? [{ key: "users", label: "User Management", icon: <IconUsers /> }] : []),
     { key: "settings", label: "Settings", icon: <IconSettings /> },
   ];
+
+  const alertCount = (watches.fired?.length || 0) + (watches.active?.length || 0);
 
   const navButton = (item) => {
     const active = activeView === item.key;
@@ -321,6 +584,26 @@ export default function Home() {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          {factoryDate ? (
+            <Badge variant="accent" size="sm" className="max-w-[11rem] truncate sm:max-w-none" title={`Factory date ${factoryDate}`}>
+              Factory · {formatFactoryDateLabel(factoryDate)}
+            </Badge>
+          ) : (
+            <Badge variant="neutral" size="sm" className="hidden sm:inline-flex">
+              Factory date…
+            </Badge>
+          )}
+          {alertCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setAlertsDrawerOpen(true)}
+              className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-danger/30 bg-dangerSoft px-2.5 py-1 type-caption font-medium text-danger md:hidden"
+              aria-label={`${alertCount} alerts`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-danger" />
+              {alertCount}
+            </button>
+          )}
           <div className="hidden items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 md:flex">
             <span
               className={`h-2 w-2 rounded-full ${
@@ -340,12 +623,14 @@ export default function Home() {
             {navItems.map(navButton)}
           </nav>
 
+          <AlertsRail watches={watches} loading={watchesLoading} onWatchChanged={handleWatchChanged} />
+
           <div className="flex shrink-0 items-center justify-between gap-2 border-t border-line px-3 py-2">
             <p className="type-overline text-muted">Conversations</p>
             <button
               type="button"
               disabled={chatBusy || conversationLoading}
-              onClick={handleNewConversation}
+              onClick={() => handleNewConversation()}
               className="focus-ring rounded-control border border-line px-2 py-1 type-caption font-medium text-foreground transition-colors hover:border-accentText hover:text-accentText disabled:opacity-50"
             >
               New
@@ -353,14 +638,7 @@ export default function Home() {
           </div>
 
           <div id="conversation-history" className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
-            <ConversationList
-              conversations={conversations}
-              activeConversationId={activeConversationId}
-              loading={conversationLoading && conversations.length === 0}
-              disabled={chatBusy || conversationLoading}
-              onCreate={handleNewConversation}
-              onSelect={openConversation}
-            />
+            <ConversationList {...conversationListProps} scrollable={false} />
             {conversationError && (
               <p className="mt-2 rounded-card border border-danger/30 bg-dangerSoft px-3 py-2 type-sm text-danger">
                 {conversationError}
@@ -381,9 +659,12 @@ export default function Home() {
                     llmReady={Boolean(health?.llm_configured)}
                     onBusyChange={setChatBusy}
                     onConversationUpdated={handleConversationUpdated}
-                    onBoardChanged={() => setBoardTick((n) => n + 1)}
+                    onBoardChanged={handleWatchChanged}
                     onOpenConversations={() => setHistoryDrawerOpen(true)}
                     onNewConversation={handleNewConversation}
+                    onDraftChange={setComposerDraft}
+                    notice={askAiNotice}
+                    onDismissNotice={() => setAskAiNotice("")}
                   />
                 </div>
               ) : (
@@ -404,15 +685,12 @@ export default function Home() {
 
           {activeView === "overview" && (
             <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
-              <div className="mx-auto max-w-5xl space-y-4">
-                <div className="mb-2">
-                  <p className="type-overline text-accentText">{viewMeta.eyebrow}</p>
-                  <h2 className="type-h2 text-foreground">{viewMeta.title}</h2>
-                  <p className="type-sm text-muted">{viewMeta.subtitle}</p>
-                  <p className="mt-1 type-caption text-subtle">Factory date: 1 Apr 2026</p>
-                </div>
-                <Sidebar refreshToken={boardTick} onOpenBriefing={() => setBriefingOpen(true)} />
-              </div>
+              <Sidebar
+                refreshToken={boardTick}
+                onFactoryDate={(value) => {
+                  if (value) setFactoryDate(value);
+                }}
+              />
             </div>
           )}
 
@@ -536,7 +814,7 @@ export default function Home() {
       >
         <button
           type="button"
-          onClick={() => setActiveView("overview")}
+          onClick={() => handleNav("overview")}
           className={`focus-ring flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-control px-1 py-1 type-caption font-medium transition-colors ${
             activeView === "overview" ? "text-accent" : "text-muted"
           }`}
@@ -546,7 +824,7 @@ export default function Home() {
         </button>
         <button
           type="button"
-          onClick={() => setActiveView("copilot")}
+          onClick={() => handleNav("copilot")}
           className={`focus-ring flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-control px-1 py-1 type-caption font-medium transition-colors ${
             activeView === "copilot" ? "text-accent" : "text-muted"
           }`}
@@ -557,7 +835,23 @@ export default function Home() {
         </button>
         <button
           type="button"
-          onClick={() => setActiveView("settings")}
+          onClick={() => setAlertsDrawerOpen(true)}
+          className={`focus-ring relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-control px-1 py-1 type-caption font-medium transition-colors ${
+            alertsDrawerOpen ? "text-accent" : "text-muted"
+          }`}
+          aria-label={alertCount > 0 ? `Alerts, ${alertCount}` : "Alerts"}
+        >
+          <IconAlerts />
+          <span className="truncate">Alerts</span>
+          {alertCount > 0 && (
+            <span className="absolute right-3 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-accentContrast">
+              {alertCount}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleNav("settings")}
           className={`focus-ring flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-control px-1 py-1 type-caption font-medium transition-colors ${
             activeView === "settings" ? "text-accent" : "text-muted"
           }`}
@@ -592,16 +886,16 @@ export default function Home() {
                 Close
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-1">
-              <ConversationList
-                conversations={conversations}
-                activeConversationId={activeConversationId}
-                loading={conversationLoading && conversations.length === 0}
-                disabled={chatBusy || conversationLoading}
-                onCreate={handleNewConversation}
-                onSelect={openConversation}
-                scrollable={false}
+            <div className="mb-2 shrink-0 border-b border-line pb-2">
+              <AlertsRail
+                watches={watches}
+                loading={watchesLoading}
+                compact
+                onWatchChanged={handleWatchChanged}
               />
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-1">
+              <ConversationList {...conversationListProps} scrollable={false} />
               {conversationError && (
                 <p className="mt-2 rounded-card border border-danger/30 bg-dangerSoft px-3 py-2 type-sm text-danger">
                   {conversationError}
@@ -612,13 +906,91 @@ export default function Home() {
         </div>
       )}
 
-      {briefingOpen && (
-        <MorningBriefingModal
-          onClose={() => setBriefingOpen(false)}
-          refreshToken={boardTick}
-          onAlertCreated={() => setBoardTick((n) => n + 1)}
-        />
+      {alertsDrawerOpen && (
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Alerts and watch history">
+          <button
+            type="button"
+            aria-label="Close alerts"
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setAlertsDrawerOpen(false)}
+          />
+          <div
+            className="absolute inset-x-0 bottom-0 flex max-h-[70dvh] flex-col rounded-t-2xl border-t border-line bg-surface px-4 pt-3 shadow-float"
+            style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+          >
+            <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+              <div>
+                <p className="type-overline text-accentText">Alerts</p>
+                <p className="type-caption text-subtle">Active watches and watch history.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAlertsDrawerOpen(false)}
+                className="focus-ring rounded-control border border-line px-2.5 py-1.5 type-caption font-medium text-muted"
+              >
+                Close
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-1">
+              <AlertsRail
+                watches={watches}
+                loading={watchesLoading}
+                compact
+                persistHistory
+                onWatchChanged={handleWatchChanged}
+              />
+            </div>
+          </div>
+        </div>
       )}
+
+      <Modal
+        open={Boolean(pendingDelete)}
+        onClose={() => {
+          if (deletingId) return;
+          setPendingDelete(null);
+          setDeleteError("");
+        }}
+        title="Delete conversation"
+        description="This permanently removes the conversation and its saved turns for your account."
+        size="sm"
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={Boolean(deletingId)}
+              onClick={() => {
+                setPendingDelete(null);
+                setDeleteError("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              disabled={Boolean(deletingId)}
+              onClick={confirmDeleteConversation}
+            >
+              {deletingId ? "Deleting…" : "Delete"}
+            </Button>
+          </div>
+        }
+      >
+        <p className="type-sm text-foreground">
+          Delete{" "}
+          <span className="font-semibold">
+            {pendingDelete?.title || "this conversation"}
+          </span>
+          ?
+        </p>
+        {deleteError && (
+          <p className="mt-3 type-caption text-danger" role="alert">
+            {deleteError}
+          </p>
+        )}
+      </Modal>
     </div>
   );
 }

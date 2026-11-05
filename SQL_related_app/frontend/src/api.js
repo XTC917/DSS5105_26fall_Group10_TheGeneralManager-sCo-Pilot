@@ -34,3 +34,7 @@ export const deleteDataSource = (id, dropTable = false) => {
 export const getDataSourceData = (id, limit = 50, offset = 0) => {
   return api.get(`/datasources/${id}/data`, { params: { limit, offset } })
 }
+
+export const updateDataSourceRows = (id, updates) => {
+  return api.patch(`/datasources/${id}/rows`, { updates })
+}

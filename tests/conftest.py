@@ -11,13 +11,47 @@ import json
 import os
 
 import pytest
+from argon2 import PasswordHasher
 
 TEST_AUTH_SECRET = "test-auth-secret-key-with-at-least-32-chars"
 
 os.environ.setdefault("AUTH_SECRET_KEY", TEST_AUTH_SECRET)
 
 from backend.services.database import get_db, init_db
+from backend.services.pg_database import connect
 from backend.services.request_context import set_current_user
+
+
+@pytest.fixture(scope="session", autouse=True)
+def baseline_auth_users():
+    """Create the fixed identities used by authenticated API test tokens."""
+    password_hash = PasswordHasher().hash("TestPassword123!")
+    with connect(admin=True) as connection, connection.transaction():
+        connection.execute(
+            """
+            INSERT INTO auth.users (id, username, password_hash, role, status)
+            OVERRIDING SYSTEM VALUE
+            VALUES
+                (1, 'test_admin', %s, 'ADMIN', 'ACTIVE'),
+                (2, 'test_employee', %s, 'EMPLOYEE', 'ACTIVE')
+            ON CONFLICT (id) DO UPDATE SET
+                username = EXCLUDED.username,
+                password_hash = EXCLUDED.password_hash,
+                role = EXCLUDED.role,
+                status = EXCLUDED.status
+            """,
+            (password_hash, password_hash),
+        )
+        connection.execute(
+            """
+            SELECT setval(
+                pg_get_serial_sequence('auth.users', 'id'),
+                GREATEST((SELECT COALESCE(MAX(id), 1) FROM auth.users), 1),
+                TRUE
+            )
+            """
+        )
+    yield
 
 
 @pytest.fixture(scope="session")

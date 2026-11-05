@@ -218,23 +218,23 @@ export default function TableView({ table }) {
         ref={popupRef}
         role="group"
         aria-label={`Filter ${column.label}`}
-        className="fixed z-[1000] max-h-[calc(100vh-1rem)] w-72 max-w-[calc(100vw-1rem)] overflow-hidden rounded border border-ink/15 bg-white text-left text-xs text-ink shadow-lg"
+        className="fixed z-[1000] max-h-[calc(100vh-1rem)] w-72 max-w-[calc(100vw-1rem)] overflow-hidden rounded-control border border-line bg-surface text-left type-caption text-foreground shadow-float"
         style={{ left: popup.left, top: popup.top }}
       >
-        <div className="border-b border-ink/10 p-2">
+        <div className="border-b border-line p-2">
           <input
             type="search"
             value={query}
             onChange={(event) => updateFilterQuery(column, event.target.value)}
             placeholder={`Search ${column.label}`}
             aria-label={`Search ${column.label} filter values`}
-            className="w-full rounded border border-ink/15 px-2.5 py-2 outline-none focus:border-brass"
+            className="w-full rounded-control border border-line bg-surface px-2.5 py-2 outline-none focus:border-accentText"
           />
           <div className="mt-2 flex items-center justify-between gap-2">
             <button
               type="button"
               onClick={() => selectMatchingValues(column, matchingOptions)}
-              className="rounded px-2 py-1 font-medium hover:bg-paper"
+              className="rounded-control px-2 py-1 font-medium hover:bg-surfaceMuted"
             >
               Select shown
             </button>
@@ -244,7 +244,7 @@ export default function TableView({ table }) {
                 resetFilter(column);
                 setPopup(null);
               }}
-              className="rounded px-2 py-1 font-medium text-ink/65 hover:bg-paper"
+              className="rounded-control px-2 py-1 font-medium text-muted hover:bg-surfaceMuted"
             >
               All values
             </button>
@@ -252,21 +252,21 @@ export default function TableView({ table }) {
         </div>
         <div className="max-h-56 overflow-y-auto p-1.5">
           {matchingOptions.length ? matchingOptions.map((value) => (
-            <label key={value} className="flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 hover:bg-paper">
+            <label key={value} className="flex cursor-pointer items-start gap-2 rounded-control px-2 py-1.5 hover:bg-surfaceMuted">
               <input
                 type="checkbox"
                 checked={filter.values === undefined || filter.values.includes(value)}
                 onChange={() => toggleFilterValue(column, value)}
-                className="mt-0.5 accent-ink"
+                className="mt-0.5 accent-accent"
               />
               <span className="break-words">{value || "(blank)"}</span>
             </label>
           )) : (
-            <p className="px-2 py-3 text-ink/50">No matching values</p>
+            <p className="px-2 py-3 text-subtle">No matching values</p>
           )}
         </div>
         {active && (
-          <p className="border-t border-ink/10 px-3 py-2 text-ink/55">
+          <p className="border-t border-line px-3 py-2 text-subtle">
             Filter active
           </p>
         )}
@@ -284,13 +284,13 @@ export default function TableView({ table }) {
     ? filterPopup(table.columns.find((column) => column.key === popup.key))
     : popup?.type === "column"
       ? (
-        <div ref={popupRef} role="menu" className="fixed z-[1000] w-60 rounded border border-ink/15 bg-white p-1.5 text-xs text-ink shadow-lg" style={{ left: popup.left, top: popup.top }}>
+        <div ref={popupRef} role="menu" className="fixed z-[1000] w-60 rounded-control border border-line bg-surface p-1.5 type-caption text-foreground shadow-float" style={{ left: popup.left, top: popup.top }}>
           <button
             type="button"
             role="menuitem"
             disabled={visibleColumns.length <= 1}
             onClick={() => hideColumn(popup.key)}
-            className="w-full rounded px-3 py-2 text-left hover:bg-paper disabled:cursor-not-allowed disabled:opacity-45"
+            className="w-full rounded-control px-3 py-2 text-left hover:bg-surfaceMuted disabled:cursor-not-allowed disabled:opacity-45"
           >
             Hide {table.columns.find((column) => column.key === popup.key)?.label}
           </button>
@@ -298,53 +298,53 @@ export default function TableView({ table }) {
       )
       : popup?.type === "table"
         ? (
-          <div ref={popupRef} role="menu" className="fixed z-[1000] max-h-[calc(100vh-1rem)] w-60 overflow-y-auto rounded border border-ink/15 bg-white p-1.5 text-xs text-ink shadow-lg" style={{ left: popup.left, top: popup.top }}>
+          <div ref={popupRef} role="menu" className="fixed z-[1000] max-h-[calc(100vh-1rem)] w-60 overflow-y-auto rounded-control border border-line bg-surface p-1.5 type-caption text-foreground shadow-float" style={{ left: popup.left, top: popup.top }}>
             {hiddenColumnItems.length ? (
               <>
-                <p className="px-3 py-2 font-semibold text-ink/60">Restore column</p>
+                <p className="px-3 py-2 font-semibold text-muted">Restore column</p>
                 {hiddenColumnItems.map((column) => (
-                  <button key={column.key} type="button" role="menuitem" onClick={() => restoreColumn(column.key)} className="w-full rounded px-3 py-2 text-left hover:bg-paper">
+                  <button key={column.key} type="button" role="menuitem" onClick={() => restoreColumn(column.key)} className="w-full rounded-control px-3 py-2 text-left hover:bg-surfaceMuted">
                     {column.label}
                   </button>
                 ))}
-                <button type="button" role="menuitem" onClick={() => { setHiddenColumns([]); setPopup(null); }} className="mt-1 w-full rounded border-t border-ink/10 px-3 py-2 text-left font-medium hover:bg-paper">
+                <button type="button" role="menuitem" onClick={() => { setHiddenColumns([]); setPopup(null); }} className="mt-1 w-full rounded-control border-t border-line px-3 py-2 text-left font-medium hover:bg-surfaceMuted">
                   Restore all columns
                 </button>
               </>
             ) : (
-              <p className="px-3 py-2 text-ink/55">No hidden columns</p>
+              <p className="px-3 py-2 text-subtle">No hidden columns</p>
             )}
           </div>
         )
         : null;
 
   return (
-    <figure className="mt-3 w-full min-w-0 max-w-full border-t border-ink/10 pt-3">
+    <figure className="mt-3 w-full min-w-0 max-w-full overflow-hidden rounded-card border border-line bg-surface p-3 shadow-xs sm:p-4">
       {table.title && (
-        <figcaption className="mb-2 text-xs font-semibold text-ink/80">
+        <figcaption className="mb-2 type-caption font-semibold text-foreground">
           {table.title}
         </figcaption>
       )}
       <div
-        className="max-h-72 w-full min-w-0 max-w-full overflow-auto overscroll-contain rounded border border-ink/10 bg-white"
+        className="max-h-72 w-full min-w-0 max-w-full overflow-auto overscroll-contain rounded-control border border-line bg-surface"
         style={{ scrollbarGutter: "stable" }}
         onContextMenu={(event) => showContextMenu(event, "table")}
       >
-        <table className="w-max min-w-full table-fixed border-collapse text-left text-xs">
+        <table className="w-max min-w-full table-fixed border-collapse text-left type-caption">
           <colgroup>
             {visibleColumns.map((column) => (
               <col key={column.key} style={{ width: `${estimateColumnWidth(column, table.rows)}px` }} />
             ))}
           </colgroup>
-          <thead className="text-ink/70">
-            <tr className="bg-ink/5">
+          <thead className="text-muted">
+            <tr className="bg-surfaceMuted">
               {visibleColumns.map((column) => (
                 <th
                   key={column.key}
                   scope="col"
                   aria-sort={sort?.key === column.key ? sort.direction : "none"}
                   onContextMenu={(event) => showContextMenu(event, "column", column.key)}
-                  className="sticky top-0 z-10 border-b border-ink/10 bg-paper px-2 py-2 font-semibold"
+                  className="sticky top-0 z-10 border-b border-line bg-surfaceMuted px-2 py-2 font-semibold"
                 >
                   <div className="flex min-w-0 items-center gap-1">
                     <button
@@ -353,7 +353,7 @@ export default function TableView({ table }) {
                       aria-label={`Filter ${column.label}`}
                       aria-expanded={popup?.type === "filter" && popup.key === column.key}
                       onClick={() => toggleFilter(column)}
-                      className={`min-w-0 flex-1 break-words text-left whitespace-normal hover:text-ink ${filters[column.key] ? "text-brass" : ""}`}
+                      className={`min-w-0 flex-1 break-words text-left whitespace-normal hover:text-foreground ${filters[column.key] ? "text-accentText" : ""}`}
                       title="Open filter"
                     >
                       {column.label}
@@ -364,7 +364,7 @@ export default function TableView({ table }) {
                       aria-pressed={sort?.key === column.key}
                       title={sort?.key === column.key ? `Sorted ${sort.direction}. Click to change sort.` : "Not sorted. Click to sort descending."}
                       onClick={() => toggleSort(column.key)}
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-ink/55 hover:bg-ink/5 hover:text-ink"
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-control text-muted hover:bg-surface hover:text-foreground"
                     >
                       {sort?.key === column.key
                         ? sort.direction === "ascending"
@@ -379,9 +379,9 @@ export default function TableView({ table }) {
           </thead>
           <tbody>
             {pageRows.map((row, rowIndex) => (
-              <tr key={rowIndex} className="border-t border-ink/10 odd:bg-white even:bg-ink/[0.025]">
+              <tr key={rowIndex} className="border-t border-line odd:bg-surface even:bg-surfaceMuted/50">
                 {visibleColumns.map((column) => (
-                  <td key={column.key} className="break-words whitespace-normal px-3 py-2 text-ink/80" title={row[column.key] == null ? "-" : String(row[column.key])}>
+                  <td key={column.key} className="break-words whitespace-normal px-3 py-2 text-foreground/80" title={row[column.key] == null ? "-" : String(row[column.key])}>
                     {row[column.key] == null ? "-" : String(row[column.key])}
                   </td>
                 ))}
@@ -389,7 +389,7 @@ export default function TableView({ table }) {
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={visibleColumns.length} className="px-3 py-5 text-center text-ink/50">
+                <td colSpan={visibleColumns.length} className="px-3 py-5 text-center text-subtle">
                   No matching rows
                 </td>
               </tr>
@@ -397,7 +397,7 @@ export default function TableView({ table }) {
           </tbody>
           {rows.length > 1 && totals.some((total) => total !== null) && (
             <tfoot>
-              <tr className="border-t border-ink/10 bg-ink/5 font-semibold text-ink">
+              <tr className="border-t border-line bg-surfaceMuted font-semibold text-foreground">
                 {visibleColumns.map((column, index) => {
                   const labelHere = index === (summaryLabelIndex === -1 ? 0 : summaryLabelIndex);
                   const total = totals[index];
@@ -422,7 +422,7 @@ export default function TableView({ table }) {
         </table>
       </div>
       {pageCount > 1 && (
-        <div className="mt-2 flex items-center justify-between text-xs text-ink/70">
+        <div className="mt-2 flex items-center justify-between type-caption text-muted">
           <span>
             {currentPage * PAGE_SIZE + 1}–{Math.min(rows.length, currentPage * PAGE_SIZE + PAGE_SIZE)} of {rows.length}
           </span>
@@ -431,7 +431,7 @@ export default function TableView({ table }) {
               type="button"
               disabled={currentPage === 0}
               onClick={() => setPage(currentPage - 1)}
-              className="rounded border border-ink/15 px-2 py-1 hover:bg-paper disabled:opacity-40"
+              className="rounded-control border border-line px-2 py-1 hover:bg-surfaceMuted disabled:opacity-40"
             >
               Previous
             </button>
@@ -439,7 +439,7 @@ export default function TableView({ table }) {
               type="button"
               disabled={currentPage >= pageCount - 1}
               onClick={() => setPage(currentPage + 1)}
-              className="rounded border border-ink/15 px-2 py-1 hover:bg-paper disabled:opacity-40"
+              className="rounded-control border border-line px-2 py-1 hover:bg-surfaceMuted disabled:opacity-40"
             >
               Next
             </button>

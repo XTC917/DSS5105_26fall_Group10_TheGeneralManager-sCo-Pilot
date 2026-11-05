@@ -21,6 +21,8 @@ COPY backend ./backend
 COPY alembic ./alembic
 COPY alembic.ini ./
 COPY data ./data
+# Answer-style templates used after tool results (PROJECT_ROOT/evaluation/questions.json).
+COPY evaluation/questions.json ./evaluation/questions.json
 
 RUN mkdir -p logs backend/uploads
 

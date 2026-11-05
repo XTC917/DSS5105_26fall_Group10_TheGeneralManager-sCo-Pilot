@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
-from backend.config import FACTORY_TODAY
+from backend.config import FACTORY_TODAY, PROJECT_ROOT, SEMANTIC_LAYER_PATH
 from backend.agent.graph import llm_is_configured, run_agent, set_checkpointer
 from backend.logging_setup import setup_logging
 from backend.models.schemas import (
@@ -118,11 +118,15 @@ _UNSTORED_LIMITATIONS = frozenset({"needs_clarification", "missing_data", "no_to
 
 @app.get("/api/health")
 def health() -> dict:
+    questions_path = PROJECT_ROOT / "evaluation" / "questions.json"
     return {
         "ok": True,
         "factory_today": "2026-04-01",
         "llm_configured": llm_is_configured(),
         "tools": [t.name for t in MVP_TOOLS],
+        # Deploy integrity only — does not invoke the LLM or change agent behavior.
+        "answer_templates_present": questions_path.is_file(),
+        "semantic_layer_present": SEMANTIC_LAYER_PATH.is_file(),
     }
 
 

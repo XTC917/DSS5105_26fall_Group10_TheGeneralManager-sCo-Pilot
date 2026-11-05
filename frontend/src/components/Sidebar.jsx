@@ -1,14 +1,7 @@
-import { useEffect, useState } from "react";
-import { fetchAudit, fetchBriefing, fetchDiscovery, fetchWatches } from "../services/api.js";
-
-function Card({ title, children }) {
-  return (
-    <section className="rounded-card border border-line bg-surface p-4 shadow-xs">
-      <h2 className="type-overline text-muted">{title}</h2>
-      <div className="mt-2 type-sm text-muted">{children}</div>
-    </section>
-  );
-}
+import { useCallback, useEffect, useState } from "react";
+import MorningBriefingModal from "./MorningBriefingModal.jsx";
+import { loadOverviewData, peekOverviewCache } from "../services/overviewCache.js";
+import { Button, Skeleton } from "./ui/index.js";
 
 function formatFactoryDate(iso) {
   if (!iso) return "";
@@ -16,51 +9,18 @@ function formatFactoryDate(iso) {
   if (parts.length !== 3) return iso;
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const month = months[Number(parts[1]) - 1];
-  return month ? `${month} ${Number(parts[2])}` : iso;
+  return month ? `${Number(parts[2])} ${month} ${parts[0]}` : iso;
 }
 
-function FiredAlert({ item }) {
-  const [open, setOpen] = useState(false);
-  const snapshot = item.snapshot || {};
+function Chevron({ dir = "left" }) {
   return (
-    <li className="rounded-control border border-line bg-surfaceMuted px-2 py-2">
-      <p className="type-caption font-semibold text-foreground">Standing watch triggered</p>
-      <p className="mt-1 type-sm text-foreground">
-        {item.order_id} has not moved by {formatFactoryDate(item.check_date)}
-      </p>
-      <ul className="mt-1 space-y-0.5 type-caption text-muted">
-        <li>Last activity: {item.last_activity_date || "—"}</li>
-        <li>Triggered as of: {item.fired_as_of || item.as_of || "—"}</li>
-        <li>Status then: {item.order_status || "—"}</li>
-        <li>Watch id: {item.watch_id}</li>
-      </ul>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="mt-1 type-caption font-medium text-accentText underline underline-offset-2"
-      >
-        {open ? "Hide evidence" : "Why?"}
-      </button>
-      {open && (
-        <pre className="trace-pre mt-1 max-h-40 overflow-auto type-caption text-muted">
-          {JSON.stringify(
-            {
-              order_id: item.order_id,
-              condition_type: item.condition_type,
-              check_date: item.check_date,
-              as_of: snapshot.as_of || item.as_of,
-              last_activity_date: item.last_activity_date,
-              order_status: item.order_status,
-              current_stage: item.current_stage,
-              fired_at: item.fired_at,
-              formula: snapshot.formula,
-            },
-            null,
-            2,
-          )}
-        </pre>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      {dir === "left" ? (
+        <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      ) : (
+        <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       )}
-    </li>
+    </svg>
   );
 }
 
@@ -68,23 +28,30 @@ function IssueRow({ item }) {
   const [open, setOpen] = useState(false);
   const where = item.order_id || item.stage || "";
   return (
-    <li className="rounded-control border border-line bg-surfaceMuted px-2 py-2">
-      <p className="type-caption font-semibold text-foreground">
-        P{item.priority} · {item.title || item.issue_type}
-      </p>
-      <p className="mt-0.5 type-caption text-muted">
-        {where}
-        {item.evidence?.flags?.length ? ` · ${item.evidence.flags.join(", ")}` : ""}
-      </p>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="mt-1 type-caption font-medium text-accentText underline underline-offset-2"
-      >
-        {open ? "Hide evidence" : "Why?"}
-      </button>
+    <li className="rounded-card border border-line bg-surface px-3 py-3 shadow-xs">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="type-sm font-semibold text-foreground">
+            <span className="mr-1.5 inline-flex rounded-control bg-dangerSoft px-1.5 py-0.5 type-caption font-semibold text-danger">
+              P{item.priority}
+            </span>
+            {item.title || item.issue_type}
+          </p>
+          <p className="mt-1 type-caption text-muted">
+            {where}
+            {item.evidence?.flags?.length ? ` · ${item.evidence.flags.join(", ")}` : ""}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="focus-ring shrink-0 rounded-control px-2 py-1 type-caption font-medium text-accentText hover:bg-accentSoft/50"
+        >
+          {open ? "Hide" : "Why?"}
+        </button>
+      </div>
       {open && (
-        <pre className="trace-pre mt-1 max-h-40 overflow-auto type-caption text-muted">
+        <pre className="trace-pre mt-2 max-h-40 overflow-auto rounded-control bg-surfaceMuted p-2 type-caption text-muted">
           {JSON.stringify(
             {
               issue_id: item.issue_id,
@@ -105,157 +72,254 @@ function IssueRow({ item }) {
   );
 }
 
-export default function Sidebar({ refreshToken = 0, onOpenBriefing }) {
-  const [briefing, setBriefing] = useState(null);
-  const [audit, setAudit] = useState([]);
-  const [watches, setWatches] = useState({ fired: [], active: [], cancelled: [] });
-  const [discovery, setDiscovery] = useState({ issues: [] });
-  const [discoveryState, setDiscoveryState] = useState("loading");
-  const [error, setError] = useState("");
+/**
+ * Overview / Insights — Top Issues + Morning/Weekly briefing carousel.
+ * Alerts / watches / audit live in the left rail, not here.
+ */
+export default function Sidebar({ refreshToken = 0, onFactoryDate }) {
+  const cached = peekOverviewCache();
+  const [briefing, setBriefing] = useState(cached?.briefing || null);
+  const [discovery, setDiscovery] = useState(cached?.discovery || null);
+  const [error, setError] = useState(cached?.error || "");
+  const [status, setStatus] = useState(cached?.briefing ? "cached" : "idle");
+  const [fetchedAt, setFetchedAt] = useState(cached?.fetchedAt || 0);
+  const [panel, setPanel] = useState("today");
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const applyPayload = useCallback(
+    (payload, nextStatus) => {
+      setBriefing(payload.briefing);
+      setDiscovery(payload.discovery);
+      setFetchedAt(payload.fetchedAt || Date.now());
+      setError(payload.error || "");
+      setStatus(nextStatus);
+      if (payload.briefing?.factory_today) {
+        onFactoryDate?.(payload.briefing.factory_today);
+      }
+    },
+    [onFactoryDate],
+  );
+
+  const refresh = useCallback(
+    async ({ force = true, background = false } = {}) => {
+      const hasCache = Boolean(peekOverviewCache()?.briefing);
+      if (!background || !hasCache) {
+        setStatus(hasCache ? "refreshing" : "loading");
+      } else {
+        setStatus("refreshing");
+      }
+      try {
+        const payload = await loadOverviewData({ force });
+        applyPayload(payload, "ready");
+      } catch (err) {
+        const fallback = peekOverviewCache();
+        if (fallback?.briefing) {
+          applyPayload(fallback, "stale");
+          setError(err.message || "Could not refresh overview.");
+        } else {
+          setError(err.message || "Could not load overview.");
+          setStatus("error");
+        }
+      }
+    },
+    [applyPayload],
+  );
 
   useEffect(() => {
     let cancelled = false;
-    setDiscoveryState("loading");
-    setError("");
-    Promise.all([fetchBriefing(), fetchAudit(6), fetchWatches(), fetchDiscovery(5)])
-      .then(([brief, log, board, issues]) => {
+    const existing = peekOverviewCache();
+    if (existing?.briefing) {
+      applyPayload(existing, "cached");
+      refresh({ force: true, background: true }).then(() => {
         if (cancelled) return;
-        setBriefing(brief);
-        setAudit(log.items || []);
-        setWatches({
-          fired: board.fired || [],
-          active: board.active || [],
-          cancelled: board.cancelled || [],
-        });
-        setDiscovery(issues);
-        setDiscoveryState("ready");
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err.message);
-          setDiscoveryState("error");
-        }
       });
+    } else {
+      refresh({ force: false, background: false });
+    }
     return () => {
       cancelled = true;
     };
-  }, [refreshToken]);
+  }, [applyPayload, refresh, refreshToken]);
 
-  const metrics = briefing?.dashboard?.metrics || {};
-  const fired = watches.fired || [];
-  const active = watches.active || [];
-  const cancelledWatches = watches.cancelled || [];
+  const issues = discovery?.issues || [];
+  const hasWeekly = Boolean(briefing?.last_week);
+  const showingWeek = panel === "week" && hasWeekly;
+  const busy = status === "loading" && !briefing;
+
+  function goPrev() {
+    if (showingWeek) setPanel("today");
+  }
+
+  function goNext() {
+    if (!showingWeek && hasWeekly) setPanel("week");
+  }
 
   return (
-    <aside className="space-y-3">
-      <Card title="Morning briefing">
-        <button
-          type="button"
-          onClick={onOpenBriefing}
-          className="mb-3 w-full rounded-control bg-accent px-3 py-2 type-sm font-semibold text-accentContrast transition-colors duration-[var(--dur-fast)] hover:brightness-110"
-        >
-          Open morning briefing ↗
-        </button>
-        {error && <p className="text-danger">API offline — ask in chat once the backend is running.</p>}
-        {!error && !briefing && <p>Loading structured facts…</p>}
-        {briefing && (
-          <ul className="space-y-1">
-            <li>Factory date {briefing.factory_today}</li>
-            <li>
-              {metrics.attention ?? 0} orders need attention (overdue {metrics.overdue ?? 0},
-              stalled {metrics.stalled ?? 0})
-            </li>
-            <li>IN_PROGRESS: {briefing.in_progress_order_count}</li>
-            {briefing.suspended_workshops?.length > 0 && (
-              <li>
-                Suspended: {briefing.suspended_workshops.map((w) => w.name).join(", ")}
-              </li>
-            )}
-          </ul>
+    <div className="mx-auto w-full max-w-6xl space-y-5 md:space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="type-overline text-accentText">Insights</p>
+          <h2 className="type-h2 text-foreground">Overview</h2>
+          <p className="type-sm text-muted">Top issues and the factory morning / weekly briefing.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {status === "refreshing" && (
+            <span className="type-caption text-subtle" role="status">
+              Refreshing…
+            </span>
+          )}
+          {status === "stale" && (
+            <span className="rounded-control border border-warning/30 bg-warningSoft px-2 py-1 type-caption text-warning">
+              Showing cached data
+            </span>
+          )}
+          {status === "cached" && fetchedAt > 0 && (
+            <span className="type-caption text-subtle">Cached · updating</span>
+          )}
+          <Button size="sm" variant="secondary" disabled={status === "loading" || status === "refreshing"} onClick={() => refresh({ force: true })}>
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      {error && status === "error" && (
+        <div className="rounded-card border border-danger/30 bg-dangerSoft px-4 py-3" role="alert">
+          <p className="type-sm text-danger">{error}</p>
+          <button type="button" onClick={() => refresh({ force: true })} className="mt-2 type-caption font-medium text-danger underline">
+            Try again
+          </button>
+        </div>
+      )}
+
+      {error && status === "stale" && (
+        <p className="rounded-control border border-warning/30 bg-warningSoft px-3 py-2 type-caption text-warning" role="status">
+          Could not refresh — showing last loaded data. {error}
+        </p>
+      )}
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="type-h3 text-foreground">Top issues</h3>
+          <span className="type-caption text-subtle">{issues.length} open</span>
+        </div>
+        {busy && (
+          <div className="space-y-2">
+            <Skeleton className="h-16 w-full rounded-card" />
+            <Skeleton className="h-16 w-full rounded-card" />
+          </div>
         )}
-      </Card>
-      <Card title="Top issues">
-        {discoveryState === "loading" && <p>Checking for issues…</p>}
-        {discoveryState === "ready" && (discovery.issues || []).length === 0 && (
-          <p>No issues found.</p>
+        {!busy && issues.length === 0 && (
+          <p className="rounded-card border border-line bg-surface px-4 py-5 type-sm text-muted shadow-xs">
+            No discovery issues on the current tables. Ask in chat what to be concerned about.
+          </p>
         )}
-        {discoveryState === "error" && <p>Could not check for issues.</p>}
-        {discoveryState === "ready" && (discovery.issues || []).length > 0 && (
-          <ul className="space-y-2">
-            {discovery.issues.map((item) => (
+        {!busy && issues.length > 0 && (
+          <ul className="grid gap-2 md:grid-cols-2">
+            {issues.map((item) => (
               <IssueRow key={item.issue_id} item={item} />
             ))}
           </ul>
         )}
-      </Card>
-      <Card title="Triggered alerts">
-        {fired.length === 0 && (
-          <p>
-            No standing watches have fired. Local alerts only. Ask in chat to cancel
-            one after it appears.
-          </p>
+      </section>
+
+      <section className="overflow-hidden rounded-card border border-line bg-surface shadow-xs">
+        <div className="flex items-center gap-2 border-b border-line px-2 py-2 sm:px-3">
+          <button
+            type="button"
+            aria-label="Show morning briefing"
+            disabled={!showingWeek}
+            onClick={goPrev}
+            className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-control text-foreground transition-colors hover:bg-surfaceMuted disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <Chevron dir="left" />
+          </button>
+          <div className="min-w-0 flex-1 text-center">
+            <p className="type-overline text-accentText">Factory briefing</p>
+            <h3 className="truncate type-h3 text-foreground">
+              {showingWeek ? "Weekly briefing" : "Morning briefing"}
+            </h3>
+            <p className="truncate type-caption text-subtle">
+              {showingWeek && briefing?.last_week
+                ? `${briefing.last_week.start} – ${briefing.last_week.end}`
+                : briefing?.factory_today
+                  ? `Factory date ${formatFactoryDate(briefing.factory_today)}`
+                  : "Loading…"}
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Show weekly briefing"
+            disabled={showingWeek || !hasWeekly}
+            onClick={goNext}
+            className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-control text-foreground transition-colors hover:bg-surfaceMuted disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <Chevron dir="right" />
+          </button>
+        </div>
+
+        <div className="flex items-center justify-center gap-1.5 border-b border-line/70 py-2">
+          <button
+            type="button"
+            aria-label="Morning"
+            aria-current={!showingWeek ? "true" : undefined}
+            onClick={() => setPanel("today")}
+            className={`h-1.5 w-6 rounded-full transition-colors ${!showingWeek ? "bg-accent" : "bg-line hover:bg-muted"}`}
+          />
+          <button
+            type="button"
+            aria-label="Weekly"
+            disabled={!hasWeekly}
+            aria-current={showingWeek ? "true" : undefined}
+            onClick={() => hasWeekly && setPanel("week")}
+            className={`h-1.5 w-6 rounded-full transition-colors disabled:opacity-30 ${showingWeek ? "bg-accent" : "bg-line hover:bg-muted"}`}
+          />
+        </div>
+
+        <div className="min-h-[20rem] p-3 sm:p-4 md:p-5">
+          {busy && (
+            <div className="space-y-3 py-6">
+              <Skeleton className="mx-auto h-4 w-48" />
+              <Skeleton className="h-40 w-full rounded-card" />
+              <Skeleton className="h-24 w-full rounded-card" />
+            </div>
+          )}
+          {!busy && briefing && (
+            <MorningBriefingModal
+              key={`${showingWeek ? "week" : "today"}-${fetchedAt}`}
+              embedded
+              initialPanel={showingWeek ? "week" : "today"}
+              data={briefing}
+              onClose={() => setModalOpen(false)}
+              onAlertCreated={() => refresh({ force: true })}
+            />
+          )}
+          {!busy && !briefing && !error && (
+            <p className="py-10 text-center type-sm text-muted">Briefing is unavailable.</p>
+          )}
+        </div>
+
+        {!busy && briefing && (
+          <div className="border-t border-line px-4 py-3">
+            <button
+              type="button"
+              onClick={() => setModalOpen(true)}
+              className="focus-ring type-caption font-medium text-accentText underline underline-offset-2"
+            >
+              Open fullscreen briefing
+            </button>
+          </div>
         )}
-        {fired.length > 0 && (
-          <ul className="space-y-2">
-            {fired.map((item) => (
-              <FiredAlert key={item.watch_id} item={item} />
-            ))}
-          </ul>
-        )}
-      </Card>
-      <Card title="Active watches">
-        {active.length === 0 && (
-          <p>
-            No active watches. Ask in chat to watch an in-progress order. This is not a
-            calendar reminder.
-          </p>
-        )}
-        {active.length > 0 && (
-          <ul className="space-y-1 type-caption">
-            {active.map((item) => (
-              <li key={item.watch_id}>
-                {item.order_id} · inactive by {formatFactoryDate(item.check_date)} ·{" "}
-                {item.status}
-                <span className="block text-subtle">
-                  Ask in chat to cancel watch {item.watch_id}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-      <Card title="Watch history">
-        {cancelledWatches.length === 0 && (
-          <p>Cancelled watches stay here for audit. They are not deleted.</p>
-        )}
-        {cancelledWatches.length > 0 && (
-          <ul className="space-y-1 type-caption">
-            {cancelledWatches.map((item) => (
-              <li key={item.watch_id}>
-                {item.order_id} · inactive by {formatFactoryDate(item.check_date)} ·
-                cancelled
-                {item.watch_id ? ` · id ${item.watch_id}` : ""}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-      <Card title="Recent actions">
-        {audit.length === 0 && (
-          <p>No local audit rows yet. Drafts, notes, reminders, and watches will appear here.</p>
-        )}
-        {audit.length > 0 && (
-          <ul className="space-y-1 type-caption">
-            {audit.slice(0, 5).map((row) => (
-              <li key={row.id}>
-                {row.tool || row.event_type}
-                {row.target ? ` · ${row.target}` : ""} · {row.execution_status || row.confirmation_status}
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="mt-2 type-caption">Email is never actually sent (no SMTP).</p>
-      </Card>
-    </aside>
+      </section>
+
+      {modalOpen && (
+        <MorningBriefingModal
+          key={`modal-${panel}`}
+          initialPanel={showingWeek ? "week" : "today"}
+          onClose={() => setModalOpen(false)}
+          refreshToken={refreshToken}
+          onAlertCreated={() => refresh({ force: true })}
+        />
+      )}
+    </div>
   );
 }

@@ -18,9 +18,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { ChartTooltip, useChartTheme } from "./chartTheme.jsx";
 
 const PAGE_SIZE = 50;
-const COLORS = ["#167d78", "#d49a32", "#c45c42", "#5278a5", "#718a45"];
 const TYPES = {
   bar: "Bar chart",
   pie: "Pie chart",
@@ -34,7 +34,7 @@ function chartLabel(chart) {
   return chart.type === "bar" && chart.stacked ? "Stacked bar chart" : TYPES[chart.type];
 }
 
-function CartesianChart({ chart }) {
+function CartesianChart({ chart, theme }) {
   const { type, data, category_key: categoryKey, value_keys: valueKeys } = chart;
   const isCombo = type === "combo";
   const Chart = isCombo ? ComposedChart : type === "bar" ? BarChart : type === "line" ? LineChart : AreaChart;
@@ -42,74 +42,78 @@ function CartesianChart({ chart }) {
   const percentFormatter = chart.percentage
     ? (value) => [`${(Number(value) * 100).toFixed(0)}%`, "Share"]
     : undefined;
+  const tick = { fill: theme.axis, fontSize: 11 };
 
   return (
     <div className="h-[260px] w-full min-w-0">
-    <ResponsiveContainer width="100%" height="100%">
-      <Chart
-        data={data}
-        stackOffset={chart.percentage ? "expand" : undefined}
-        margin={{ top: 12, right: 12, left: -16, bottom: 4 }}
-      >
-        <CartesianGrid stroke="#d9ddd8" strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey={categoryKey} tick={{ fill: "#5d665f", fontSize: 11 }} />
-        <YAxis
-          allowDecimals={Boolean(chart.percentage)}
-          domain={chart.percentage ? [0, 1] : undefined}
-          tickFormatter={chart.percentage ? (value) => `${Math.round(value * 100)}%` : undefined}
-          tick={{ fill: "#5d665f", fontSize: 11 }}
-        />
-        <Tooltip formatter={percentFormatter} />
-        {valueKeys.length > 1 && <Legend />}
-        {valueKeys.map((key, index) => (
-          (() => {
+      <ResponsiveContainer width="100%" height="100%">
+        <Chart
+          data={data}
+          stackOffset={chart.percentage ? "expand" : undefined}
+          margin={{ top: 12, right: 12, left: -8, bottom: 4 }}
+        >
+          <CartesianGrid stroke={theme.grid} strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey={categoryKey} tick={tick} axisLine={{ stroke: theme.grid }} tickLine={false} />
+          <YAxis
+            allowDecimals={Boolean(chart.percentage)}
+            domain={chart.percentage ? [0, 1] : undefined}
+            tickFormatter={chart.percentage ? (value) => `${Math.round(value * 100)}%` : undefined}
+            tick={tick}
+            axisLine={false}
+            tickLine={false}
+          />
+          <Tooltip content={<ChartTooltip formatter={percentFormatter} />} />
+          {valueKeys.length > 1 && (
+            <Legend wrapperStyle={{ fontSize: 11, color: theme.legend }} />
+          )}
+          {valueKeys.map((key, index) => {
             const seriesType = isCombo ? chart.series_types?.[key] : type;
             const SeriesComponent = seriesType === "bar" ? Bar : seriesType === "line" ? Line : Series;
+            const color = theme.colors[index % theme.colors.length];
             return (
               <SeriesComponent
                 key={key}
                 dataKey={key}
                 name={key}
-                {...(SeriesComponent === Bar ? {} : { type: "monotone" })}
+                {...(SeriesComponent === Bar ? { radius: [4, 4, 0, 0] } : { type: "monotone" })}
                 stackId={type === "bar" && chart.stacked ? "stacked" : undefined}
-                fill={COLORS[index % COLORS.length]}
-                stroke={COLORS[index % COLORS.length]}
+                fill={color}
+                stroke={color}
                 strokeWidth={2}
                 isAnimationActive={false}
               />
             );
-          })()
-        ))}
-      </Chart>
-    </ResponsiveContainer>
+          })}
+        </Chart>
+      </ResponsiveContainer>
     </div>
   );
 }
 
-function PieChartView({ chart }) {
+function PieChartView({ chart, theme }) {
   const { data, category_key: categoryKey, value_keys: valueKeys } = chart;
 
   return (
     <div className="h-[260px] w-full min-w-0">
-    <ResponsiveContainer width="100%" height="100%">
-      <PieChart>
-        <Pie
-          data={data}
-          dataKey={valueKeys[0]}
-          nameKey={categoryKey}
-          cx="50%"
-          cy="48%"
-          outerRadius={88}
-          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-          isAnimationActive={false}
-        >
-          {data.map((row, index) => (
-            <Cell key={`${row[categoryKey]}-${index}`} fill={COLORS[index % COLORS.length]} />
-          ))}
-        </Pie>
-        <Tooltip />
-      </PieChart>
-    </ResponsiveContainer>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey={valueKeys[0]}
+            nameKey={categoryKey}
+            cx="50%"
+            cy="48%"
+            outerRadius={88}
+            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+            isAnimationActive={false}
+          >
+            {data.map((row, index) => (
+              <Cell key={`${row[categoryKey]}-${index}`} fill={theme.colors[index % theme.colors.length]} />
+            ))}
+          </Pie>
+          <Tooltip content={<ChartTooltip />} />
+        </PieChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -234,6 +238,7 @@ function StageDailyChart({ chart }) {
 
 export default function ChartView({ chart }) {
   const [page, setPage] = useState(0);
+  const theme = useChartTheme();
   useEffect(() => {
     setPage(0);
   }, [chart]);
@@ -252,13 +257,20 @@ export default function ChartView({ chart }) {
       };
 
   return (
-    <figure className="mt-3 max-w-full overflow-hidden border-t border-ink/10 pt-3" aria-label={chartLabel(chart)}>
-      <figcaption className="mb-2 text-xs font-semibold text-ink/80">
+    <figure
+      className="mt-3 w-full min-w-0 max-w-full overflow-hidden rounded-card border border-line bg-surface p-3 shadow-xs sm:p-4"
+      aria-label={chartLabel(chart)}
+    >
+      <figcaption className="mb-2 type-caption font-semibold text-foreground">
         {chart.title || TYPES[chart.type]}
       </figcaption>
-      {chart.type === "pie" ? <PieChartView chart={pageChart} /> : <CartesianChart chart={pageChart} />}
+      {chart.type === "pie" ? (
+        <PieChartView chart={pageChart} theme={theme} />
+      ) : (
+        <CartesianChart chart={pageChart} theme={theme} />
+      )}
       {pageCount > 1 && (
-        <div className="mt-2 flex items-center justify-between text-xs text-ink/70">
+        <div className="mt-2 flex items-center justify-between type-caption text-muted">
           <span>
             {currentPage * PAGE_SIZE + 1}–{Math.min(chart.data.length, currentPage * PAGE_SIZE + PAGE_SIZE)} of {chart.data.length}
           </span>
@@ -267,7 +279,7 @@ export default function ChartView({ chart }) {
               type="button"
               disabled={currentPage === 0}
               onClick={() => setPage(currentPage - 1)}
-              className="rounded border border-ink/15 px-2 py-1 hover:bg-paper disabled:opacity-40"
+              className="rounded-control border border-line px-2 py-1 hover:bg-surfaceMuted disabled:opacity-40"
             >
               Previous
             </button>
@@ -275,7 +287,7 @@ export default function ChartView({ chart }) {
               type="button"
               disabled={currentPage >= pageCount - 1}
               onClick={() => setPage(currentPage + 1)}
-              className="rounded border border-ink/15 px-2 py-1 hover:bg-paper disabled:opacity-40"
+              className="rounded-control border border-line px-2 py-1 hover:bg-surfaceMuted disabled:opacity-40"
             >
               Next
             </button>
