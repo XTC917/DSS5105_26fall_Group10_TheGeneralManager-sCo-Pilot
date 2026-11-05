@@ -60,8 +60,11 @@ Manager (React UI)
 
 ## Dataset clock
 
-Business logic uses **`FACTORY_TODAY = 2026-04-01`**, not the computer's date.
-The factory is closed on Sundays.
+The demo starts at **2026-04-01**. Signed-in users can advance their saved factory
+date one calendar day at a time from the sidebar. The watch board, briefing,
+discovery, and chat calculations use that date. Advancing changes the date
+used to evaluate existing records. The factory is still closed on Sundays
+for working-day calculations.
 
 ## Why SQLite, not DuckDB
 
@@ -96,9 +99,8 @@ standing watches persist in `copilot_state.db`, which is separate from
 **Reminders vs standing watches:** `create_reminder` stores a calendar note
 (`remind_on` + free-text message). Python does **not** evaluate that message.
 `create_watch` stores a typed condition (`ORDER_INACTIVE_BY_DATE`). Python
-evaluates it when `GET /api/watches?as_of=YYYY-MM-DD` runs. There is no
-scheduler and no `date.today()` — callers pass a factory `as_of` date
-(default `FACTORY_TODAY`). `cancel_watch` sets `status=CANCELLED` after
+evaluates it on the signed-in account's saved factory date when the sidebar
+refreshes through `GET /api/watches`. `cancel_watch` sets `status=CANCELLED` after
 confirmation — the row is **not deleted**, so `list_watches` can still answer
 "was there a watch?". ACTIVE stops evaluating; FIRED leaves the live alerts
 list and appears under cancelled history. A

@@ -3,7 +3,7 @@
 MVP model — deliberately simple and fully documented in docs/tool_spec.md.
 
 What this DOES:
-  * Count remaining factory working days (Mon–Sat) from FACTORY_TODAY through due_date.
+  * Count remaining factory working days (Mon–Sat) from the factory date through due_date.
   * Estimate factory bottleneck throughput as the minimum of the per-stage
     medians of pieces_completed over the last N working days in production_log.
   * Treat the sum of IN_PROGRESS order pieces as competing demand
@@ -22,7 +22,7 @@ from datetime import date
 from typing import Any
 
 from backend.config import (
-    FACTORY_TODAY,
+    factory_date,
     PRODUCTION_STAGES_IN_ORDER,
     THROUGHPUT_LOOKBACK_WORKING_DAYS,
 )
@@ -143,10 +143,11 @@ def resolve_category(db: FactoryDB, product: str | None, category: str | None) -
     }
 
 
-def stage_throughput_medians(db: FactoryDB, today: date = FACTORY_TODAY) -> dict[str, Any]:
+def stage_throughput_medians(db: FactoryDB, today: date | None = None) -> dict[str, Any]:
     """Median pieces_completed per stage on the last N working days (Sundays excluded)."""
     log = db.production_log()
     by_stage: dict[str, list[int]] = {s: [] for s in PRODUCTION_STAGES_IN_ORDER}
+    today = today or factory_date()
     working_dates = sorted(
         {
             parse_iso_date(row["date"])
@@ -195,11 +196,12 @@ def check_feasibility(
     due_date: str,
     product: str | None = None,
     category: str | None = None,
-    today: date = FACTORY_TODAY,
+    today: date | None = None,
 ) -> dict[str, Any]:
     if pieces <= 0:
         return _error("INVALID_INPUT", "pieces must be a positive integer.")
 
+    today = today or factory_date()
     due = parse_iso_date(due_date)
     if due is None:
         return _error("INVALID_INPUT", "due_date must be YYYY-MM-DD.")
@@ -239,7 +241,7 @@ def check_feasibility(
 
     if due < today:
         verdict = "NOT_FEASIBLE"
-        summary = "The due date is already before factory today (2026-04-01)."
+        summary = f"The due date is already before factory today ({today.isoformat()})."
     elif working_days == 0:
         verdict = "NOT_FEASIBLE"
         summary = "No remaining working days before the due date."

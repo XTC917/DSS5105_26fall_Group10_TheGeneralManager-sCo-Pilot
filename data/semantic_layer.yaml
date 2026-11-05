@@ -309,7 +309,7 @@ term_definition:
   # Special vocabulary only. Copy this shape when adding jargon.
   terms:
     factory_today:
-      description: Business clock is 2026-04-01. Do not use the computer date.
+      description: Business date is the active factory date from the request.
     selling_price:
       in_dataset: false
       description: Not a stored field. What we pay an outside shop per garment is not a selling price.
@@ -318,7 +318,7 @@ term_definition:
       description: >
         Same manager wording as already overdue, past the due date, how many
         days late. stored=true. table=orders, column=due_date.
-        Answer from flag=OVERDUE (due_date < 2026-04-01). This is not the
+        Answer from flag=OVERDUE (due_date before factory_today). This is not the
         "likely to miss" list.
     prioritize:
       tool: get_today_priority
@@ -366,8 +366,7 @@ term_definition:
         tell me if an order is still inactive by a weekday.
         ** It IS an action ** (standing watch). kind=action, stored=true,
         table=null, column=null. Use create_watch. Pass the weekday as spoken;
-        Python maps Thursday from factory today 2026-04-01 (Wednesday) to
-        2026-04-02. Do not treat as missing data. Do not answer whether the
+        Python resolves weekday names from the active factory date. Do not treat as missing data. Do not answer whether the
         order has already stalled; last_activity_date is checked later.
     same production stages:
       description: >

@@ -8,7 +8,7 @@ rejected by `backend/agent/routing.py` **before** any tool runs. Do not call
 `get_order_status` / `get_orders_at_risk` / `check_feasibility` just to discover
 that a field is missing.
 
-Factory today = **2026-04-01**. Working day = Monday–Saturday.
+The initial factory date is **2026-04-01**. Working day = Monday–Saturday.
 
 ---
 
@@ -27,7 +27,7 @@ Factory today = **2026-04-01**. Working day = Monday–Saturday.
 
 | Name | Formula |
 |---|---|
-| `calendar_days_until_due` | Calendar days from today through `due_date`, inclusive (due today = 1). If overdue, `due_date − 2026-04-01` (negative) |
+| `calendar_days_until_due` | Calendar days from today through `due_date`, inclusive (due today = 1). If overdue, `due_date − factory date` (negative) |
 | `working_days_until_due_inclusive` | Count of Mon–Sat from today through `due_date`; `0` if overdue |
 | `working_days_since_last_activity` | Count of Mon–Sat after `last_activity_date` through today |
 | `remaining_stages` | From `current_stage` through PACKING; empty if COMPLETE |
@@ -46,7 +46,7 @@ With no `flag`, `data.orders` is the miss-due list. It is the same rows as `like
 |---|---|
 | Miss-due / `TIGHT_DEADLINE` | not overdue, due today through +3 calendar days, and `days_left` > working days until due |
 | `days_left` | max(sum over remaining stages of `pieces / 30-day median pieces_completed`, remaining stage count). Each remaining stage counts as at least one day |
-| `OVERDUE` | `flag=OVERDUE`: `due_date < 2026-04-01`. Not included in the default list |
+| `OVERDUE` | `flag=OVERDUE`: `due_date < factory date`. Not included in the default list |
 | `STALLED` | `flag=STALLED`: working days since `last_activity_date` ≥ **3**. Not included in the default list |
 
 `likely_to_miss_due_next_7_days` is a separate list: tomorrow through 7 calendar days ahead (not due today) and at least one working day short on the same formula.
@@ -84,7 +84,7 @@ Do not ask the manager to type TOPS/ACCESSORIES for ordinary dataset garments.
 
 **Steps:**
 
-1. `working_days` = Mon–Sat from 2026-04-01 through `due_date` inclusive (`0` if past).
+1. `working_days` = Mon–Sat from the active factory date through `due_date` inclusive (`0` if past).
 2. For each stage, take the **median** `pieces_completed` on the last **30** working days
    in `production_log.csv` (Sundays excluded; dates before factory today).
 3. `bottleneck_median` = minimum of those four medians.
@@ -288,8 +288,8 @@ AND order.last_activity_date < check_date
 `message` (display only), `confirmed` (default false), `condition_type`
 (must be `ORDER_INACTIVE_BY_DATE`).
 
-Weekdays are resolved from **factory today 2026-04-01** (Wednesday), not
-`date.today()`. **Thursday → 2026-04-02**.
+Weekdays are resolved from the account's active factory date. With the
+initial date of Wednesday 2026-04-01, Thursday resolves to 2026-04-02.
 
 | `confirmed` | Effect |
 |---|---|
@@ -298,13 +298,15 @@ Weekdays are resolved from **factory today 2026-04-01** (Wednesday), not
 
 COMPLETE orders (e.g. ORD-058) are rejected (`INVALID_INPUT`).
 
-**Evaluation:** `GET /api/watches?as_of=YYYY-MM-DD` calls
-`evaluate_active_watches(as_of)`. Default `as_of` is `FACTORY_TODAY`. There is
-**no scheduler**. Repeat calls are idempotent: each watch produces at most one
+**Evaluation:** The sidebar calls `GET /api/watches` after advancing the
+account's factory date and on refresh. The endpoint evaluates the signed-in
+user's watches at their saved date. If provided, `as_of` must match that
+date. Each watch produces at most one
 `watch_events` row with `event_type=fired`.
 
 When the condition is true: status becomes `FIRED`, a `watch_events` snapshot is
-written, `audit_log` gets `watch_fired`, then `WatchNotifier.notify` runs.
+written, and `audit_log` gets `watch_fired` in the same transaction.
+After commit, `WatchNotifier.notify` runs.
 V1 `LocalWatchNotifier` only acknowledges the local row. Notify failures must
 not un-fire the watch. SMTP is not implemented.
 

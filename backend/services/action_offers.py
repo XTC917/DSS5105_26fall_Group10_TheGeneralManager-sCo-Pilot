@@ -12,7 +12,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from backend.config import FACTORY_TODAY
+from backend.config import factory_date
 from backend.services.confirm_actions import ALLOWED_ACTIONS
 from backend.services.watches import CONDITION_INACTIVE
 
@@ -41,7 +41,7 @@ def _orders_in_traces(traces: list[dict[str, Any]] | None) -> dict[str, dict[str
 
 def _check_date(order: dict[str, Any]) -> str:
     due = str(order.get("due_date") or "").strip()
-    today = FACTORY_TODAY.isoformat()
+    today = factory_date().isoformat()
     if due >= today:
         return due
     return today

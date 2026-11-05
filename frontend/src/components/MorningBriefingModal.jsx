@@ -339,7 +339,12 @@ export default function MorningBriefingModal({
         if (!result.dashboard) throw new Error("Briefing data is unavailable. Restart the updated backend.");
         if (!cancelled) {
           setData(result);
-          setSelected(null);
+          setSelected((previous) => {
+            if (!previous) return null;
+            const rows = previous.completed ? result.dashboard.completed_orders : result.dashboard.orders;
+            const updated = rows.find((row) => row.order_id === previous.order_id);
+            return updated ? { ...updated, completed: previous.completed } : null;
+          });
         }
       })
       .catch((err) => {

@@ -1,6 +1,7 @@
 """Dashboard boundary coverage without a PostgreSQL connection."""
 from datetime import date
 
+from backend.config import using_factory_date
 from backend.services import briefing
 
 
@@ -39,14 +40,14 @@ def test_dashboard_deadline_boundaries_and_overlapping_flags(monkeypatch):
 
 
 def test_completed_window_skips_sunday_and_derives_lateness(monkeypatch):
-    monkeypatch.setattr(briefing, "FACTORY_TODAY", date(2026, 4, 6))
     monkeypatch.setattr(briefing, "stage_medians", lambda db: {})
     completed = [
         order("late", "2026-04-03", completed_date="2026-04-04"),
         order("on-time", "2026-04-05", completed_date=date(2026, 4, 4)),
         order("excluded", "2026-04-05", completed_date="2026-04-05"),
     ]
-    board = briefing.build_dashboard(Records([], completed))
+    with using_factory_date(date(2026, 4, 6)):
+        board = briefing.build_dashboard(Records([], completed))
     assert board["completion_date"] == "2026-04-04"
     assert {row["order_id"]: row["days_late"] for row in board["completed_orders"]} == {"late": 1, "on-time": -1}
     assert board["metrics"]["active"] == 0

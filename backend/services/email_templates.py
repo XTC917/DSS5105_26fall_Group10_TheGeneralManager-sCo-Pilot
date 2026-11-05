@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from backend.config import FACTORY_TODAY
+from backend.config import factory_date
 
 EmailLanguage = Literal["auto", "zh", "en"]
 EmailAudience = Literal["unspecified", "internal", "customer"]
@@ -38,7 +38,7 @@ def compose_email(order: dict, flags: list[str], *, language: str,
         risks = {"OVERDUE": "已逾期", "STALLED": "生产停滞", "TIGHT_DEADLINE": "交期紧张"}
         subject = f"订单 {oid} 的进度通知" if audience == "customer" or completed else f"请跟进订单 {oid} 的生产进度"
         greeting = f"{value('customer')}，您好：" if audience == "customer" else "您好："
-        facts = (f"截至工厂业务日期 {FACTORY_TODAY.isoformat()}，订单 {oid}（客户：{value('customer')}，"
+        facts = (f"截至工厂业务日期 {factory_date().isoformat()}，订单 {oid}（客户：{value('customer')}，"
                  f"产品：{value('product')}，数量：{value('pieces')} 件）的状态为"
                  f"{statuses.get(order.get('status'), value('status'))}，当前阶段为"
                  f"{stages.get(order.get('current_stage'), value('current_stage'))}。"
@@ -57,7 +57,7 @@ def compose_email(order: dict, flags: list[str], *, language: str,
     else:
         subject = f"Progress update for order {oid}" if audience == "customer" or completed else f"Please follow up on order {oid}"
         greeting = f"Dear {value('customer')}," if audience == "customer" else "Hello,"
-        facts = (f"As of the factory business date {FACTORY_TODAY.isoformat()}, order {oid} for {value('customer')} "
+        facts = (f"As of the factory business date {factory_date().isoformat()}, order {oid} for {value('customer')} "
                  f"covers {value('pieces')} pieces of {value('product')}. Its recorded status is "
                  f"{value('status')} and current stage is {value('current_stage')}. "
                  f"The scheduled due date is {value('due_date')}; the last recorded activity date "

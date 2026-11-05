@@ -6,9 +6,12 @@ from datetime import date
 
 from fastapi.testclient import TestClient
 
+from backend.config import factory_date
 from backend.main import app
 from backend.services.audit import list_audit
 from backend.services.auth import CurrentUser
+from backend.pg_config import COPILOT_SCHEMA
+from backend.services.pg_database import connect
 from backend.services.request_context import set_current_user
 from backend.services.watches import (
     CONDITION_INACTIVE,
@@ -92,6 +95,7 @@ def test_fires_on_check_date(db, clean_state, test_user):
     audit = [row for row in list_audit(limit=20) if row["event_type"] == "watch_fired"]
     assert len(audit) == 1
     assert audit[0]["target"] == "ORD-005"
+    assert audit[0]["factory_today"] == date(2026, 4, 2)
 
 
 def test_repeat_evaluate_does_not_refire(db, clean_state, test_user):
@@ -127,32 +131,82 @@ def test_complete_order_cannot_create_inactive_watch(db, clean_state, test_user)
     assert list_watches() == []
 
 
-def test_get_watches_api_returns_fired_and_active(db, clean_state, test_user, monkeypatch, employee_auth_headers):
+def test_advance_date_syncs_watch_board_and_briefing(
+    clean_state, test_user, employee_auth_headers, admin_auth_headers, monkeypatch,
+):
     _create("ORD-005", "2026-04-02", confirmed=True)
-    monkeypatch.setattr("backend.main.init_db", lambda *args, **kwargs: db)
-    with TestClient(app) as client:
-        waiting = client.get("/api/watches?as_of=2026-04-01", headers=employee_auth_headers)
-        assert waiting.status_code == 200
-        body = waiting.json()
-        assert body["as_of"] == "2026-04-01"
-        assert "fired" in body and "active" in body
-        assert body["fired"] == []
-        assert len(body["active"]) == 1
-        assert body["active"][0]["order_id"] == "ORD-005"
-        assert body["active"][0]["status"] == "ACTIVE"
+    _create("ORD-107", "2026-04-03", confirmed=True)
 
-        fired = client.get("/api/watches?as_of=2026-04-02", headers=employee_auth_headers)
-        assert fired.status_code == 200
-        board = fired.json()
-        assert board["as_of"] == "2026-04-02"
-        assert len(board["fired"]) == 1
-        assert board["active"] == []
-        item = board["fired"][0]
-        assert item["watch_id"]
-        assert item["order_id"] == "ORD-005"
-        assert item["condition_type"] == CONDITION_INACTIVE
-        assert item["last_activity_date"] == "2026-03-24"
-        assert item["as_of"] == "2026-04-02"
+    def run_agent_on_factory_date(message, conversation_id, **kwargs):
+        from backend.agent.prompts import build_system_prompt
+        from backend.tools.retrieval import get_order_status
+
+        today = factory_date().isoformat()
+        assert f"Factory clock: today is {today}." in build_system_prompt()
+        order = parse_tool(get_order_status.invoke({"order_id": "ORD-029"}))["data"]
+        return {
+            "answer": f"{today}: {order['computed']['calendar_days_until_due']}",
+            "conversation_id": conversation_id,
+            "tools_used": ["get_order_status"],
+        }
+
+    monkeypatch.setattr("backend.main.llm_is_configured", lambda: True)
+    monkeypatch.setattr("backend.main.run_agent", run_agent_on_factory_date)
+    base = "2026-04-01"
+    next_day = "2026-04-02"
+    advance_path = "/api/factory-date/advance"
+    try:
+        with TestClient(app) as client:
+            def get(path, headers=employee_auth_headers):
+                response = client.get(path, headers=headers)
+                assert response.status_code == 200, response.text
+                return response.json()
+
+            waiting = get("/api/watches?as_of=2026-04-01")
+            assert waiting["as_of"] == base
+            assert waiting["fired"] == []
+            assert {row["order_id"] for row in waiting["active"]} == {"ORD-005", "ORD-107"}
+            assert client.get("/api/watches?as_of=2026-04-02", headers=employee_auth_headers).status_code == 409
+            before = get("/api/briefing")["dashboard"]["orders"]
+            assert next(row for row in before if row["order_id"] == "ORD-029")["bucket"] == "TODAY"
+            assert client.post(advance_path, json={"expected_date": base}).status_code == 401
+            advanced = client.post(advance_path, headers=employee_auth_headers, json={"expected_date": base})
+            assert advanced.status_code == 200
+            assert advanced.json()["factory_today"] == next_day
+            assert client.post(advance_path, headers=employee_auth_headers, json={"expected_date": base}).status_code == 409
+
+            board = get("/api/watches")
+            assert board["as_of"] == next_day
+            assert [row["order_id"] for row in board["active"]] == ["ORD-107"]
+            alert, = board["fired"]
+            assert alert["order_id"] == "ORD-005"
+            assert alert["fired_as_of"] == next_day
+            assert alert["last_activity_date"] == "2026-03-24"
+            assert get("/api/watches") == board
+            audit = [row for row in get("/api/audit")["items"] if row["event_type"] == "watch_fired"]
+            assert [row["factory_today"] for row in audit] == [next_day]
+
+            briefing = get("/api/briefing")
+            assert briefing["factory_today"] == get("/api/discovery")["as_of"] == next_day
+            overdue = next(row for row in briefing["dashboard"]["orders"] if row["order_id"] == "ORD-029")
+            assert overdue["bucket"] == "OVERDUE"
+            assert get("/api/health")["factory_today"] == next_day
+            assert get("/api/briefing", admin_auth_headers)["factory_today"] == base
+            assert get("/api/watches", admin_auth_headers) == {
+                "as_of": base, "active": [], "fired": [], "cancelled": [],
+            }
+
+            conversation = client.post("/api/conversations", headers=employee_auth_headers).json()
+            request = {"message": "How long until ORD-029 is due?", "conversation_id": conversation["id"]}
+            chat = client.post("/api/chat", headers=employee_auth_headers, json=request)
+            assert chat.status_code == 200, chat.text
+            assert chat.json()["answer"] == f"{next_day}: -1"
+            stream = client.post("/api/chat/stream", headers=employee_auth_headers, json=request)
+            assert stream.status_code == 200
+            assert f'"answer": "{next_day}: -1"' in stream.text
+    finally:
+        with connect(admin=True) as conn:
+            conn.execute(f"DELETE FROM {COPILOT_SCHEMA}.factory_clocks WHERE user_id = %s", (test_user.id,))
 
 
 def test_notifier_failure_does_not_unfire(db, clean_state, test_user):

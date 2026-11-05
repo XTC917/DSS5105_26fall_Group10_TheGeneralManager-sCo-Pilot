@@ -1,11 +1,13 @@
 """Project-wide constants.
 
-Business logic must use FACTORY_TODAY, not the machine clock.
+Business logic uses the active factory date. FACTORY_TODAY is the dataset baseline.
 The dataset declares that "today" is 2026-04-01.
 """
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import date
 from pathlib import Path
 
@@ -23,6 +25,21 @@ STATE_DB_PATH = DATA_DIR / "copilot_state.db"
 
 # Dataset clock — do not replace this with date.today().
 FACTORY_TODAY = date(2026, 4, 1)
+_factory_date: ContextVar[date] = ContextVar("factory_date", default=FACTORY_TODAY)
+
+
+def factory_date() -> date:
+    return _factory_date.get()
+
+
+@contextmanager
+def using_factory_date(day: date):
+    """Keep the business date fixed for the duration of one request."""
+    token = _factory_date.set(day)
+    try:
+        yield
+    finally:
+        _factory_date.reset(token)
 
 # Order lifecycle: ORDERED is an order state, not a production_log stage.
 # Production stages (production_log grain) are KNITTING -> ASSEMBLY -> WASHING -> PACKING.

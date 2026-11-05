@@ -12,7 +12,7 @@ from typing import Literal, Optional
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from backend.config import FACTORY_TODAY
+from backend.config import factory_date
 from backend.services.audit import add_note, add_reminder, list_audit, record_event
 from backend.services.calculations import assess_order_risk, parse_iso_date
 from backend.services.pace import flags_with_pace_tight, pace_fields, stage_medians
@@ -56,7 +56,7 @@ class CreateReminderInput(BaseModel):
     order_id: str = Field(..., description="Order id the manager wrote.")
     remind_on: str = Field(
         ...,
-        description="Factory-calendar date YYYY-MM-DD. Tomorrow from 2026-04-01 is 2026-04-02.",
+        description="Factory-calendar date YYYY-MM-DD. Use the active factory date to resolve relative dates.",
     )
     message: str = Field(..., description="What to check on that date.")
     confirmed: bool = Field(
@@ -366,7 +366,7 @@ def create_reminder(
             "order_id": order["order_id"],
             "remind_on": when.isoformat(),
             "message": text,
-            "factory_today": FACTORY_TODAY.isoformat(),
+            "factory_today": factory_date().isoformat(),
         }
         if not confirmed:
             record_event(

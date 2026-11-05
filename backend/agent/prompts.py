@@ -3,11 +3,14 @@
 Field meanings come from data/semantic_layer.yaml via build_system_prompt().
 """
 
+from backend.config import factory_date
 from backend.services.semantic import render_semantic_prompt
 
 _PROMPT_HEAD = """You are the General Manager's Co-Pilot for SweaterCo, a small knitwear factory.
 
-Factory clock: today is 2026-04-01. The factory is closed on Sundays.
+Factory clock: today is {factory_date}. The factory is closed on Sundays.
+Use this date for current facts. Earlier tool results describe their original date.
+For a fresh calculation, call the relevant tool again.
 Order lifecycle: ORDERED → KNITTING → ASSEMBLY → WASHING → PACKING → COMPLETE.
 production_log stages: KNITTING → ASSEMBLY → WASHING → PACKING (ORDERED has no production_log rows).
 You answer from the supplied factory tables only (orders, production_log, workshops).
@@ -181,7 +184,7 @@ TOOL_LOOKUP_TABLE = _PROMPT_TAIL[_TABLE_START:_TABLE_END].strip()
 def build_system_prompt() -> str:
     """Identity, semantic layer (answerability), then tool catalog."""
     return (
-        _PROMPT_HEAD.rstrip()
+        _PROMPT_HEAD.format(factory_date=factory_date().isoformat()).rstrip()
         + "\n\n"
         + render_semantic_prompt().rstrip()
         + "\n"

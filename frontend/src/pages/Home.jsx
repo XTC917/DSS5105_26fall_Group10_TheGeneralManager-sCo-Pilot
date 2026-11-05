@@ -6,7 +6,7 @@ import AlertsRail from "../components/AlertsRail.jsx";
 import DataManagement from "./DataManagement.jsx";
 import UserManagement from "./UserManagement.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
-import { fetchHealth } from "../services/api.js";
+import { advanceFactoryDate, fetchHealth } from "../services/api.js";
 import { deactivateMe } from "../services/authApi.js";
 import {
   createConversation,
@@ -189,6 +189,8 @@ export default function Home() {
   const [chatBusy, setChatBusy] = useState(false);
   const [composerDraft, setComposerDraft] = useState("");
   const [factoryDate, setFactoryDate] = useState(() => peekOverviewCache()?.briefing?.factory_today || "");
+  const [advancingDate, setAdvancingDate] = useState(false);
+  const [advanceError, setAdvanceError] = useState("");
   const [watches, setWatches] = useState(() => peekOverviewCache()?.watches || { fired: [], active: [], cancelled: [] });
   const [watchesLoading, setWatchesLoading] = useState(false);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
@@ -207,10 +209,18 @@ export default function Home() {
   const conversations = searching ? searchResults || [] : conversationCatalog;
 
   useEffect(() => {
+    let cancelled = false;
     fetchHealth()
-      .then(setHealth)
-      .catch((err) => setHealthError(err.message));
-  }, []);
+      .then((result) => {
+        if (cancelled) return;
+        setHealth(result);
+        setHealthError("");
+      })
+      .catch((err) => {
+        if (!cancelled) setHealthError(err.message);
+      });
+    return () => { cancelled = true; };
+  }, [boardTick]);
 
   useEffect(() => {
     let cancelled = false;
@@ -442,6 +452,22 @@ export default function Home() {
     setBoardTick((n) => n + 1);
   }
 
+  async function advanceDate() {
+    if (!factoryDate || advancingDate) return;
+    setAdvancingDate(true);
+    setAdvanceError("");
+    try {
+      const result = await advanceFactoryDate(factoryDate);
+      if (result?.factory_today) setFactoryDate(result.factory_today);
+      invalidateOverviewCache();
+      setBoardTick((n) => n + 1);
+    } catch (err) {
+      setAdvanceError(err.message || "Could not advance the factory date.");
+    } finally {
+      setAdvancingDate(false);
+    }
+  }
+
   async function handleConversationUpdated() {
     try {
       await refreshConversationCatalog();
@@ -594,6 +620,19 @@ export default function Home() {
             <Badge variant="neutral" size="sm" className="hidden sm:inline-flex">
               Factory date…
             </Badge>
+          )}
+          <button
+            type="button"
+            onClick={advanceDate}
+            disabled={!factoryDate || advancingDate}
+            className="focus-ring rounded-control border border-line bg-surface px-2.5 py-1 type-caption font-medium text-foreground hover:bg-surfaceMuted disabled:opacity-60"
+          >
+            {advancingDate ? "Advancing…" : "Advance one day"}
+          </button>
+          {advanceError && (
+            <span className="hidden max-w-[12rem] truncate type-caption text-danger lg:inline" title={advanceError}>
+              {advanceError}
+            </span>
           )}
           {alertCount > 0 && (
             <button

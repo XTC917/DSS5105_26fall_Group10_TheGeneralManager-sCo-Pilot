@@ -12,7 +12,7 @@ from typing import Any
 
 from backend.config import (
     CLOSED_WEEKDAY,
-    FACTORY_TODAY,
+    factory_date,
     ORDERED_STAGE,
     PRODUCTION_STAGES_IN_ORDER,
     STAGE_COMPLETE,
@@ -80,32 +80,35 @@ def calendar_days_between(start: date, end: date) -> int:
     return (end - start).days
 
 
-def calendar_days_until_due(due: date, today: date = FACTORY_TODAY) -> int:
+def calendar_days_until_due(due: date, today: date | None = None) -> int:
     """Calendar days for 'due in x days'.
 
     Not overdue: count today through due_date, inclusive. Due today is 1.
     Overdue: due_date - today, negative. Today is not counted in the lateness.
     """
+    today = today or factory_date()
     delta = (due - today).days
     if delta < 0:
         return delta
     return delta + 1
 
 
-def working_days_until_due(due: date, today: date = FACTORY_TODAY) -> int:
+def working_days_until_due(due: date, today: date | None = None) -> int:
     """Working days from today through due_date, inclusive. 0 if already overdue."""
+    today = today or factory_date()
     if due < today:
         return 0
     return count_working_days(today, due)
 
 
-def working_days_since_activity(last_activity: date, today: date = FACTORY_TODAY) -> int:
+def working_days_since_activity(last_activity: date, today: date | None = None) -> int:
     """Working days after last_activity_date up to and including today."""
-    return count_working_days(last_activity, today, include_start=False, include_end=True)
+    return count_working_days(last_activity, today or factory_date(), include_start=False, include_end=True)
 
 
-def order_computed_fields(order: dict[str, Any], today: date = FACTORY_TODAY) -> dict[str, Any]:
+def order_computed_fields(order: dict[str, Any], today: date | None = None) -> dict[str, Any]:
     """Derived fields for a single order row. All arithmetic lives here."""
+    today = today or factory_date()
     due = parse_iso_date(order.get("due_date"))
     last_activity = parse_iso_date(order.get("last_activity_date"))
     completed = parse_iso_date(order.get("completed_date"))
@@ -141,7 +144,7 @@ def order_computed_fields(order: dict[str, Any], today: date = FACTORY_TODAY) ->
     }
 
 
-def assess_order_risk(order: dict[str, Any], today: date = FACTORY_TODAY) -> dict[str, Any]:
+def assess_order_risk(order: dict[str, Any], today: date | None = None) -> dict[str, Any]:
     """Inspectable risk flags for one order.
 
     Definitions (also in docs/tool_spec.md):
@@ -155,6 +158,7 @@ def assess_order_risk(order: dict[str, Any], today: date = FACTORY_TODAY) -> dic
 
     COMPLETE orders are never flagged.
     """
+    today = today or factory_date()
     computed = order_computed_fields(order, today)
     flags: list[str] = []
     calculations: list[dict[str, Any]] = []
@@ -224,7 +228,7 @@ def assess_order_risk(order: dict[str, Any], today: date = FACTORY_TODAY) -> dic
         "computed": computed,
         "calculations": calculations,
         "basis": (
-            "OVERDUE: due_date < 2026-04-01. "
+            f"OVERDUE: due_date < {today.isoformat()}. "
             f"STALLED: idle >= {STALL_WORKING_DAYS} working days. "
             "TIGHT_DEADLINE is the pace rule, applied by the caller."
         ),

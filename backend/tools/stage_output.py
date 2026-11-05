@@ -13,7 +13,7 @@ from typing import Any
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from backend.config import FACTORY_TODAY, PRODUCTION_STAGES_IN_ORDER
+from backend.config import PRODUCTION_STAGES_IN_ORDER, factory_date
 from backend.services.calculations import is_working_day, parse_iso_date
 from backend.services.database import get_db
 from backend.tools.common import tool_error, tool_json
@@ -75,7 +75,7 @@ def get_stage_output(working_days: int = 30) -> str:
                 f"working_days must be from 1 to {MAX_WORKING_DAYS}.",
             )
         log = get_db().production_log()
-        available = _working_dates(log, FACTORY_TODAY)
+        available = _working_dates(log, factory_date())
         chosen = available[-working_days:]
         daily = _pieces_by_day(log, set(chosen))
         series = [
@@ -95,7 +95,7 @@ def get_stage_output(working_days: int = 30) -> str:
                 "ok": True,
                 "tool": tool_name,
                 "data": {
-                    "factory_today": FACTORY_TODAY.isoformat(),
+                    "factory_today": factory_date().isoformat(),
                     "window_working_days_requested": working_days,
                     "window_working_days": len(chosen),
                     "date_from": chosen[0].isoformat() if chosen else None,
@@ -113,12 +113,12 @@ def get_stage_output(working_days: int = 30) -> str:
                     "tool": tool_name,
                     "source_file": "production_log.csv",
                     "filter": {
-                        "factory_today": FACTORY_TODAY.isoformat(),
+                        "factory_today": factory_date().isoformat(),
                         "working_days": working_days,
                     },
                     "rows": series,
                     "calculations": [],
-                    "basis": "Working days before 2026-04-01, Sundays excluded. Pieces are copied from production_log.",
+                    "basis": "Working days before the active factory date, Sundays excluded. Pieces are copied from production_log.",
                 },
             }
         )

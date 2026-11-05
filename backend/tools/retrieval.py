@@ -164,7 +164,7 @@ def get_order_status(
                     ],
                     "basis": (
                         "Single row from orders.csv. Date differences use factory today "
-                        "2026-04-01 and skip Sundays. "
+                        f"{computed['factory_today']} and skip Sundays. "
                         "TIGHT_DEADLINE: not overdue, due today through +3 calendar days, "
                         "and days_left exceeds working days until due. "
                         "days_left = max(sum over remaining stages of pieces / 30-day stage median, "
@@ -272,7 +272,7 @@ def get_orders_at_risk(flag: Optional[str] = None) -> str:
                         "(max of pieces / 30-day stage median over remaining stages "
                         "and remaining stage count) "
                         "exceeds working days until due. "
-                        "flag=OVERDUE is due_date < 2026-04-01. "
+                        "flag=OVERDUE is due_date before the active factory date. "
                         "flag=STALLED is idle >= 3 working days. "
                         "Those two flags are not the miss-due list. "
                         "Next 7 days is data.likely_to_miss_due_next_7_days."

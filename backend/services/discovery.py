@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-from backend.config import FACTORY_TODAY, PRODUCTION_DROP_RATIO
+from backend.config import PRODUCTION_DROP_RATIO, factory_date
 from backend.services.briefing import unusual_stage_output
 from backend.services.calculations import assess_order_risk
 from backend.services.database import FactoryDB
@@ -96,7 +96,7 @@ def collect_order_risk_issues(db: FactoryDB) -> list[dict[str, Any]]:
                     "due_date": order["due_date"],
                     "last_activity_date": order["last_activity_date"],
                     "current_stage": order["current_stage"],
-                    "factory_today": FACTORY_TODAY.isoformat(),
+                    "factory_today": factory_date().isoformat(),
                     "flags": flags,
                 },
                 "result": True,
@@ -199,8 +199,8 @@ def discover_factory_issues(db: FactoryDB, limit: int = DEFAULT_LIMIT) -> dict[s
             "No issues found."
         )
     return {
-        "factory_today": FACTORY_TODAY.isoformat(),
-        "as_of": FACTORY_TODAY.isoformat(),
+        "factory_today": factory_date().isoformat(),
+        "as_of": factory_date().isoformat(),
         "limit": limit,
         "total_found": len(collected),
         "returned_count": len(returned),
@@ -217,8 +217,8 @@ def discover_factory_issues(db: FactoryDB, limit: int = DEFAULT_LIMIT) -> dict[s
 def get_today_priority(db: FactoryDB) -> dict[str, Any]:
     buckets = today_priority(db)
     return {
-        "factory_today": FACTORY_TODAY.isoformat(),
-        "as_of": FACTORY_TODAY.isoformat(),
+        "factory_today": factory_date().isoformat(),
+        "as_of": factory_date().isoformat(),
         "today_priority": buckets,
         "limitations": list(TODAY_PRIORITY_LIMITATIONS),
     }
