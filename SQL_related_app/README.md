@@ -1,6 +1,6 @@
 # Factory Data Administration App (`SQL_related_app`)
 
-This folder contains a local React/FastAPI administration app for the Factory Copilot PostgreSQL database. It accepts the three agreed business datasets, validates and imports them, exposes read-only SQL endpoints, and records upload metadata.
+This folder contains a local React/FastAPI administration app for the Factory Copilot PostgreSQL database. It accepts the three agreed business datasets, validates and imports them, exposes read-only SQL endpoints, supports bounded row edits, and records upload and row-change metadata.
 
 The PostgreSQL path is currently an experimental local integration. It has been tested independently, but the main LangGraph application has not yet been formally switched to this API. Authentication and ownership of that final integration must be agreed with the main application authors.
 
@@ -114,6 +114,7 @@ backend on port `8001`, leaving port `8000` available for the main application.
 | `GET` | `/api/admin/datasources/` | List current uploadable data sources |
 | `GET` | `/api/admin/datasources/{id}` | Read one data-source record |
 | `GET` | `/api/admin/datasources/{id}/data?limit=&offset=` | Read a page of current business data |
+| `PATCH` | `/api/admin/datasources/{id}/rows` | Atomically update 1-50 existing rows using table-specific keys and column allowlists |
 | `DELETE` | `/api/admin/datasources/{id}` | Mark a data source inactive |
 | `DELETE` | `/api/admin/datasources/{id}?drop_table=true` | Clear its rows and mark it inactive; retain the table and catalog record |
 | `POST` | `/api/admin/upload/preview` | Preview an uploaded file without importing it |
@@ -121,6 +122,8 @@ backend on port `8001`, leaving port `8000` available for the main application.
 | `GET` | `/api/admin/upload/status/{upload_id}` | Read import status and details |
 
 Despite the `drop_table` parameter name, the implementation does not drop the PostgreSQL table. It optionally deletes its rows while retaining the schema.
+
+The row editor never accepts a table name or SQL statement from the browser. It resolves the table through the selected data source, rejects primary-key changes, limits a batch to 50 rows, and records before/after JSON in `admin_meta.data_change_audit`. Because this standalone local app does not implement application login, these audit rows use the explicit actor label `sql-related-app-local-admin`; authenticated edits through the main backend retain the actual application user ID.
 
 ## Read-only SQL rules
 

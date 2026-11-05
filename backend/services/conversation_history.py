@@ -76,8 +76,30 @@ def list_conversations(
     user_id: int,
     *,
     limit: int = MAX_HISTORY_LIMIT,
+    query: str | None = None,
 ) -> list[dict[str, Any]]:
     limit = _validated_limit(limit)
+    query = (query or "").strip()
+    search_clause = ""
+    params: list[Any] = [user_id]
+    if query:
+        pattern = f"%{query}%"
+        search_clause = f"""
+            AND (
+             c.title ILIKE %s
+                OR EXISTS (
+                    SELECT 1
+                    FROM {_table('chat_turns')} AS searched
+                    WHERE searched.conversation_id = c.id
+                    AND (
+                          searched.question ILIKE %s
+                        OR searched.answer ILIKE %s
+                    )
+                )
+            )
+    """
+        params.extend([pattern, pattern, pattern])
+    params.append(limit)
     with connect(admin=True) as conn:
         rows = conn.execute(
             f"""
@@ -94,10 +116,11 @@ def list_conversations(
                 ) AS turn_count
             FROM {_table('conversations')} AS c
             WHERE c.user_id = %s
+            {search_clause}
             ORDER BY c.updated_at DESC, c.id DESC
             LIMIT %s
             """,
-            (user_id, limit),
+            tuple(params),
         ).fetchall()
     return [dict(row) for row in rows]
 
@@ -130,6 +153,48 @@ def get_owned_conversation(
     return dict(row)
 
 
+def delete_conversation(
+    user_id: int,
+    conversation_id: UUID,
+) -> None:
+    thread_id = f"user:{user_id}:conversation:{conversation_id}"
+
+    with connect(admin=True) as conn, conn.transaction():
+        owned = conn.execute(
+            f"""
+            SELECT id
+            FROM {_table('conversations')}
+            WHERE id = %s AND user_id = %s
+            FOR UPDATE
+            """,
+            (conversation_id, user_id),
+        ).fetchone()
+
+        if owned is None:
+            raise ConversationNotFoundError
+
+        for table_name in (
+            "checkpoint_writes",
+            "checkpoint_blobs",
+            "checkpoints",
+        ):
+            conn.execute(
+                f"""
+                DELETE FROM {_table(table_name)}
+                WHERE thread_id = %s
+                """,
+                (thread_id,),
+            )
+
+        conn.execute(
+            f"""
+            DELETE FROM {_table('conversations')}
+            WHERE id = %s AND user_id = %s
+            """,
+            (conversation_id, user_id),
+        )
+
+
 def _restore_turn_metadata(turn: dict[str, Any]) -> None:
     payload = dict(turn.get("response_json") or {})
     actions = payload.get("proposed_actions") or []
@@ -139,22 +204,6 @@ def _restore_turn_metadata(turn: dict[str, Any]) -> None:
         if isinstance(action, dict)
     ]
     turn["response_json"] = payload
-
-
-def _close_clarification_except_latest(
-    turns: list[dict[str, Any]],
-    *,
-    keep_latest: bool,
-) -> None:
-    last = len(turns) - 1
-    for index, turn in enumerate(turns):
-        if keep_latest and index == last:
-            continue
-        payload = dict(turn.get("response_json") or {})
-        if not payload.get("clarification"):
-            continue
-        payload["clarification"] = None
-        turn["response_json"] = payload
 
 
 def read_history_window(
@@ -225,7 +274,6 @@ def read_history_window(
     turns = [dict(row) for row in reversed(selected)]
     for turn in turns:
         _restore_turn_metadata(turn)
-    _close_clarification_except_latest(turns, keep_latest=before_turn_id is None)
     return {
         "conversation": dict(conversation),
         "turns": turns,
@@ -378,17 +426,6 @@ def save_turn(
                 Jsonb(response_json or {}),
             ),
         ).fetchone()
-
-        conn.execute(
-            f"""
-            UPDATE {_table('chat_turns')}
-            SET response_json = response_json - 'clarification'
-            WHERE conversation_id = %s
-              AND id <> %s
-              AND response_json ? 'clarification'
-            """,
-            (conversation_id, row["id"]),
-        )
 
         conn.execute(
             f"""

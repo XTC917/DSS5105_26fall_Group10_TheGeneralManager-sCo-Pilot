@@ -102,6 +102,165 @@ def test_reject_requires_admin_and_confirm_semantics(db, admin_auth_headers, emp
         _cleanup(name)
 
 
+def test_creating_and_switching_multiple_accounts_keeps_first_account_active(
+    db,
+    monkeypatch,
+):
+    password = "password123"
+    admin_code = "test-admin-registration-code"
+    monkeypatch.setenv("ADMIN_REGISTRATION_CODE", admin_code)
+
+    account_types = [
+        "ADMIN",
+        "EMPLOYEE",
+        "ADMIN",
+        "EMPLOYEE",
+        "EMPLOYEE",
+    ]
+    accounts = [
+        (_unique(f"switch_account_{index}"), account_type)
+        for index, account_type in enumerate(account_types)
+    ]
+    created_names: list[str] = []
+
+    try:
+        with TestClient(app) as client:
+            for username, account_type in accounts:
+                response = _register(
+                    client,
+                    username,
+                    password=password,
+                    account_type=account_type,
+                    admin_code=admin_code if account_type == "ADMIN" else None,
+                )
+                assert response.status_code == 200, response.text
+                created_names.append(username)
+
+                with connect(admin=True) as conn:
+                    first_account = conn.execute(
+                        """
+                        SELECT status
+                        FROM auth.users
+                        WHERE username = %s
+                        """,
+                        (accounts[0][0],),
+                    ).fetchone()
+
+                assert first_account is not None
+                assert first_account["status"] == "ACTIVE"
+
+            # Employee registration starts as PENDING. Activate the test
+            # employees so that every account can participate in login switching.
+            with connect(admin=True) as conn, conn.transaction():
+                for username, account_type in accounts:
+                    if account_type == "EMPLOYEE":
+                        conn.execute(
+                            """
+                            UPDATE auth.users
+                            SET status = 'ACTIVE'
+                            WHERE username = %s
+                            """,
+                            (username,),
+                        )
+
+            for username, _ in accounts:
+                login = _login(client, username, password)
+                assert login.status_code == 200, login.text
+                assert login.json()["user"]["username"] == username
+                assert login.json()["user"]["status"] == "ACTIVE"
+
+            # Return to the first account after switching through all others.
+            first_login = _login(client, accounts[0][0], password)
+            assert first_login.status_code == 200, first_login.text
+            assert first_login.json()["user"]["status"] == "ACTIVE"
+
+            with connect(admin=True) as conn:
+                rows = conn.execute(
+                    """
+                    SELECT username, status
+                    FROM auth.users
+                    WHERE username = ANY(%s)
+                    """,
+                    ([username for username, _ in accounts],),
+                ).fetchall()
+
+            assert len(rows) == len(accounts)
+            assert {row["status"] for row in rows} == {"ACTIVE"}
+    finally:
+        for username in reversed(created_names):
+            _cleanup(username)
+
+
+def test_self_deactivation_only_affects_authenticated_account(db):
+    password = "password123"
+    first_name = _unique("deactivate_isolation_first")
+    second_name = _unique("deactivate_isolation_second")
+    created_names: list[str] = []
+
+    try:
+        with TestClient(app) as client:
+            for username in (first_name, second_name):
+                response = _register(client, username, password=password)
+                assert response.status_code == 200, response.text
+                created_names.append(username)
+
+            with connect(admin=True) as conn, conn.transaction():
+                for username in created_names:
+                    conn.execute(
+                        """
+                        UPDATE auth.users
+                        SET status = 'ACTIVE'
+                        WHERE username = %s
+                        """,
+                        (username,),
+                    )
+
+            first_login = _login(client, first_name, password)
+            second_login = _login(client, second_name, password)
+            assert first_login.status_code == 200, first_login.text
+            assert second_login.status_code == 200, second_login.text
+
+            second_headers = {
+                "Authorization": (
+                    f"Bearer {second_login.json()['access_token']}"
+                )
+            }
+            deactivated = client.delete(
+                "/api/auth/me",
+                headers=second_headers,
+            )
+            assert deactivated.status_code == 200, deactivated.text
+            assert deactivated.json()["user"]["username"] == second_name
+            assert deactivated.json()["user"]["status"] == "DEACTIVATED"
+
+            # The first account must remain usable.
+            first_login_again = _login(client, first_name, password)
+            assert first_login_again.status_code == 200, first_login_again.text
+            assert first_login_again.json()["user"]["status"] == "ACTIVE"
+
+            with connect(admin=True) as conn:
+                rows = conn.execute(
+                    """
+                    SELECT username, status
+                    FROM auth.users
+                    WHERE username = ANY(%s)
+                    """,
+                    ([first_name, second_name],),
+                ).fetchall()
+
+            statuses = {
+                row["username"]: row["status"]
+                for row in rows
+            }
+            assert statuses == {
+                first_name: "ACTIVE",
+                second_name: "DEACTIVATED",
+            }
+    finally:
+        for username in reversed(created_names):
+            _cleanup(username)
+
+
 def test_self_deactivation_soft_delete(db):
     name = _unique("deact_emp")
     with TestClient(app) as client:

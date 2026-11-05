@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile
@@ -11,6 +12,12 @@ from psycopg import sql
 from backend.pg_config import ADMIN_META_SCHEMA, PG_SCHEMA
 from backend.services.auth import require_admin
 from backend.services.data_admin import assert_allowed_table
+from backend.services.data_admin_updates import (
+    DataRowNotFoundError,
+    DataSourceNotFoundError,
+    DataUpdateValidationError,
+    update_datasource_rows,
+)
 from backend.services.file_importer import FileImporter
 from backend.services.pg_database import connect
 from backend.services.schema_service import schema_service
@@ -28,6 +35,15 @@ query_router = APIRouter(prefix="/api/query", tags=["Data Query"])
 class QueryRequest(BaseModel):
     question: str | None = None
     sql: str | None = None
+
+
+class RowUpdate(BaseModel):
+    key: dict[str, Any]
+    changes: dict[str, Any]
+
+
+class BatchRowUpdateRequest(BaseModel):
+    updates: list[RowUpdate]
 
 
 def _safe_upload_path(filename: str) -> Path:
@@ -154,6 +170,26 @@ async def get_datasource_data(datasource_id: int, _admin=Depends(require_admin),
         data = cur.fetchall()
         total = conn.execute(sql.SQL("SELECT COUNT(*) AS total FROM {}").format(ident)).fetchone()["total"]
     return {"table_name": table, "columns": [{"name": c.name} for c in cur.description], "data": [dict(row) for row in data], "total": total, "limit": limit, "offset": offset}
+
+
+@datasource_router.patch("/{datasource_id}/rows")
+async def update_rows(
+    datasource_id: int,
+    request: BatchRowUpdateRequest,
+    admin=Depends(require_admin),
+):
+    try:
+        return update_datasource_rows(
+            datasource_id,
+            actor_user_id=admin.id,
+            updates=[item.model_dump() for item in request.updates],
+        )
+    except DataSourceNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except DataRowNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except DataUpdateValidationError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @query_router.get("/schema")

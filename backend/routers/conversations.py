@@ -5,7 +5,7 @@ from __future__ import annotations
 from uuid import UUID
 
 import psycopg
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from backend.models.schemas import ConversationHistory, ConversationSummary
 from backend.services.auth import CurrentUser, get_current_user
@@ -14,6 +14,7 @@ from backend.services.conversation_history import (
     create_conversation,
     list_conversations,
     read_history_window,
+    delete_conversation,
 )
 
 
@@ -41,13 +42,15 @@ def create_conversation_endpoint(
         raise _database_unavailable(exc) from exc
 
 
+
 @router.get("", response_model=list[ConversationSummary])
 def list_conversations_endpoint(
     limit: int = Query(default=50, ge=1, le=50),
+    query: str | None = Query(default=None, min_length=1, max_length=100),
     user: CurrentUser = Depends(get_current_user),
 ) -> list[dict]:
     try:
-        return list_conversations(user.id, limit=limit)
+        return list_conversations(user.id, limit=limit, query=query)
     except psycopg.Error as exc:
         raise _database_unavailable(exc) from exc
 
@@ -66,6 +69,26 @@ def get_conversation_history_endpoint(
             limit=limit,
             before_turn_id=before_turn_id,
         )
+    except ConversationNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found",
+        ) from exc
+    except psycopg.Error as exc:
+        raise _database_unavailable(exc) from exc
+
+
+@router.delete(
+    "/{conversation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_conversation_endpoint(
+    conversation_id: UUID,
+    user: CurrentUser = Depends(get_current_user),
+) -> Response:
+    try:
+        delete_conversation(user.id, conversation_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except ConversationNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

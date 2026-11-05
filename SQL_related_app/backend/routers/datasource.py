@@ -1,10 +1,28 @@
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from config import Config, assert_upload_table
 from db import get_postgres_admin_connection
 from psycopg import sql
+from row_updates import (
+    DataRowNotFoundError,
+    DataSourceNotFoundError,
+    DataUpdateValidationError,
+    update_rows,
+)
 
 router = APIRouter(prefix="/api/admin/datasources", tags=["Data Sources"])
+
+
+class RowUpdate(BaseModel):
+    key: dict[str, Any]
+    changes: dict[str, Any]
+
+
+class BatchRowUpdateRequest(BaseModel):
+    updates: list[RowUpdate]
 
 
 @router.get("/")
@@ -137,3 +155,19 @@ async def get_datasource_data(
         }
     finally:
         conn.close()
+
+
+@router.patch("/{datasource_id}/rows")
+async def update_datasource_rows(
+    datasource_id: int,
+    request: BatchRowUpdateRequest,
+):
+    try:
+        return update_rows(
+            datasource_id,
+            [item.model_dump() for item in request.updates],
+        )
+    except (DataSourceNotFoundError, DataRowNotFoundError) as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except DataUpdateValidationError as exc:
+        raise HTTPException(422, str(exc)) from exc
