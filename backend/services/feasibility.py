@@ -18,7 +18,7 @@ What this does NOT do (TODO, do not invent):
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from backend.config import (
@@ -341,6 +341,164 @@ def check_feasibility(
             "basis": (
                 "Bottleneck median throughput vs remaining working days, "
                 "minus IN_PROGRESS piece count, plus ACTIVE workshop overflow."
+            ),
+        },
+    }
+
+
+_FEASIBLE = {"FEASIBLE_IN_HOUSE", "FEASIBLE_WITH_WORKSHOPS"}
+_SEARCH_DAYS = 366 * 2
+
+
+def _first_feasible_day(
+    db: FactoryDB,
+    *,
+    pieces: int,
+    product: str | None,
+    category: str | None,
+    today: date,
+    in_house_only: bool,
+) -> dict[str, Any] | None:
+    """Earliest due date on which check_feasibility is not NOT_FEASIBLE.
+
+    Capacity does not shrink as the due date moves later, so the search is the
+    first day the existing verdict allows. The feasibility formula is unchanged.
+    """
+    horizon = today + timedelta(days=_SEARCH_DAYS)
+    far = check_feasibility(
+        db,
+        pieces=pieces,
+        due_date=horizon.isoformat(),
+        product=product,
+        category=category,
+        today=today,
+    )
+    if not far.get("ok"):
+        return far
+    allowed = {"FEASIBLE_IN_HOUSE"} if in_house_only else _FEASIBLE
+    if far["data"]["verdict"] not in allowed:
+        return None
+    lo = today
+    hi = horizon
+    while lo < hi:
+        mid = lo + timedelta(days=(hi - lo).days // 2)
+        result = check_feasibility(
+            db,
+            pieces=pieces,
+            due_date=mid.isoformat(),
+            product=product,
+            category=category,
+            today=today,
+        )
+        if not result.get("ok"):
+            return result
+        if result["data"]["verdict"] in allowed:
+            hi = mid
+        else:
+            lo = mid + timedelta(days=1)
+    return check_feasibility(
+        db,
+        pieces=pieces,
+        due_date=lo.isoformat(),
+        product=product,
+        category=category,
+        today=today,
+    )
+
+
+def earliest_delivery_date(
+    db: FactoryDB,
+    *,
+    pieces: int,
+    product: str | None = None,
+    category: str | None = None,
+    today: date | None = None,
+) -> dict[str, Any]:
+    """First due date the existing feasibility check would accept."""
+    today = today or factory_date()
+    probe = check_feasibility(
+        db,
+        pieces=pieces,
+        due_date=today.isoformat(),
+        product=product,
+        category=category,
+        today=today,
+    )
+    if not probe.get("ok"):
+        probe["tool"] = "earliest_delivery_date"
+        return probe
+
+    with_shops = _first_feasible_day(
+        db,
+        pieces=pieces,
+        product=product,
+        category=category,
+        today=today,
+        in_house_only=False,
+    )
+    in_house = _first_feasible_day(
+        db,
+        pieces=pieces,
+        product=product,
+        category=category,
+        today=today,
+        in_house_only=True,
+    )
+    for result in (with_shops, in_house):
+        if isinstance(result, dict) and not result.get("ok", True):
+            result["tool"] = "earliest_delivery_date"
+            return result
+
+    chosen = with_shops["data"] if with_shops else None
+    in_house_data = in_house["data"] if in_house else None
+    limitations = list((chosen or probe["data"])["limitations"])
+    limitations.append(
+        "The earliest date is the first due date on which this same capacity check "
+        "is not NOT_FEASIBLE. Throughput stays the 30-day bottleneck median. "
+        "It is not a promised daily output, and pipeline delay across stages is still not modelled."
+    )
+    return {
+        "ok": True,
+        "tool": "earliest_delivery_date",
+        "data": {
+            "earliest_date": None if chosen is None else chosen["due_date"],
+            "verdict": None if chosen is None else chosen["verdict"],
+            "earliest_in_house_date": None if in_house_data is None else in_house_data["due_date"],
+            "pieces": pieces,
+            "product": product,
+            "matched_product": probe["data"].get("matched_product"),
+            "category": probe["data"]["category"],
+            "working_days": None if chosen is None else chosen["working_days"],
+            "in_progress_pieces": probe["data"]["in_progress_pieces"],
+            "spare_factory_capacity": None if chosen is None else chosen["spare_factory_capacity"],
+            "workshop_overflow_pieces": None if chosen is None else chosen["workshop_overflow_pieces"],
+            "bottleneck_stage": probe["data"]["throughput"]["bottleneck_stage"],
+            "bottleneck_median": probe["data"]["throughput"]["bottleneck_median"],
+            "summary": (
+                "No due date within two years makes this order feasible under the current capacity check."
+                if chosen is None
+                else (
+                    f"{pieces} pieces are first feasible on {chosen['due_date']} "
+                    f"({chosen['verdict']})."
+                )
+            ),
+            "limitations": limitations,
+        },
+        "trace": {
+            "tool": "earliest_delivery_date",
+            "source_file": "production_log.csv + orders.csv + workshops.csv",
+            "filter": {"pieces": pieces, "product": product, "category": probe["data"]["category"]},
+            "rows": [],
+            "calculations": [
+                {
+                    "name": "earliest_date",
+                    "formula": "first due date where check_feasibility is not NOT_FEASIBLE",
+                    "result": None if chosen is None else chosen["due_date"],
+                }
+            ],
+            "basis": (
+                "Same capacity check as check_feasibility. "
+                "The date is the earliest one that check accepts."
             ),
         },
     }

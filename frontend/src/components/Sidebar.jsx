@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import MorningBriefingModal from "./MorningBriefingModal.jsx";
+import TracePanel from "./TracePanel.jsx";
 import { loadOverviewData, peekOverviewCache } from "../services/overviewCache.js";
 import { Button, Skeleton } from "./ui/index.js";
 
@@ -24,9 +25,102 @@ function Chevron({ dir = "left" }) {
   );
 }
 
+function stageName(stage) {
+  return String(stage || "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function issueExplanation(item) {
+  const evidence = item.evidence || {};
+  const stage = item.stage || evidence.stage;
+  if (stage) {
+    const name = stageName(stage);
+    const pieces = evidence.last_day_pieces ?? item.latest_output;
+    const median = evidence.lookback_median ?? item.median_30d;
+    const day = evidence.last_working_date || item.inputs?.last_working_date;
+    const ratio = Number(evidence.ratio_to_median ?? item.ratio);
+    const percent = Number.isFinite(ratio) ? Math.round(ratio * 100) : null;
+    return {
+      language: "en",
+      steps: [
+        {
+          title: "Start from the question",
+          items: ["Which production issue should be looked at on the current factory date?"],
+        },
+        {
+          title: "Read what the data says",
+          items: [
+            `${name} completed ${pieces} pieces on ${day}, the last working day recorded before the factory date.`,
+            `Over the previous 30 working days, the median output for ${name} is ${median} pieces a day.`,
+          ],
+        },
+        {
+          title: "Check the calculation or comparison",
+          items: [
+            `${pieces} pieces is ${percent}% of the median of ${median}. A stage is flagged when the latest day is below 70% of that median.`,
+          ],
+        },
+        {
+          title: "Understand why the conclusion follows",
+          items: [
+            `${name} is listed because its latest working day is below 70% of its own recent median. This compares factory-wide output for that stage, not one order.`,
+          ],
+        },
+      ],
+      sources: [{
+        name: "production_log.csv",
+        label: "production_log.csv · last working day compared with the 30-working-day median",
+        summary_only: true,
+        rows: [],
+      }],
+    };
+  }
+  const order = evidence.order || {};
+  const orderId = item.order_id || order.order_id;
+  if (!orderId) return null;
+  const computed = evidence.computed || {};
+  return {
+    language: "en",
+    steps: [
+      { title: "Start from the question", items: [`Why is ${orderId} on the issue list?`] },
+      {
+        title: "Read what the data says",
+        items: [
+          [
+            orderId,
+            order.customer,
+            order.product,
+            order.pieces != null ? `${order.pieces} pieces` : "",
+            order.current_stage ? `currently at ${stageName(order.current_stage)}` : "",
+            order.due_date ? `due ${order.due_date}` : "",
+          ].filter(Boolean).join(", ") + ".",
+        ],
+      },
+      {
+        title: "Check the calculation or comparison",
+        items: [
+          computed.calendar_days_until_due != null
+            ? `Calendar days until due: ${computed.calendar_days_until_due}.`
+            : "No separate numeric check was attached beyond the order record.",
+        ],
+      },
+      {
+        title: "Understand why the conclusion follows",
+        items: [item.summary || `${orderId} matched one of the issue rules on the current factory date.`],
+      },
+    ],
+    sources: [{
+      name: item.source_file || "orders.csv",
+      label: `${item.source_file || "orders.csv"} · the order record used for this issue`,
+      summary_only: true,
+      rows: [],
+    }],
+  };
+}
+
 function IssueRow({ item }) {
   const [open, setOpen] = useState(false);
   const where = item.order_id || item.stage || "";
+  const explanation = issueExplanation(item);
   return (
     <li className="rounded-card border border-line bg-surface px-3 py-3 shadow-xs">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -50,24 +144,7 @@ function IssueRow({ item }) {
           {open ? "Hide" : "Why?"}
         </button>
       </div>
-      {open && (
-        <pre className="trace-pre mt-2 max-h-40 overflow-auto rounded-control bg-surfaceMuted p-2 type-caption text-muted">
-          {JSON.stringify(
-            {
-              issue_id: item.issue_id,
-              issue_type: item.issue_type,
-              priority: item.priority,
-              rule: item.rule,
-              inputs: item.inputs,
-              result: item.result,
-              source_file: item.source_file,
-              evidence: item.evidence,
-            },
-            null,
-            2,
-          )}
-        </pre>
-      )}
+      {open && explanation && <TracePanel why={explanation} />}
     </li>
   );
 }
@@ -214,7 +291,7 @@ export default function Sidebar({ refreshToken = 0, onFactoryDate }) {
           </p>
         )}
         {!busy && issues.length > 0 && (
-          <ul className="grid gap-2 md:grid-cols-2">
+          <ul className="grid gap-2">
             {issues.map((item) => (
               <IssueRow key={item.issue_id} item={item} />
             ))}

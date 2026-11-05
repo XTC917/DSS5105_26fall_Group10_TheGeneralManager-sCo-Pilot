@@ -79,6 +79,7 @@ function WatchActions({ item, disabled, menuOpen, onToggleMenu, onRequestCancel 
  */
 export default function AlertsRail({
   watches = { fired: [], active: [], cancelled: [] },
+  loading = false,
   compact = false,
   onWatchChanged,
 }) {
@@ -194,7 +195,12 @@ export default function AlertsRail({
     <div ref={rootRef} className={`relative ${compact ? "" : "border-b border-line"}`}>
       <div className={`flex items-start gap-2 ${compact ? "px-0 py-1" : "px-3 py-2"}`}>
         <div className="min-w-0 flex-1">
-          {!hasAlerts ? (
+          {loading ? (
+            <div aria-busy="true">
+              <p className="type-overline text-foreground">Active Watches</p>
+              <p className="mt-1 type-caption text-muted" role="status">Loading…</p>
+            </div>
+          ) : !hasAlerts ? (
             <div>
               <p className="type-overline text-foreground">Active Watches</p>
               <p className="mt-1 type-caption text-subtle">No active watches</p>
@@ -243,7 +249,7 @@ export default function AlertsRail({
         </button>
       </div>
 
-      {expanded && hasAlerts && (
+      {expanded && hasAlerts && !loading && (
         <div
           id={panelId}
           className={`space-y-2 border-t border-line/70 bg-surfaceMuted/40 ${compact ? "px-0 py-2" : "px-3 py-2"}`}

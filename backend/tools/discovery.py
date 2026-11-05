@@ -229,6 +229,12 @@ def discover_factory_issues(limit: int = DEFAULT_LIMIT) -> str:
                             "priority": item["priority"],
                             "order_id": item.get("order_id"),
                             "stage": item.get("stage"),
+                            "last_working_date": (item.get("evidence") or {}).get("last_working_date")
+                            or (item.get("inputs") or {}).get("last_working_date"),
+                            "last_day_pieces": item.get("latest_output"),
+                            "lookback_median": item.get("median_30d"),
+                            "ratio_to_median": item.get("ratio"),
+                            "flagged": True,
                         }
                         for item in issues
                     ],

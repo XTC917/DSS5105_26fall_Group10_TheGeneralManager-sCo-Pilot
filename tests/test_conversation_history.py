@@ -20,6 +20,7 @@ from backend.services.conversation_history import (
     get_owned_conversation,
     list_conversations,
     read_history_window,
+    record_clarification_choice,
     record_turn_action_decision,
     save_turn,
     start_chat_attempt,
@@ -58,8 +59,8 @@ def test_history_and_attempts_are_user_owned():
     first = create_conversation(1)
     second = create_conversation(2)
 
-    assert [row["id"] for row in list_conversations(1)] == [first["id"]]
-    assert [row["id"] for row in list_conversations(2)] == [second["id"]]
+    assert list_conversations(1) == []
+    assert list_conversations(2) == []
     with pytest.raises(ConversationNotFoundError):
         get_owned_conversation(2, first["id"])
 
@@ -82,6 +83,8 @@ def test_history_and_attempts_are_user_owned():
     assert completed["status"] == "SUCCEEDED"
     assert completed["turn_id"] == turn["id"]
     assert completed["duration_ms"] == 12
+    assert [row["id"] for row in list_conversations(1)] == [first["id"]]
+    assert list_conversations(2) == []
     with pytest.raises(ConversationNotFoundError):
         get_chat_attempt(2, attempt["id"])
 
@@ -156,19 +159,19 @@ def test_history_pagination_preserves_old_clarification_and_restores_decision():
     }
 
 
-def test_conversation_api_and_chat_are_authenticated(
-    monkeypatch,
-    employee_auth_headers,
-):
-    with TestClient(app) as client:
-        assert client.get("/api/conversations").status_code == 401
-        created = client.post(
-            "/api/conversations",
-            headers=employee_auth_headers,
-        )
-        assert created.status_code == 201
-        conversation_id = created.json()["id"]
-
+def test_clarification_choice_sticks_to_the_latest_unanswered_card():
+    conversation = create_conversation(2)
+    save_turn(
+        2,
+        conversation["id"],
+        question="Which customer?",
+        answer="Please choose.",
+        response_json={"clarification": {"options": [{"label": "TrendCart"}, {"label": "Harbor Knits"}]}},
+    )
+    record_clarification_choice(2, conversation["id"], "TrendCart")
+    record_clarification_choice(2, conversation["id"], "Harbor Knits")
+    history = read_history_window(2, conversation["id"], limit=5)
+    assert history["turns"][0]["response_json"]["clarification_choice"] == "TrendCart"
         admin_conversation = create_conversation(1)
         hidden = client.get(
             f"/api/conversations/{admin_conversation['id']}",

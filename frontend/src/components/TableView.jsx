@@ -14,26 +14,6 @@ function cellValue(row, key) {
   return row[key] == null ? "" : String(row[key]);
 }
 
-function formatSum(value) {
-  const rounded = Math.round(value * 10) / 10;
-  return Number.isInteger(rounded)
-    ? rounded.toLocaleString()
-    : rounded.toLocaleString(undefined, { maximumFractionDigits: 1 });
-}
-
-function columnTotal(column, rows) {
-  const numbers = [];
-  for (const row of rows) {
-    const raw = row[column.key];
-    if (raw == null || raw === "") continue;
-    const value = numericValue(raw);
-    if (value === null) return null;
-    numbers.push(value);
-  }
-  if (!numbers.length) return null;
-  return numbers.reduce((total, value) => total + value, 0);
-}
-
 function estimateColumnWidth(column, rows) {
   const values = [column.label, ...rows.map((row) => row[column.key] == null ? "-" : String(row[column.key]))];
   const maxTextWidth = values.reduce((max, value) => {
@@ -277,8 +257,6 @@ export default function TableView({ table }) {
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
   const pageRows = rows.slice(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE);
-  const totals = visibleColumns.map((column) => columnTotal(column, rows));
-  const summaryLabelIndex = totals.findIndex((total) => total === null);
   const hiddenColumnItems = table.columns.filter((column) => hiddenColumns.includes(column.key));
   const popupContent = popup?.type === "filter"
     ? filterPopup(table.columns.find((column) => column.key === popup.key))
@@ -395,30 +373,6 @@ export default function TableView({ table }) {
               </tr>
             )}
           </tbody>
-          {rows.length > 1 && totals.some((total) => total !== null) && (
-            <tfoot>
-              <tr className="border-t border-line bg-surfaceMuted font-semibold text-foreground">
-                {visibleColumns.map((column, index) => {
-                  const labelHere = index === (summaryLabelIndex === -1 ? 0 : summaryLabelIndex);
-                  const total = totals[index];
-                  const sumLabel = pageCount > 1 ? "Sum of all pages" : "Sum";
-                  return (
-                    <td
-                      key={column.key}
-                      className="break-words whitespace-normal px-3 py-2"
-                      title={pageCount > 1 ? "Total of every filtered row, not only this page" : undefined}
-                    >
-                      {labelHere && total === null
-                        ? sumLabel
-                        : labelHere
-                          ? `${sumLabel} ${formatSum(total)}`
-                          : total === null ? "" : formatSum(total)}
-                    </td>
-                  );
-                })}
-              </tr>
-            </tfoot>
-          )}
         </table>
       </div>
       {pageCount > 1 && (

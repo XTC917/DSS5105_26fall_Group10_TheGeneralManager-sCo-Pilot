@@ -30,17 +30,27 @@ async function request(path, options = {}) {
   return body;
 }
 
-export function createConversation() {
-  return request("/api/conversations", { method: "POST" });
+function appendKeep(params, keepIds) {
+  for (const id of keepIds || []) {
+    if (id) params.append("keep", id);
+  }
 }
 
-export function fetchConversations(limit = 50, query = "") {
+export function createConversation(keepIds = []) {
+  const params = new URLSearchParams();
+  appendKeep(params, keepIds);
+  const query = params.toString();
+  return request(`/api/conversations${query ? `?${query}` : ""}`, { method: "POST" });
+}
+
+export function fetchConversations(limit = 50, query = "", keepIds = []) {
   const params = new URLSearchParams();
   params.set("limit", String(limit));
   const trimmed = (query || "").trim();
   if (trimmed) {
     params.set("query", trimmed.slice(0, 100));
   }
+  appendKeep(params, keepIds);
   return request(`/api/conversations?${params.toString()}`);
 }
 

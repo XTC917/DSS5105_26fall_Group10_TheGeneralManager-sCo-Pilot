@@ -404,6 +404,29 @@ def _prior_tool_json(conversation_id: str) -> str:
     return "\n\n".join(chunks[-2:])
 
 
+def _recent_memory(conversation_id: str) -> str:
+    """Last three saved turns. Empty when this conversation has no history yet."""
+    try:
+        from uuid import UUID
+
+        from backend.services.conversation_history import recent_turn_memory
+
+        return recent_turn_memory(UUID(str(conversation_id)))
+    except Exception:  # noqa: BLE001 — a memory lookup must not block the new question
+        logger.exception("recent turn memory unavailable")
+        return ""
+
+
+def _with_recent(message: str, recent: str) -> str:
+    recent = (recent or "").strip()
+    if not recent:
+        return message
+    return (
+        "History, oldest first. These earlier turns are not the question to answer now.\n"
+        f"{recent}\n\nThis turn's question:\n{message}"
+    )
+
+
 def _model_turn(
     message: str,
     *,
@@ -452,6 +475,8 @@ def run_agent(
         clarification_reply=clarification_reply,
         original_question=original_question,
     )
+    recent = _recent_memory(conversation_id)
+    remembered = _with_recent(model_message, recent)
     if decision.short_circuit:
         logger.info(
             "route short-circuit conversation=%s intent=%s",
@@ -476,6 +501,7 @@ def run_agent(
         model_message,
         prior_tool_json=_prior_tool_json(memory_thread),
         clarification_reply=clarification_reply,
+        recent_turns=recent,
     )
     if not gate.proceed:
         parsed = {
@@ -521,7 +547,7 @@ def run_agent(
     held_rows = bind_lookup_rows()
     try:
         agent = get_agent()
-        payload = {"messages": [{"role": "user", "content": model_message}]}
+        payload = {"messages": [{"role": "user", "content": remembered}]}
         config = {"configurable": {"thread_id": memory_thread}}
         if progress or on_token:
             from backend.services.chat_stream import ToolProgress

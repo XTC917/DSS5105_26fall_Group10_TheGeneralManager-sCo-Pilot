@@ -58,6 +58,52 @@ def _title_from_question(question: str) -> str:
     return compact[:80] or DEFAULT_TITLE
 
 
+def discard_unused_conversations(user_id: int, keep: list[UUID] | None = None) -> None:
+    """Drop conversations that never received a question.
+
+    A conversation stays if a question is still being answered, or if the
+    caller just submitted one and asked to keep that id.
+    """
+    keep_ids = list(dict.fromkeys(str(item) for item in (keep or [])))
+    keep_clause = ""
+    params: list[Any] = [user_id]
+    if keep_ids:
+        keep_clause = "AND c.id::text <> ALL(%s)"
+        params.append(keep_ids)
+    with connect(admin=True) as conn, conn.transaction():
+        unused = conn.execute(
+            f"""
+            SELECT id
+            FROM {_table('conversations')} AS c
+            WHERE c.user_id = %s
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM {_table('chat_turns')} AS t
+                    WHERE t.conversation_id = c.id
+              )
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM {_table('chat_attempts')} AS a
+                    WHERE a.conversation_id = c.id
+                      AND a.status = 'IN_PROGRESS'
+              )
+              {keep_clause}
+            """,
+            tuple(params),
+        ).fetchall()
+        for row in unused:
+            thread_id = f"user:{user_id}:conversation:{row['id']}"
+            for table_name in ("checkpoint_writes", "checkpoint_blobs", "checkpoints"):
+                conn.execute(
+                    f"DELETE FROM {_table(table_name)} WHERE thread_id = %s",
+                    (thread_id,),
+                )
+            conn.execute(
+                f"DELETE FROM {_table('conversations')} WHERE id = %s AND user_id = %s",
+                (row["id"], user_id),
+            )
+
+
 def create_conversation(user_id: int) -> dict[str, Any]:
     conversation_id = uuid4()
     with connect(admin=True) as conn, conn.transaction():
@@ -113,9 +159,28 @@ def list_conversations(
                     SELECT COUNT(*)::INTEGER
                     FROM {_table('chat_turns')} AS t
                     WHERE t.conversation_id = c.id
-                ) AS turn_count
+                ) AS turn_count,
+                EXISTS (
+                    SELECT 1
+                    FROM {_table('chat_attempts')} AS running
+                    WHERE running.conversation_id = c.id
+                      AND running.status = 'IN_PROGRESS'
+                ) AS in_progress
             FROM {_table('conversations')} AS c
             WHERE c.user_id = %s
+              AND (
+                    EXISTS (
+                        SELECT 1
+                        FROM {_table('chat_turns')} AS asked
+                        WHERE asked.conversation_id = c.id
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM {_table('chat_attempts')} AS running
+                        WHERE running.conversation_id = c.id
+                          AND running.status = 'IN_PROGRESS'
+                    )
+              )
             {search_clause}
             ORDER BY c.updated_at DESC, c.id DESC
             LIMIT %s
@@ -204,6 +269,32 @@ def _restore_turn_metadata(turn: dict[str, Any]) -> None:
         if isinstance(action, dict)
     ]
     turn["response_json"] = payload
+
+
+def recent_turn_memory(conversation_id: UUID, *, limit: int = 3) -> str:
+    """Question and answer text from the last saved turns, oldest first."""
+    if limit < 1:
+        return ""
+    with connect(admin=True) as conn:
+        rows = conn.execute(
+            f"""
+            SELECT question, answer
+            FROM {_table('chat_turns')}
+            WHERE conversation_id = %s
+            ORDER BY id DESC
+            LIMIT %s
+            """,
+            (conversation_id, limit),
+        ).fetchall()
+    lines: list[str] = []
+    for row in reversed(rows):
+        question = " ".join(str(row["question"] or "").split())[:500]
+        answer = " ".join(str(row["answer"] or "").split())[:800]
+        if question:
+            lines.append(f"Manager: {question}")
+        if answer:
+            lines.append(f"Co-Pilot: {answer}")
+    return "\n".join(lines)
 
 
 def read_history_window(
@@ -315,6 +406,22 @@ def start_chat_attempt(
             """,
             (conversation_id, question, clarification_reply),
         ).fetchone()
+        if not clarification_reply:
+            conn.execute(
+                f"""
+                UPDATE {_table('conversations')}
+                SET
+                    title = CASE WHEN title = %s THEN %s ELSE title END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s AND user_id = %s
+                """,
+                (
+                    DEFAULT_TITLE,
+                    _title_from_question(question),
+                    conversation_id,
+                    user_id,
+                ),
+            )
     return dict(row)
 
 
@@ -469,6 +576,50 @@ def save_turn(
     return dict(row)
 
 
+def record_clarification_choice(
+    user_id: int,
+    conversation_id: UUID,
+    choice: str,
+) -> None:
+    """Remember which clarification option the manager already chose.
+
+    Only the latest unanswered card in this conversation is updated.
+    """
+    choice = choice.strip()
+    if not choice:
+        return
+    with connect(admin=True) as conn, conn.transaction():
+        conn.execute(
+            f"""
+            UPDATE {_table('chat_turns')} AS t
+            SET response_json = jsonb_set(
+                COALESCE(t.response_json, '{{}}'::jsonb),
+                '{{clarification_choice}}',
+                to_jsonb(%s::text),
+                true
+            )
+            FROM {_table('conversations')} AS c
+            WHERE t.conversation_id = c.id
+              AND c.user_id = %s
+              AND t.conversation_id = %s
+              AND t.response_json -> 'clarification' IS NOT NULL
+              AND jsonb_typeof(t.response_json -> 'clarification') = 'object'
+              AND NOT (t.response_json ? 'clarification_choice')
+              AND t.id = (
+                SELECT id
+                FROM {_table('chat_turns')}
+                WHERE conversation_id = %s
+                  AND response_json -> 'clarification' IS NOT NULL
+                  AND jsonb_typeof(response_json -> 'clarification') = 'object'
+                  AND NOT (response_json ? 'clarification_choice')
+                ORDER BY turn_number DESC
+                LIMIT 1
+              )
+            """,
+            (choice, user_id, conversation_id, conversation_id),
+        )
+
+
 def get_chat_attempt(user_id: int, attempt_id: int) -> dict[str, Any]:
     with connect(admin=True) as conn:
         row = conn.execute(
@@ -507,11 +658,53 @@ def validate_turn_action(
     if row is None:
         raise ConversationNotFoundError
     response_json = dict(row["response_json"] or {})
-    if public_action not in (response_json.get("proposed_actions") or []):
+    if not _action_belongs_to_turn(response_json, public_action):
         raise ActionDecisionError(
             "The proposed action does not belong to this chat turn"
         )
     return public_action
+
+
+def _stored_offer_action(response_json: dict[str, Any]) -> dict[str, Any] | None:
+    offer = response_json.get("action_offer")
+    if not isinstance(offer, dict) or not isinstance(offer.get("action"), dict):
+        return None
+    return _public_action(offer["action"])
+
+
+def _action_belongs_to_turn(response_json: dict[str, Any], public_action: dict[str, Any]) -> bool:
+    if public_action in (response_json.get("proposed_actions") or []):
+        return True
+    return _stored_offer_action(response_json) == public_action
+
+
+def attach_action_offer(user_id: int, turn_id: int, offer: dict[str, Any]) -> None:
+    """Store the automatic watch or email suggestion on the turn that produced it."""
+    prompt = str(offer.get("prompt") or "").strip()
+    action = offer.get("action")
+    if not prompt or not isinstance(action, dict):
+        raise ValueError("An action offer needs a prompt and an action")
+    stored = {"prompt": prompt, "action": _public_action(action)}
+    with connect(admin=True) as conn, conn.transaction():
+        row = conn.execute(
+            f"""
+            SELECT t.response_json
+            FROM {_table('chat_turns')} AS t
+            JOIN {_table('conversations')} AS c
+              ON c.id = t.conversation_id
+            WHERE t.id = %s AND c.user_id = %s
+            FOR UPDATE OF t
+            """,
+            (turn_id, user_id),
+        ).fetchone()
+        if row is None:
+            raise ConversationNotFoundError
+        response_json = dict(row["response_json"] or {})
+        response_json["action_offer"] = stored
+        conn.execute(
+            f"UPDATE {_table('chat_turns')} SET response_json = %s WHERE id = %s",
+            (Jsonb(response_json), turn_id),
+        )
 
 
 def record_turn_action_decision(
@@ -542,16 +735,22 @@ def record_turn_action_decision(
             raise ConversationNotFoundError
 
         response_json = dict(row["response_json"] or {})
-        if public_action not in (response_json.get("proposed_actions") or []):
+        if not _action_belongs_to_turn(response_json, public_action):
             raise ActionDecisionError(
                 "The proposed action does not belong to this chat turn"
             )
-        response_json["proposed_actions"] = []
-        response_json["decision"] = {
-            "status": status,
-            "summary": summary,
-            "action": public_action,
-        }
+        if public_action in (response_json.get("proposed_actions") or []):
+            response_json["proposed_actions"] = []
+            response_json["decision"] = {
+                "status": status,
+                "summary": summary,
+                "action": public_action,
+            }
+        if _stored_offer_action(response_json) == public_action:
+            response_json["action_offer_decision"] = {
+                "status": status,
+                "summary": summary,
+            }
         updated = conn.execute(
             f"""
             UPDATE {_table('chat_turns')}

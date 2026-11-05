@@ -6,7 +6,7 @@ import AlertsRail from "../components/AlertsRail.jsx";
 import DataManagement from "./DataManagement.jsx";
 import UserManagement from "./UserManagement.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
-import { advanceFactoryDate, fetchHealth } from "../services/api.js";
+import { fetchHealth, setFactoryDate } from "../services/api.js";
 import { deactivateMe } from "../services/authApi.js";
 import {
   createConversation,
@@ -45,10 +45,13 @@ function messagesFromTurns(turns) {
         limitation: metadata.limitation || null,
         proposedActions: metadata.proposed_actions || [],
         emailDrafts: metadata.email_drafts || [],
+        actionOffer: metadata.action_offer || null,
+        actionOfferDecision: metadata.action_offer_decision || null,
         turnId: turn.id,
         charts: metadata.charts || [],
         tables: metadata.tables || [],
         clarification: metadata.clarification || null,
+        clarificationChoice: metadata.clarification_choice || "",
         why: metadata.why || null,
         decision: metadata.decision || null,
       },
@@ -183,14 +186,19 @@ export default function Home() {
   const [capabilities, setCapabilities] = useState({ search: false, delete: false });
   const [capabilitiesReady, setCapabilitiesReady] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState(null);
-  const [initialMessages, setInitialMessages] = useState([]);
+  const [messageSeeds, setMessageSeeds] = useState({});
   const [conversationLoading, setConversationLoading] = useState(true);
   const [conversationError, setConversationError] = useState("");
-  const [chatBusy, setChatBusy] = useState(false);
+  const [busyIds, setBusyIds] = useState(() => new Set());
+  const busyIdsRef = useRef(busyIds);
+  busyIdsRef.current = busyIds;
+  const watchSaveHolds = useRef(0);
   const [composerDraft, setComposerDraft] = useState("");
-  const [factoryDate, setFactoryDate] = useState(() => peekOverviewCache()?.briefing?.factory_today || "");
-  const [advancingDate, setAdvancingDate] = useState(false);
-  const [advanceError, setAdvanceError] = useState("");
+  const [factoryDate, setFactoryDateState] = useState(() => peekOverviewCache()?.briefing?.factory_today || "");
+  const [dateDraft, setDateDraft] = useState(() => peekOverviewCache()?.briefing?.factory_today || "");
+  const [dateSaving, setDateSaving] = useState(false);
+  const [dateError, setDateError] = useState("");
+  const [dateNotice, setDateNotice] = useState("");
   const [watches, setWatches] = useState(() => peekOverviewCache()?.watches || { fired: [], active: [], cancelled: [] });
   const [watchesLoading, setWatchesLoading] = useState(false);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
@@ -203,6 +211,9 @@ export default function Home() {
   const searchRequest = useRef(0);
   const searchInputRef = useRef("");
   const bootstrappedRef = useRef(false);
+  const pinnedIdsRef = useRef(new Set());
+  const pinnedRowsRef = useRef(new Map());
+  const conversationCatalogRef = useRef([]);
 
   const isAdmin = user?.role === "ADMIN";
   const searching = Boolean(debouncedSearch.trim());
@@ -225,21 +236,27 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
     setWatchesLoading(true);
-    loadOverviewData({ force: !peekOverviewCache()?.briefing })
+    loadOverviewData({ force: boardTick > 0 || !peekOverviewCache()?.briefing })
       .then((payload) => {
         if (cancelled) return;
-        if (payload.briefing?.factory_today) setFactoryDate(payload.briefing.factory_today);
+        if (payload.briefing?.factory_today) {
+          setFactoryDateState(payload.briefing.factory_today);
+          setDateDraft(payload.briefing.factory_today);
+        }
         setWatches(payload.watches || { fired: [], active: [], cancelled: [] });
       })
       .catch(() => {
         const cached = peekOverviewCache();
         if (!cancelled && cached) {
-          if (cached.briefing?.factory_today) setFactoryDate(cached.briefing.factory_today);
+          if (cached.briefing?.factory_today) {
+            setFactoryDateState(cached.briefing.factory_today);
+            setDateDraft(cached.briefing.factory_today);
+          }
           setWatches(cached.watches || { fired: [], active: [], cancelled: [] });
         }
       })
       .finally(() => {
-        if (!cancelled) setWatchesLoading(false);
+        if (!cancelled && watchSaveHolds.current === 0) setWatchesLoading(false);
       });
     return () => {
       cancelled = true;
@@ -272,11 +289,86 @@ export default function Home() {
     return () => window.clearTimeout(handle);
   }, [searchInput]);
 
-  const refreshConversationCatalog = useCallback(async () => {
-    const rows = await fetchConversations();
-    setConversationCatalog(rows);
+  function keepIds() {
+    return [...new Set([...pinnedIdsRef.current, ...busyIdsRef.current])];
+  }
+
+  function listedConversation(row) {
+    return (row.turn_count || 0) > 0 || row.pending || row.in_progress;
+  }
+
+  function replaceCatalog(next) {
+    conversationCatalogRef.current = next;
+    setConversationCatalog(next);
+    return next;
+  }
+
+  function mergeCatalog(rows) {
+    const serverRows = (rows || [])
+      .filter((row) => (row.turn_count || 0) > 0 || row.in_progress)
+      .map((row) => {
+        const pinned = pinnedRowsRef.current.get(row.id);
+        const title = row.title === "New conversation" && pinned?.title ? pinned.title : row.title;
+        return { ...row, title, pending: false };
+      });
+    const seen = new Set(serverRows.map((row) => row.id));
+    for (const row of serverRows) {
+      if ((row.turn_count || 0) > 0) {
+        pinnedIdsRef.current.delete(row.id);
+        pinnedRowsRef.current.delete(row.id);
+      }
+    }
+    const extras = [];
+    for (const [id, row] of pinnedRowsRef.current) {
+      if (!seen.has(id)) extras.push(row);
+    }
+    return [...extras, ...serverRows].sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
+  }
+
+  function questionTitle(question) {
+    const compact = String(question || "").trim().replace(/\s+/g, " ");
+    return compact.slice(0, 80) || "New conversation";
+  }
+
+  function noteQuestionSubmitted(conversationId, question) {
+    if (!conversationId) return;
+    const existing = conversationCatalogRef.current.find((row) => row.id === conversationId);
+    const alreadySaved = Boolean(existing && !existing.pending && (existing.turn_count || 0) > 0);
+    const row = {
+      id: conversationId,
+      title: alreadySaved ? existing.title : questionTitle(question),
+      created_at: existing?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      turn_count: existing?.turn_count || 0,
+      pending: !alreadySaved,
+      in_progress: true,
+    };
+    if (!alreadySaved) {
+      pinnedIdsRef.current.add(conversationId);
+      pinnedRowsRef.current.set(conversationId, row);
+    }
+    const next = [row, ...conversationCatalogRef.current.filter((item) => item.id !== conversationId)];
+    replaceCatalog(next);
+    setSearchResults((current) => (
+      current ? [row, ...current.filter((item) => item.id !== conversationId)] : current
+    ));
+  }
+
+  function noteQuestionFailed(conversationId) {
+    if (!conversationId) return;
+    pinnedIdsRef.current.delete(conversationId);
+    pinnedRowsRef.current.delete(conversationId);
+    refreshConversationCatalog().catch(() => {
+      replaceCatalog(
+        conversationCatalogRef.current.filter((row) => row.id !== conversationId || !row.pending),
+      );
+    });
+  }
+
+  async function refreshConversationCatalog() {
+    const rows = replaceCatalog(mergeCatalog(await fetchConversations(50, "", keepIds())));
     return rows;
-  }, []);
+  }
 
   const openConversation = useCallback(
     async (conversationId) => {
@@ -288,7 +380,13 @@ export default function Home() {
         const history = await fetchConversationHistory(conversationId);
         if (requestId !== historyRequest.current) return;
         setActiveConversationId(history.conversation.id);
-        setInitialMessages(messagesFromTurns(history.turns));
+        setMessageSeeds((current) => {
+          if (busyIdsRef.current.has(history.conversation.id)) return current;
+          return {
+            ...current,
+            [history.conversation.id]: messagesFromTurns(history.turns),
+          };
+        });
         localStorage.setItem(storageKey(user.id), history.conversation.id);
         setActiveView("copilot");
         setAskAiNotice("");
@@ -305,13 +403,17 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
     historyRequest.current += 1;
+    pinnedIdsRef.current = new Set();
+    pinnedRowsRef.current = new Map();
+    conversationCatalogRef.current = [];
     setConversationCatalog([]);
     setSearchResults(null);
     setSearchInput("");
     searchInputRef.current = "";
     setDebouncedSearch("");
     setActiveConversationId(null);
-    setInitialMessages([]);
+    setMessageSeeds({});
+    setBusyIds(new Set());
     setConversationError("");
     setListError("");
     setConversationLoading(true);
@@ -320,14 +422,17 @@ export default function Home() {
     async function restoreConversations() {
       if (!user?.id) return;
       try {
-        let rows = await fetchConversations();
+        let rows = mergeCatalog(await fetchConversations(50, "", keepIds()));
         if (cancelled) return;
         if (rows.length === 0) {
-          const created = await createConversation();
-          rows = [created];
+          const created = await createConversation(keepIds());
+          if (cancelled) return;
+          replaceCatalog([]);
+          await openConversation(created.id);
+          bootstrappedRef.current = true;
+          return;
         }
-        if (cancelled) return;
-        setConversationCatalog(rows);
+        replaceCatalog(rows);
         const remembered = localStorage.getItem(storageKey(user.id));
         const selected = rows.some((item) => item.id === remembered) ? remembered : rows[0].id;
         await openConversation(selected);
@@ -369,7 +474,7 @@ export default function Home() {
     fetchConversations(50, query)
       .then((rows) => {
         if (cancelled || requestId !== searchRequest.current) return;
-        setSearchResults(rows);
+        setSearchResults(rows.filter(listedConversation));
       })
       .catch((err) => {
         if (cancelled || requestId !== searchRequest.current) return;
@@ -397,14 +502,18 @@ export default function Home() {
     }
   }
 
+  const setConversationBusy = useCallback((conversationId, isBusy) => {
+    if (!conversationId) return;
+    setBusyIds((current) => {
+      if (current.has(conversationId) === isBusy) return current;
+      const next = new Set(current);
+      if (isBusy) next.add(conversationId);
+      else next.delete(conversationId);
+      return next;
+    });
+  }, []);
+
   async function handleNewConversation({ fromAskAi = false } = {}) {
-    if (chatBusy) {
-      if (fromAskAi) {
-        setActiveView("copilot");
-        setAskAiNotice("Wait for the current answer to finish before starting a new chat.");
-      }
-      return;
-    }
     if (composerDraft.trim()) {
       if (fromAskAi) {
         setActiveView("copilot");
@@ -412,26 +521,12 @@ export default function Home() {
       }
       return;
     }
-    // Reuse an already-empty conversation instead of creating duplicates.
-    if (activeConversationId && initialMessages.length === 0) {
-      setActiveView("copilot");
-      setAskAiNotice("");
-      setHistoryDrawerOpen(false);
-      return;
-    }
-    const emptyExisting = conversationCatalog.find((row) => row.id === activeConversationId && (row.turn_count || 0) === 0);
-    if (emptyExisting && initialMessages.length === 0) {
-      setActiveView("copilot");
-      setAskAiNotice("");
-      return;
-    }
     setConversationError("");
     setAskAiNotice("");
+    setHistoryDrawerOpen(false);
     try {
-      const created = await createConversation();
-      setConversationCatalog((current) => [created, ...current.filter((row) => row.id !== created.id)]);
-      setSearchInput("");
-      searchInputRef.current = "";
+      const created = await createConversation(keepIds());
+      replaceCatalog(conversationCatalogRef.current.filter(listedConversation));
       setDebouncedSearch("");
       setSearchResults(null);
       setComposerDraft("");
@@ -447,35 +542,67 @@ export default function Home() {
     handleNewConversation({ fromAskAi: true });
   }
 
-  function handleWatchChanged() {
+  function beginWatchSave() {
+    watchSaveHolds.current += 1;
+    setWatchesLoading(true);
+  }
+
+  function abandonWatchSave() {
+    watchSaveHolds.current = Math.max(0, watchSaveHolds.current - 1);
+    if (watchSaveHolds.current === 0) setWatchesLoading(false);
+  }
+
+  function finishWatchSave() {
+    watchSaveHolds.current = Math.max(0, watchSaveHolds.current - 1);
     invalidateOverviewCache();
+    setWatchesLoading(true);
     setBoardTick((n) => n + 1);
   }
 
-  async function advanceDate() {
-    if (!factoryDate || advancingDate) return;
-    setAdvancingDate(true);
-    setAdvanceError("");
+  function handleWatchChanged() {
+    invalidateOverviewCache();
+    setWatchesLoading(true);
+    setBoardTick((n) => n + 1);
+  }
+
+  async function saveFactoryDate() {
+    if (!dateDraft || dateSaving) return;
+    setDateSaving(true);
+    setDateError("");
+    setDateNotice("");
     try {
-      const result = await advanceFactoryDate(factoryDate);
-      if (result?.factory_today) setFactoryDate(result.factory_today);
+      const result = await setFactoryDate(dateDraft);
+      const next = result?.factory_today || dateDraft;
+      setFactoryDateState(next);
+      setDateDraft(next);
+      setDateNotice("Saved. Every account now treats this date as today.");
       invalidateOverviewCache();
       setBoardTick((n) => n + 1);
     } catch (err) {
-      setAdvanceError(err.message || "Could not advance the factory date.");
+      setDateError(err.message || "Could not save the factory date.");
     } finally {
-      setAdvancingDate(false);
+      setDateSaving(false);
     }
   }
 
-  async function handleConversationUpdated() {
+  async function handleConversationUpdated(conversationId) {
     try {
-      await refreshConversationCatalog();
+      const rows = await fetchConversations(50, "", keepIds());
+      if (conversationId) {
+        const saved = rows.some((row) => row.id === conversationId && (row.turn_count || 0) > 0);
+        if (!saved) {
+          pinnedIdsRef.current.delete(conversationId);
+          pinnedRowsRef.current.delete(conversationId);
+        }
+      }
+      replaceCatalog(mergeCatalog(rows));
       const query = debouncedSearch.trim();
       if (capabilities.search && query) {
         const requestId = ++searchRequest.current;
-        const rows = await fetchConversations(50, query);
-        if (requestId === searchRequest.current) setSearchResults(rows);
+        const found = await fetchConversations(50, query, keepIds());
+        if (requestId === searchRequest.current) {
+          setSearchResults(found.filter(listedConversation));
+        }
       }
     } catch (err) {
       setConversationError(err.message);
@@ -496,7 +623,9 @@ export default function Home() {
       if (capabilities.search && query) {
         const requestId = ++searchRequest.current;
         const filtered = await fetchConversations(50, query);
-        if (requestId === searchRequest.current) setSearchResults(filtered);
+        if (requestId === searchRequest.current) {
+          setSearchResults(filtered.filter(listedConversation));
+        }
       } else {
         setSearchResults(null);
       }
@@ -504,8 +633,8 @@ export default function Home() {
         if (catalog.length > 0) {
           await openConversation(catalog[0].id);
         } else {
-          const created = await createConversation();
-          setConversationCatalog([created]);
+          const created = await createConversation(keepIds());
+          replaceCatalog([]);
           setSearchInput("");
           searchInputRef.current = "";
           setDebouncedSearch("");
@@ -530,7 +659,8 @@ export default function Home() {
     searchEnabled: capabilitiesReady && capabilities.search,
     searchUnavailable: false,
     onSearchChange: handleSearchChange,
-    disabled: chatBusy || Boolean(deletingId),
+    disabled: Boolean(deletingId),
+    busyIds,
     canDelete: capabilitiesReady && capabilities.delete,
     deleteUnavailable: false,
     deletingId,
@@ -574,6 +704,11 @@ export default function Home() {
   ];
 
   const alertCount = (watches.fired?.length || 0) + (watches.active?.length || 0);
+  const liveConversationIds = [];
+  if (activeConversationId) liveConversationIds.push(activeConversationId);
+  busyIds.forEach((conversationId) => {
+    if (!liveConversationIds.includes(conversationId)) liveConversationIds.push(conversationId);
+  });
 
   const navButton = (item) => {
     const active = activeView === item.key;
@@ -621,19 +756,6 @@ export default function Home() {
               Factory date…
             </Badge>
           )}
-          <button
-            type="button"
-            onClick={advanceDate}
-            disabled={!factoryDate || advancingDate}
-            className="focus-ring rounded-control border border-line bg-surface px-2.5 py-1 type-caption font-medium text-foreground hover:bg-surfaceMuted disabled:opacity-60"
-          >
-            {advancingDate ? "Advancing…" : "Advance one day"}
-          </button>
-          {advanceError && (
-            <span className="hidden max-w-[12rem] truncate type-caption text-danger lg:inline" title={advanceError}>
-              {advanceError}
-            </span>
-          )}
           {alertCount > 0 && (
             <button
               type="button"
@@ -670,7 +792,7 @@ export default function Home() {
             <p className="type-overline text-muted">Conversations</p>
             <button
               type="button"
-              disabled={chatBusy || conversationLoading}
+              disabled={conversationLoading}
               onClick={() => handleNewConversation()}
               className="focus-ring rounded-control border border-line px-2 py-1 type-caption font-medium text-foreground transition-colors hover:border-accentText hover:text-accentText disabled:opacity-50"
             >
@@ -691,22 +813,34 @@ export default function Home() {
         <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {activeView === "copilot" && (
             <>
-              {activeConversationId ? (
-                <div className="min-h-0 flex-1 overflow-hidden">
-                  <ChatPanel
-                    key={activeConversationId}
-                    conversationId={activeConversationId}
-                    initialMessages={initialMessages}
-                    llmReady={Boolean(health?.llm_configured)}
-                    onBusyChange={setChatBusy}
-                    onConversationUpdated={handleConversationUpdated}
-                    onBoardChanged={handleWatchChanged}
-                    onOpenConversations={() => setHistoryDrawerOpen(true)}
-                    onNewConversation={handleNewConversation}
-                    onDraftChange={setComposerDraft}
-                    notice={askAiNotice}
-                    onDismissNotice={() => setAskAiNotice("")}
-                  />
+              {liveConversationIds.length > 0 ? (
+                <div className="relative min-h-0 flex-1 overflow-hidden">
+                  {liveConversationIds.map((conversationId) => (
+                    <div
+                      key={conversationId}
+                      className={conversationId === activeConversationId ? "absolute inset-0" : "hidden"}
+                    >
+                      <ChatPanel
+                        conversationId={conversationId}
+                        initialMessages={messageSeeds[conversationId] || []}
+                        active={conversationId === activeConversationId}
+                        llmReady={Boolean(health?.llm_configured)}
+                        onBusyChange={setConversationBusy}
+                        onConversationUpdated={handleConversationUpdated}
+                        onQuestionSubmitted={noteQuestionSubmitted}
+                        onQuestionFailed={noteQuestionFailed}
+                        onBoardPending={beginWatchSave}
+                        onBoardFailed={abandonWatchSave}
+                        onBoardSaved={finishWatchSave}
+                        onBoardChanged={handleWatchChanged}
+                        onOpenConversations={() => setHistoryDrawerOpen(true)}
+                        onNewConversation={handleNewConversation}
+                        onDraftChange={setComposerDraft}
+                        notice={conversationId === activeConversationId ? askAiNotice : ""}
+                        onDismissNotice={() => setAskAiNotice("")}
+                      />
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="flex min-h-0 flex-1 items-center justify-center p-4">
@@ -729,7 +863,9 @@ export default function Home() {
               <Sidebar
                 refreshToken={boardTick}
                 onFactoryDate={(value) => {
-                  if (value) setFactoryDate(value);
+                  if (!value) return;
+                  setFactoryDateState(value);
+                  setDateDraft(value);
                 }}
               />
             </div>
@@ -787,6 +923,32 @@ export default function Home() {
                     <ThemeSwitcher />
                   </div>
                 </section>
+
+                {isAdmin && (
+                  <section className="rounded-card border border-line bg-surface p-5 shadow-xs">
+                    <h3 className="type-h3 text-foreground">Factory date</h3>
+                    <p className="mt-1 type-sm text-muted">
+                      Choose any day every account treats as today, including dates before 1 April 2026. Other accounts only see the date. A warning that already fired stays fired.
+                    </p>
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <input
+                        type="date"
+                        value={dateDraft}
+                        onChange={(event) => {
+                          setDateDraft(event.target.value);
+                          setDateNotice("");
+                          setDateError("");
+                        }}
+                        className="focus-ring rounded-control border border-line bg-canvas px-3 py-2 type-sm text-foreground"
+                      />
+                      <Button size="sm" onClick={saveFactoryDate} disabled={!dateDraft || dateSaving || dateDraft === factoryDate}>
+                        {dateSaving ? "Saving…" : "Save"}
+                      </Button>
+                    </div>
+                    {dateNotice && <p className="mt-2 type-caption text-success">{dateNotice}</p>}
+                    {dateError && <p className="mt-2 type-caption text-danger">{dateError}</p>}
+                  </section>
+                )}
 
                 <section className="rounded-card border border-line bg-surface p-5 shadow-xs">
                   <h3 className="type-h3 text-foreground">Security & Session</h3>

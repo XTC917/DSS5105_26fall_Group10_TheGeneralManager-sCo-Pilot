@@ -338,6 +338,19 @@
   color: rgb(var(--foreground));
 }
 
+/* Question bubbles already use --accent-soft, so the default highlight disappears on them. */
+.question-text::selection,
+.question-text::-moz-selection {
+  background-color: rgb(var(--accent-700));
+  color: #fff;
+}
+
+[data-theme="dark"] .question-text::selection,
+[data-theme="dark"] .question-text::-moz-selection {
+  background-color: rgb(var(--accent-300));
+  color: rgb(var(--foreground));
+}
+
 /* ---- Reduced motion ----------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   *,

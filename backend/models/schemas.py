@@ -15,6 +15,7 @@ class ConversationSummary(BaseModel):
     created_at: datetime
     updated_at: datetime
     turn_count: int = 0
+    in_progress: bool = False
 
 
 class ChatTurn(BaseModel):

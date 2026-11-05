@@ -12,6 +12,7 @@ from typing import Any, Optional
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
+from backend.config import PRODUCTION_STAGES_IN_ORDER
 from backend.services.calculations import assess_order_risk, order_computed_fields
 from backend.services.database import get_db
 from backend.services.pace import (
@@ -20,6 +21,7 @@ from backend.services.pace import (
     likely_to_miss_due_next_n_days,
     pace_fields,
     stage_medians,
+    would_miss_due_date,
 )
 from backend.tools.common import (
     order_id_named_by_manager,
@@ -54,6 +56,20 @@ class GetOrdersAtRiskInput(BaseModel):
         description=(
             "Optional: OVERDUE or STALLED for those flags only. "
             "TIGHT_DEADLINE or omit for orders likely to miss a due date still ahead."
+        ),
+    )
+    stage: Optional[str] = Field(
+        default=None,
+        description=(
+            "Stage whose future daily output the manager fixed, e.g. ASSEMBLY. "
+            "Pass with pieces_per_day. Omit both when they did not fix a rate."
+        ),
+    )
+    pieces_per_day: Optional[float] = Field(
+        default=None,
+        description=(
+            "Fixed pieces per working day for stage, e.g. 455. "
+            "Replaces that stage's 30-day median only. Other stages stay on the median."
         ),
     )
 
@@ -179,13 +195,21 @@ def get_order_status(
 
 
 @tool(args_schema=GetOrdersAtRiskInput)
-def get_orders_at_risk(flag: Optional[str] = None) -> str:
+def get_orders_at_risk(
+    flag: Optional[str] = None,
+    stage: Optional[str] = None,
+    pieces_per_day: Optional[float] = None,
+) -> str:
     """List orders likely to miss a due date, plus separate overdue and stalled flags.
 
-    data.orders with no flag — same rows as likely_to_miss_due_dates.
+    data.orders with no flag and no fixed rate — same rows as likely_to_miss_due_dates.
       Not overdue. Due today through +3 calendar days.
       days_left = max(sum over remaining stages of pieces / 30-day median, remaining stage count).
       Included when days_left exceeds working days until due.
+    stage + pieces_per_day — the manager fixed that stage's future output.
+      Replaces only that stage's 30-day median. Other stages stay on the median.
+      data.orders is then every not-yet-overdue in-progress order whose days_left
+      exceeds working days until due. Do not answer that hypothetical from the median.
     flag=OVERDUE or flag=STALLED — that flag only. Not the miss-due list.
     data.likely_to_miss_due_next_7_days — tomorrow through 7 calendar days ahead
       (not due today) and at least one working day short at the same pace.
@@ -203,7 +227,37 @@ def get_orders_at_risk(flag: Optional[str] = None) -> str:
             )
 
         db = get_db()
-        medians = stage_medians(db)
+        named_stage = (stage or "").strip()
+        has_stage = bool(named_stage)
+        has_rate = pieces_per_day is not None
+        if has_stage != has_rate:
+            return tool_error(
+                tool_name,
+                "INVALID_INPUT",
+                "Pass stage and pieces_per_day together, or omit both.",
+            )
+        medians = dict(stage_medians(db))
+        assumption = None
+        if has_stage:
+            stage_key = named_stage.upper()
+            if stage_key not in PRODUCTION_STAGES_IN_ORDER:
+                return tool_error(
+                    tool_name,
+                    "INVALID_INPUT",
+                    "stage must be KNITTING, ASSEMBLY, WASHING, or PACKING.",
+                )
+            if pieces_per_day <= 0:
+                return tool_error(
+                    tool_name,
+                    "INVALID_INPUT",
+                    "pieces_per_day must be greater than 0.",
+                )
+            medians[stage_key] = float(pieces_per_day)
+            assumption = {
+                "stage": stage_key,
+                "pieces_per_day": float(pieces_per_day),
+                "replaces": "30-day median for this stage only",
+            }
         in_progress = db.in_progress_orders()
         flagged: list[dict[str, Any]] = []
         for order in in_progress:
@@ -228,10 +282,32 @@ def get_orders_at_risk(flag: Optional[str] = None) -> str:
                 }
             )
 
-        miss_due = likely_to_miss_due_dates(db)
-        miss_week = likely_to_miss_due_next_n_days(db)
+        miss_due = likely_to_miss_due_dates(db, medians)
+        miss_week = likely_to_miss_due_next_n_days(db, medians)
+        miss_any = would_miss_due_date(db, medians) if assumption else []
         by_id = {row["order_id"]: row for row in flagged}
-        if flag_norm is None or flag_norm == "TIGHT_DEADLINE":
+        if assumption and (flag_norm is None or flag_norm == "TIGHT_DEADLINE"):
+            assessed = []
+            for row in miss_any:
+                card = by_id.get(row["order_id"])
+                if card is None:
+                    card = {
+                        "order_id": row["order_id"],
+                        "customer": row["customer"],
+                        "product": row["product"],
+                        "pieces": row["pieces"],
+                        "due_date": row["due_date"],
+                        "current_stage": row["current_stage"],
+                        "last_activity_date": row["last_activity_date"],
+                        "flags": [],
+                        "rank_score": 0,
+                        "computed": {},
+                        "pace": row,
+                    }
+                else:
+                    card = {**card, "pace": row}
+                assessed.append(card)
+        elif flag_norm is None or flag_norm == "TIGHT_DEADLINE":
             assessed = [by_id[row["order_id"]] for row in miss_due if row["order_id"] in by_id]
         else:
             assessed = [row for row in flagged if flag_norm in row["flags"]]
@@ -244,17 +320,28 @@ def get_orders_at_risk(flag: Optional[str] = None) -> str:
                 "data": {
                     "count": len(assessed),
                     "flag_filter": flag_norm,
+                    "assumption": assumption,
+                    "stage_rates_pieces_per_day": medians,
                     "orders": assessed,
                     "likely_to_miss_due_dates": {
                         "count": len(miss_due),
                         "order_ids": [r["order_id"] for r in miss_due],
                         "orders": miss_due,
                         "basis": (
-                            "Same rows as data.orders when flag is omitted. "
-                            "Not overdue. Due today through +3 calendar days. "
-                            "days_left = max(sum over remaining stages of pieces / "
-                            "30-day median pieces_completed, remaining stage count). "
-                            "Included when days_left exceeds working days until due."
+                            (
+                                "Not the same rows as data.orders while a stage rate is fixed. "
+                                "Not overdue. Due today through +3 calendar days. "
+                                f"{assumption['stage']} uses {assumption['pieces_per_day']} pieces per day; "
+                                "other stages use the 30-day median."
+                            )
+                            if assumption
+                            else (
+                                "Same rows as data.orders when flag is omitted. "
+                                "Not overdue. Due today through +3 calendar days. "
+                                "days_left = max(sum over remaining stages of pieces / "
+                                "30-day median pieces_completed, remaining stage count). "
+                                "Included when days_left exceeds working days until due."
+                            )
                         ),
                     },
                     "likely_to_miss_due_next_7_days": {
@@ -267,21 +354,36 @@ def get_orders_at_risk(flag: Optional[str] = None) -> str:
                         ),
                     },
                     "basis": (
-                        "data.orders with no flag is the miss-due list: not overdue, "
-                        "due today through +3 calendar days, and days_left "
-                        "(max of pieces / 30-day stage median over remaining stages "
-                        "and remaining stage count) "
-                        "exceeds working days until due. "
-                        "flag=OVERDUE is due_date before the active factory date. "
-                        "flag=STALLED is idle >= 3 working days. "
-                        "Those two flags are not the miss-due list. "
-                        "Next 7 days is data.likely_to_miss_due_next_7_days."
+                        (
+                            f"data.orders uses {assumption['pieces_per_day']} pieces per working day "
+                            f"for {assumption['stage']} instead of that stage's 30-day median. "
+                            "Other stages still use their 30-day median. "
+                            "Included orders are not yet overdue and days_left exceeds "
+                            "working days until due. There is no 3-day window on this list."
+                        )
+                        if assumption
+                        else (
+                            "data.orders with no flag is the miss-due list: not overdue, "
+                            "due today through +3 calendar days, and days_left "
+                            "(max of pieces / 30-day stage median over remaining stages "
+                            "and remaining stage count) "
+                            "exceeds working days until due. "
+                            "flag=OVERDUE is due_date before the active factory date. "
+                            "flag=STALLED is idle >= 3 working days. "
+                            "Those two flags are not the miss-due list. "
+                            "Next 7 days is data.likely_to_miss_due_next_7_days."
+                        )
                     ),
                 },
                 "trace": {
                     "tool": tool_name,
                     "source_file": "orders.csv",
-                    "filter": {"status": "IN_PROGRESS", "flag": flag_norm},
+                    "filter": {
+                        "status": "IN_PROGRESS",
+                        "flag": flag_norm,
+                        "stage": None if assumption is None else assumption["stage"],
+                        "pieces_per_day": None if assumption is None else assumption["pieces_per_day"],
+                    },
                     "rows": [
                         {
                             "order_id": r["order_id"],

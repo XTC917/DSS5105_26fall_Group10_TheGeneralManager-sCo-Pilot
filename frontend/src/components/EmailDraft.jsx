@@ -15,7 +15,7 @@ async function emailRequest(path, method = "GET", data) {
   return result;
 }
 
-export default function EmailDraft({ draft, turnId, index }) {
+export default function EmailDraft({ draft, turnId, index, locked = false }) {
   const path = `/api/email/turns/${turnId}/drafts/${index}`;
   const [saved, setSaved] = useState(null);
   const [edit, setEdit] = useState(null);
@@ -79,6 +79,15 @@ export default function EmailDraft({ draft, turnId, index }) {
   };
   const control = "focus-ring rounded-lg border border-line bg-surface px-3 py-1.5 type-caption disabled:opacity-50";
   const field = "mt-1 block w-full rounded-lg border border-line bg-surface p-2";
+
+  if (locked) {
+    return (
+      <section className="space-y-2 rounded-xl border border-line bg-surfaceMuted/40 p-3 type-sm">
+        <p className="break-words font-medium">{draft.subject}</p>
+        {draft.body && <p className="whitespace-pre-wrap break-words text-muted">{draft.body}</p>}
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-2 rounded-xl border border-line bg-surfaceMuted/40 p-3 type-sm">

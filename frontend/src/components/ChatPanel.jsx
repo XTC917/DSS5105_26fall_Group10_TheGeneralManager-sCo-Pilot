@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { confirmAction, declineAction, fetchActionOffer, fetchSuggestions, sendChatStream } from "../services/api.js";
+import { confirmAction, declineAction, fetchActionOffer, saveActionOffer, sendChatStream } from "../services/api.js";
 import MessageBubble from "./MessageBubble.jsx";
 
-const CHAR_MS = 28;
+const CHAR_MS = 14;
 
 const FEATURED_STARTERS = [
   "Which orders are at risk right now?",
@@ -102,11 +102,17 @@ export default function ChatPanel({
   conversationId,
   llmReady,
   onBoardChanged,
+  onBoardPending,
+  onBoardFailed,
+  onBoardSaved,
   onBusyChange,
   onConversationUpdated,
+  onQuestionSubmitted,
+  onQuestionFailed,
   onOpenConversations,
   onNewConversation,
   onDraftChange,
+  active = true,
   notice = "",
   onDismissNotice,
   initialMessages = [],
@@ -117,13 +123,9 @@ export default function ChatPanel({
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [isAtBottom, setIsAtBottom] = useState(true);
-  const [followups, setFollowups] = useState([]);
-  const [actionOffer, setActionOffer] = useState(null);
-  const [actionNote, setActionNote] = useState("");
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [suggestionsPos, setSuggestionsPos] = useState(null);
   const listRef = useRef(null);
-  const suggestSeq = useRef(0);
   const textareaRef = useRef(null);
   const suggestionsRef = useRef(null);
   const suggestionsPopoverRef = useRef(null);
@@ -151,31 +153,6 @@ export default function ChatPanel({
   }
 
   useEffect(() => resetTyper, []);
-
-  async function loadFollowups(query, asked) {
-    const seq = ++suggestSeq.current;
-    try {
-      const data = await fetchSuggestions({ query, asked, focus: "" });
-      const suggestions = Array.isArray(data.suggestions) ? data.suggestions.slice(0, 3) : [];
-      return { seq, suggestions };
-    } catch {
-      return { seq, suggestions: [] };
-    }
-  }
-
-  useEffect(() => {
-    const users = (initialMessages || []).filter((item) => item.role === "user").map((item) => item.content);
-    const lastUser = users.at(-1);
-    const lastAssistant = [...(initialMessages || [])].reverse().find((item) => item.role === "assistant");
-    if (!lastUser || !lastAssistant || lastAssistant.clarification) return;
-    let active = true;
-    loadFollowups(lastUser, users).then((pending) => {
-      if (active && pending.seq === suggestSeq.current) setFollowups(pending.suggestions);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   function paintTyped() {
     const content = typer.current.chars.slice(0, typer.current.shown).join("");
@@ -261,13 +238,14 @@ export default function ChatPanel({
   }
 
   useEffect(() => {
-    onBusyChange?.(busy);
-    return () => onBusyChange?.(false);
-  }, [busy, onBusyChange]);
+    onBusyChange?.(conversationId, busy);
+    return () => onBusyChange?.(conversationId, false);
+  }, [busy, conversationId, onBusyChange]);
 
   useEffect(() => {
+    if (!active) return;
     onDraftChange?.(input);
-  }, [input, onDraftChange]);
+  }, [active, input, onDraftChange]);
 
   useLayoutEffect(() => {
     if (!suggestionsOpen) {
@@ -368,16 +346,11 @@ export default function ChatPanel({
     setInput("");
     setError("");
     setProgress("");
-    suggestSeq.current += 1;
-    setFollowups([]);
-    setActionOffer(null);
-    setActionNote("");
-    const prior = messages.filter((item) => item.role === "user").map((item) => item.content);
-    const asked = [...prior, content];
     const userMsg = { role: "user", content };
     stickToBottomRef.current = true;
     setMessages((prev) => [...prev, userMsg]);
     setBusy(true);
+    onQuestionSubmitted?.(conversationId, content);
     try {
       const result = await sendChatStream(content, conversationId, clarificationReply, originalQuestion, {
         onProgress: setProgress,
@@ -391,7 +364,6 @@ export default function ChatPanel({
         },
       });
       const official = assistantMessage(result);
-      const pending = result.clarification ? null : loadFollowups(content, asked);
       const offerPromise = result.clarification
         ? null
         : fetchActionOffer({
@@ -403,17 +375,23 @@ export default function ChatPanel({
           }).catch(() => null);
       await revealOfficial(official, result.instant ? CHAR_MS / 4 : CHAR_MS);
       onConversationUpdated?.();
-      if (pending) {
-        const done = await pending;
-        if (done.seq === suggestSeq.current) setFollowups(done.suggestions);
-      }
       if (offerPromise) {
         const offer = await offerPromise;
-        if (offer?.prompt && offer?.action) setActionOffer(offer);
+        const turnId = official.turnId;
+        if (offer?.prompt && offer?.action && turnId) {
+          const action = { ...offer.action, _turn_id: turnId };
+          await saveActionOffer(turnId, { prompt: offer.prompt, action: offer.action });
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.turnId === turnId ? { ...msg, actionOffer: { prompt: offer.prompt, action } } : msg,
+            ),
+          );
+        }
       }
     } catch (err) {
       resetTyper();
       setMessages((prev) => (prev[prev.length - 1]?.streaming ? prev.slice(0, -1) : prev));
+      onQuestionFailed?.(conversationId);
       setError(err.message);
     } finally {
       setBusy(false);
@@ -425,15 +403,44 @@ export default function ChatPanel({
     }
   }
 
-  async function acceptOffer() {
-    if (!actionOffer || busy) return;
+  function rememberOfferDecision(turnId, decision) {
+    setMessages((prev) =>
+      prev.map((msg) => (msg.turnId === turnId ? { ...msg, actionOfferDecision: decision } : msg)),
+    );
+  }
+
+  async function acceptOffer(offer) {
+    if (!offer?.action || busy) return;
+    const savingWatch = offer.action.type === "create_watch";
+    setBusy(true);
+    setError("");
+    if (savingWatch) onBoardPending?.();
+    try {
+      const result = await confirmAction(offer.action);
+      rememberOfferDecision(offer.action._turn_id, {
+        status: "confirmed",
+        summary: result.summary || "Done.",
+      });
+      if (savingWatch) onBoardSaved?.();
+      else onBoardChanged?.();
+    } catch (err) {
+      if (savingWatch) onBoardFailed?.();
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function declineOffer(offer) {
+    if (!offer?.action || busy) return;
     setBusy(true);
     setError("");
     try {
-      const result = await confirmAction(actionOffer.action);
-      setActionNote(result.summary || "Done.");
-      setActionOffer(null);
-      onBoardChanged?.();
+      await declineAction(offer.action);
+      rememberOfferDecision(offer.action._turn_id, {
+        status: "dismissed",
+        summary: "Dismissed. Nothing was saved.",
+      });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -443,8 +450,10 @@ export default function ChatPanel({
 
   async function confirm(index, action) {
     if (busy) return;
+    const savingWatch = action?.type === "create_watch";
     setBusy(true);
     setError("");
+    if (savingWatch) onBoardPending?.();
     try {
       const result = await confirmAction(action);
       setMessages((prev) =>
@@ -458,14 +467,11 @@ export default function ChatPanel({
             : msg,
         ),
       );
-      if (
-        result?.ok &&
-        ((action?.type === "create_watch" && result?.data?.saved === true) ||
-          (action?.type === "cancel_watch" && result?.data?.cancelled === true))
-      ) {
-        onBoardChanged?.();
-      }
+      if (savingWatch && result?.ok) onBoardSaved?.();
+      else if (result?.ok && action?.type === "cancel_watch") onBoardChanged?.();
+      else if (savingWatch) onBoardFailed?.();
     } catch (err) {
+      if (savingWatch) onBoardFailed?.();
       setError(err.message);
     } finally {
       setBusy(false);
@@ -554,7 +560,7 @@ export default function ChatPanel({
             welcome ? "max-w-2xl" : "max-w-4xl"
           }`}
         >
-          <div ref={suggestionsRef} className="relative shrink-0 self-end">
+          {welcome && <div ref={suggestionsRef} className="relative shrink-0 self-end">
             <button
               type="button"
               aria-label="Suggestions — click for recommended questions"
@@ -577,7 +583,7 @@ export default function ChatPanel({
               <span className="hidden type-caption font-semibold sm:inline">Suggestions</span>
             </button>
             {renderSuggestionsPopover()}
-          </div>
+          </div>}
           <textarea
             ref={textareaRef}
             value={input}
@@ -639,8 +645,7 @@ export default function ChatPanel({
               <button
                 type="button"
                 onClick={onNewConversation}
-                disabled={busy}
-                className="focus-ring inline-flex h-9 items-center gap-1.5 rounded-full bg-accent px-2.5 type-caption font-medium text-accentContrast shadow-xs transition-all hover:brightness-110 disabled:opacity-40 md:hidden"
+                className="focus-ring inline-flex h-9 items-center gap-1.5 rounded-full bg-accent px-2.5 type-caption font-medium text-accentContrast shadow-xs transition-all hover:brightness-110 md:hidden"
                 aria-label="New conversation"
               >
                 <PlusIcon />
@@ -728,10 +733,10 @@ export default function ChatPanel({
                   submit(text, true, original);
                 }}
                 clarificationOpen={idx === messages.length - 1}
-                actionOffer={idx === messages.length - 1 && !msg.clarification ? actionOffer : null}
-                actionNote={idx === messages.length - 1 ? actionNote : ""}
-                onAcceptOffer={acceptOffer}
-                onDeclineOffer={() => setActionOffer(null)}
+                actionOffer={msg.clarification ? null : msg.actionOffer}
+                actionOfferDecision={msg.actionOfferDecision}
+                onAcceptOffer={() => acceptOffer(msg.actionOffer)}
+                onDeclineOffer={() => declineOffer(msg.actionOffer)}
               />
             ))}
             {busy && !(messages.at(-1)?.streaming && messages.at(-1)?.content) && (
@@ -753,27 +758,6 @@ export default function ChatPanel({
           </button>
         )}
       </div>
-
-      {followups.length > 0 && (
-        <div className="shrink-0 px-3 pt-2 md:px-6">
-          <div className="mx-auto w-full max-w-4xl space-y-2">
-            <p className="type-overline text-muted">Go deeper</p>
-            <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto">
-              {followups.map((question) => (
-                <button
-                  key={question}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => submit(question)}
-                  className="rounded-full border border-line bg-surfaceMuted px-3 py-1 text-left type-caption text-foreground transition-colors hover:border-accentText hover:bg-accentSoft/40 disabled:cursor-default disabled:opacity-70"
-                >
-                  {question}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {error && (
         <div className="mx-3 mb-2 flex items-start justify-between gap-3 rounded-2xl border border-danger/30 bg-dangerSoft px-4 py-2.5 type-caption text-danger md:mx-6">

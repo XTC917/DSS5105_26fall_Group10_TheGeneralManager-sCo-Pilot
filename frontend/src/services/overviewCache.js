@@ -13,6 +13,7 @@ let cache = {
 };
 
 let inflight = null;
+let generation = 0;
 
 export function peekOverviewCache() {
   return cache.briefing || cache.discovery ? { ...cache } : null;
@@ -27,14 +28,16 @@ export function invalidateOverviewCache() {
     error: "",
   };
   inflight = null;
+  generation += 1;
 }
 
-async function fetchAll() {
+async function fetchAll(gen) {
   const [briefing, discovery, board] = await Promise.all([
     fetchBriefing(),
     fetchDiscovery(8),
     fetchWatches(),
   ]);
+  if (gen !== generation) return null;
   cache = {
     briefing,
     discovery,
@@ -57,23 +60,30 @@ export async function loadOverviewData({ force = false } = {}) {
   if (!force && cache.briefing && cache.discovery) {
     return { ...cache, fromCache: true };
   }
-  if (inflight) {
+  if (force) {
+    generation += 1;
+    inflight = null;
+  } else if (inflight) {
     const next = await inflight;
-    return { ...next, fromCache: false };
+    return { ...(next || cache), fromCache: false };
   }
-  inflight = fetchAll()
+  const gen = generation;
+  const run = fetchAll(gen)
     .catch((err) => {
-      cache = {
-        ...cache,
-        error: err.message || "Failed to load overview data.",
-      };
+      if (gen === generation) {
+        cache = {
+          ...cache,
+          error: err.message || "Failed to load overview data.",
+        };
+      }
       throw err;
     })
     .finally(() => {
-      inflight = null;
+      if (inflight === run) inflight = null;
     });
-  const next = await inflight;
-  return { ...next, fromCache: false };
+  inflight = run;
+  const next = await run;
+  return { ...(next || cache), fromCache: false };
 }
 
 /** Lightweight factory-date fetch that reuses overview cache when present. */

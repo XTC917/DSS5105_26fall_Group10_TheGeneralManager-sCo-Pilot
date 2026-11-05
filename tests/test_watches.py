@@ -154,7 +154,7 @@ def test_advance_date_syncs_watch_board_and_briefing(
     monkeypatch.setattr("backend.main.run_agent", run_agent_on_factory_date)
     base = "2026-04-01"
     next_day = "2026-04-02"
-    advance_path = "/api/factory-date/advance"
+    date_path = "/api/factory-date"
     try:
         with TestClient(app) as client:
             def get(path, headers=employee_auth_headers):
@@ -169,11 +169,13 @@ def test_advance_date_syncs_watch_board_and_briefing(
             assert client.get("/api/watches?as_of=2026-04-02", headers=employee_auth_headers).status_code == 409
             before = get("/api/briefing")["dashboard"]["orders"]
             assert next(row for row in before if row["order_id"] == "ORD-029")["bucket"] == "TODAY"
-            assert client.post(advance_path, json={"expected_date": base}).status_code == 401
-            advanced = client.post(advance_path, headers=employee_auth_headers, json={"expected_date": base})
-            assert advanced.status_code == 200
-            assert advanced.json()["factory_today"] == next_day
-            assert client.post(advance_path, headers=employee_auth_headers, json={"expected_date": base}).status_code == 409
+            assert client.post(date_path, json={"factory_date": next_day}).status_code == 401
+            assert client.post(
+                date_path, headers=employee_auth_headers, json={"factory_date": next_day}
+            ).status_code == 403
+            chosen = client.post(date_path, headers=admin_auth_headers, json={"factory_date": next_day})
+            assert chosen.status_code == 200
+            assert chosen.json()["factory_today"] == next_day
 
             board = get("/api/watches")
             assert board["as_of"] == next_day
@@ -191,10 +193,8 @@ def test_advance_date_syncs_watch_board_and_briefing(
             overdue = next(row for row in briefing["dashboard"]["orders"] if row["order_id"] == "ORD-029")
             assert overdue["bucket"] == "OVERDUE"
             assert get("/api/health")["factory_today"] == next_day
-            assert get("/api/briefing", admin_auth_headers)["factory_today"] == base
-            assert get("/api/watches", admin_auth_headers) == {
-                "as_of": base, "active": [], "fired": [], "cancelled": [],
-            }
+            assert get("/api/briefing", admin_auth_headers)["factory_today"] == next_day
+            assert get("/api/watches", admin_auth_headers)["as_of"] == next_day
 
             conversation = client.post("/api/conversations", headers=employee_auth_headers).json()
             request = {"message": "How long until ORD-029 is due?", "conversation_id": conversation["id"]}
@@ -206,7 +206,7 @@ def test_advance_date_syncs_watch_board_and_briefing(
             assert f'"answer": "{next_day}: -1"' in stream.text
     finally:
         with connect(admin=True) as conn:
-            conn.execute(f"DELETE FROM {COPILOT_SCHEMA}.factory_clocks WHERE user_id = %s", (test_user.id,))
+            conn.execute(f"DELETE FROM {COPILOT_SCHEMA}.factory_clocks")
 
 
 def test_notifier_failure_does_not_unfire(db, clean_state, test_user):

@@ -140,6 +140,10 @@ def compose_uc_why(message: str, answer: str, source_trace: dict[str, Any] | Non
     from backend.services.why import build_why
 
     why = build_why(message, {"answer": answer, "traces": uc_why_traces()})
+    if why.get("steps"):
+        why["steps"][-1]["items"] = [
+            "Read the answer against the facts and checks above. These records alone do not establish business causation."
+        ]
     name = _BRIEFING_SOURCE
     count = 0
     if isinstance(source_trace, dict) and source_trace.get("source_file"):

@@ -47,11 +47,19 @@ export async function fetchWatches() {
   return authed("/api/watches");
 }
 
-export async function advanceFactoryDate(expectedDate) {
-  return authed("/api/factory-date/advance", {
+export async function setFactoryDate(factoryDate) {
+  return authed("/api/factory-date", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ expected_date: expectedDate }),
+    body: JSON.stringify({ factory_date: factoryDate }),
+  });
+}
+
+export async function saveActionOffer(turnId, offer) {
+  return authed(`/api/turns/${turnId}/action-offer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt: offer.prompt, action: offer.action }),
   });
 }
 

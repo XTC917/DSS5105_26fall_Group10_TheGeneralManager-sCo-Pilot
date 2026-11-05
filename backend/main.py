@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ValidationError
 
-from backend.config import FACTORY_TODAY, PROJECT_ROOT, SEMANTIC_LAYER_PATH, using_factory_date
+from backend.config import PROJECT_ROOT, SEMANTIC_LAYER_PATH, using_factory_date
 from backend.agent.graph import llm_is_configured, run_agent, set_checkpointer
 from backend.logging_setup import setup_logging
 from backend.models.schemas import (
@@ -35,7 +35,7 @@ from backend.models.schemas import (
     SuggestionResponse,
 )
 from backend.services.audit import list_audit
-from backend.services.auth import CurrentUser, get_current_user, get_optional_current_user
+from backend.services.auth import CurrentUser, get_current_user, get_optional_current_user, require_admin
 from backend.services.briefing import build_morning_briefing
 from backend.services.confirm_actions import ConfirmError, confirm_proposed_action, decline_proposed_action
 from backend.services.checkpoint_store import postgres_checkpointer
@@ -44,13 +44,15 @@ from backend.services.conversation_history import (
     ConversationNotFoundError,
     fail_chat_attempt,
     get_owned_conversation,
+    attach_action_offer,
+    record_clarification_choice,
     record_turn_action_decision,
     save_turn,
     start_chat_attempt,
     validate_turn_action,
 )
 from backend.services.database import get_db, init_db
-from backend.services.factory_clock import advance_factory_date, load_factory_date
+from backend.services.factory_clock import load_factory_date, set_factory_date
 from backend.services.request_context import set_current_user
 from backend.services.action_offers import compose_action_offer
 from backend.services.discovery import DEFAULT_LIMIT, MAX_LIMIT, discover_factory_issues
@@ -61,7 +63,7 @@ from backend.routers.data_admin import (
     upload_router,
 )
 from backend.services.watches import evaluate_and_list
-from backend.services.why import build_why
+from backend.services.why import explain_why
 from backend.tools.registry import MVP_TOOLS
 from backend.routers.auth import router as auth_router, users_router
 from backend.routers.conversations import router as conversations_router
@@ -124,7 +126,7 @@ def health(user: CurrentUser | None = Depends(get_optional_current_user)) -> dic
     questions_path = PROJECT_ROOT / "evaluation" / "questions.json"
     return {
         "ok": True,
-        "factory_today": (load_factory_date(user.id) if user else FACTORY_TODAY).isoformat(),
+        "factory_today": load_factory_date().isoformat(),
         "llm_configured": llm_is_configured(),
         "tools": [t.name for t in MVP_TOOLS],
         # Deploy integrity only — does not invoke the LLM or change agent behavior.
@@ -134,9 +136,13 @@ def health(user: CurrentUser | None = Depends(get_optional_current_user)) -> dic
 
 
 def _leave_out_of_memory(result: dict) -> bool:
-    """Clarification cards and refusals that never enter the agent stay out of history."""
+    """Refusals that never enter the agent stay out of history.
+
+    A clarification card is kept, so reopening the conversation can show the
+    options and which one was chosen.
+    """
     if result.get("clarification"):
-        return True
+        return False
     limitation = result.get("limitation")
     if limitation in _UNSTORED_LIMITATIONS:
         return True
@@ -185,10 +191,17 @@ def _complete_chat(
             record_failure("LLM_NOT_CONFIGURED", message)
             raise HTTPException(status_code=503, detail=message)
 
+        if request.clarification_reply:
+            record_clarification_choice(
+                user.id,
+                request.conversation_id,
+                request.message,
+            )
+
         thread_id = f"user:{user.id}:conversation:{public_conversation_id}"
         set_current_user(user)
         try:
-            with using_factory_date(load_factory_date(user.id)):
+            with using_factory_date(load_factory_date()):
                 result = run_agent(
                     request.message,
                     public_conversation_id,
@@ -202,7 +215,7 @@ def _complete_chat(
             set_current_user(None)
 
         prepared = result.get("why")
-        why = prepared if isinstance(prepared, dict) else build_why(request.message, result)
+        why = prepared if isinstance(prepared, dict) else explain_why(request.message, result)
         response = ChatResponse(**{**result, "why": why})
         if _leave_out_of_memory(result):
             record_failure(
@@ -214,11 +227,14 @@ def _complete_chat(
             exclude={"answer", "conversation_id", "turn_id"},
             mode="json",
         )
+        answer = (response.answer or "").strip()
+        if response.clarification and not answer:
+            answer = str((response.clarification or {}).get("prompt") or "Which of these did you mean?").strip()
         saved_turn = save_turn(
             user.id,
             request.conversation_id,
             question=request.message,
-            answer=response.answer,
+            answer=answer,
             response_json=response_json,
             attempt_id=attempt_id,
             duration_ms=duration_ms(),
@@ -337,7 +353,7 @@ def action_offers(
     user: CurrentUser = Depends(get_current_user),
 ) -> ActionOfferResponse:
     """One yes/no action after the answer. Not called while the answer is still running."""
-    with using_factory_date(load_factory_date(user.id)):
+    with using_factory_date(load_factory_date()):
         offer = compose_action_offer(
             request.question.strip()[:400],
             request.answer.strip()[:800],
@@ -353,7 +369,7 @@ def action_offers(
 @app.get("/api/briefing")
 def briefing(user: CurrentUser = Depends(get_current_user)) -> dict:
     """Structured morning briefing facts (no LLM)."""
-    with using_factory_date(load_factory_date(user.id)):
+    with using_factory_date(load_factory_date()):
         return build_morning_briefing(get_db())
 
 
@@ -365,7 +381,7 @@ def discovery(limit: int = DEFAULT_LIMIT, user: CurrentUser = Depends(get_curren
             status_code=400,
             detail=f"limit must be an integer from 1 to {MAX_LIMIT}.",
         )
-    with using_factory_date(load_factory_date(user.id)):
+    with using_factory_date(load_factory_date()):
         return discover_factory_issues(get_db(), limit=limit)
 
 
@@ -380,22 +396,27 @@ def audit(limit: int = 15, user: CurrentUser = Depends(get_current_user)) -> dic
         set_current_user(None)
 
 
-class AdvanceDateRequest(BaseModel):
-    expected_date: date
+class SetFactoryDateRequest(BaseModel):
+    factory_date: date
 
 
-@app.post("/api/factory-date/advance")
-def advance_date(request: AdvanceDateRequest, user: CurrentUser = Depends(get_current_user)) -> dict:
-    day = advance_factory_date(user.id, request.expected_date)
-    if day is None:
-        raise HTTPException(status_code=409, detail="Factory date changed. Refresh and try again.")
+@app.post("/api/factory-date")
+def choose_factory_date(
+    request: SetFactoryDateRequest,
+    _admin: CurrentUser = Depends(require_admin),
+) -> dict:
+    """Set the one factory date every account treats as today."""
+    try:
+        day = set_factory_date(request.factory_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"factory_today": day.isoformat()}
 
 
 @app.get("/api/watches")
 def watches(as_of: str | None = None, user: CurrentUser = Depends(get_current_user)) -> dict:
-    """Evaluate only the authenticated user's watches on their saved factory date."""
-    day = load_factory_date(user.id)
+    """Evaluate only the authenticated user's watches on the shared factory date."""
+    day = load_factory_date()
     if as_of is not None:
         try:
             requested = date.fromisoformat(as_of)
@@ -414,6 +435,31 @@ def watches(as_of: str | None = None, user: CurrentUser = Depends(get_current_us
         set_current_user(None)
 
 
+class StoredActionOffer(BaseModel):
+    prompt: str
+    action: dict
+
+
+@app.post("/api/turns/{turn_id}/action-offer")
+def store_action_offer(
+    turn_id: int,
+    request: StoredActionOffer,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Keep the automatic watch or email suggestion on this turn."""
+    try:
+        attach_action_offer(
+            user.id,
+            turn_id,
+            {"prompt": request.prompt, "action": request.action},
+        )
+    except ConversationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Chat turn not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True}
+
+
 @app.post("/api/actions/confirm", response_model=ConfirmActionResponse)
 def confirm_action(request: ConfirmActionRequest, user: CurrentUser = Depends(get_current_user)) -> ConfirmActionResponse:
     """Persist a proposed action after a UI click. Does not call the LLM."""
@@ -422,7 +468,7 @@ def confirm_action(request: ConfirmActionRequest, user: CurrentUser = Depends(ge
     try:
         if isinstance(turn_id, int) and turn_id >= 1:
             validate_turn_action(user.id, turn_id, action=request.action)
-        with using_factory_date(load_factory_date(user.id)):
+        with using_factory_date(load_factory_date()):
             result = confirm_proposed_action(request.action, current_user=user)
         if isinstance(turn_id, int) and turn_id >= 1 and result.get("ok"):
             record_turn_action_decision(
@@ -456,7 +502,7 @@ def decline_action(request: ConfirmActionRequest, user: CurrentUser = Depends(ge
     try:
         if isinstance(turn_id, int) and turn_id >= 1:
             validate_turn_action(user.id, turn_id, action=request.action)
-        with using_factory_date(load_factory_date(user.id)):
+        with using_factory_date(load_factory_date()):
             result = decline_proposed_action(request.action, current_user=user)
         if isinstance(turn_id, int) and turn_id >= 1:
             record_turn_action_decision(

@@ -12,6 +12,7 @@ from backend.services.auth import CurrentUser, get_current_user
 from backend.services.conversation_history import (
     ConversationNotFoundError,
     create_conversation,
+    discard_unused_conversations,
     list_conversations,
     read_history_window,
     delete_conversation,
@@ -35,8 +36,10 @@ def _database_unavailable(exc: Exception) -> HTTPException:
 )
 def create_conversation_endpoint(
     user: CurrentUser = Depends(get_current_user),
+    keep: list[UUID] = Query(default=[]),
 ) -> dict:
     try:
+        discard_unused_conversations(user.id, keep=keep)
         return create_conversation(user.id)
     except psycopg.Error as exc:
         raise _database_unavailable(exc) from exc
@@ -47,9 +50,12 @@ def create_conversation_endpoint(
 def list_conversations_endpoint(
     limit: int = Query(default=50, ge=1, le=50),
     query: str | None = Query(default=None, min_length=1, max_length=100),
+    keep: list[UUID] = Query(default=[]),
     user: CurrentUser = Depends(get_current_user),
 ) -> list[dict]:
     try:
+        if not (query or "").strip():
+            discard_unused_conversations(user.id, keep=keep)
         return list_conversations(user.id, limit=limit, query=query)
     except psycopg.Error as exc:
         raise _database_unavailable(exc) from exc

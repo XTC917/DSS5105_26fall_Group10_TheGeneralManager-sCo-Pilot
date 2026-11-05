@@ -21,27 +21,9 @@ function PaceFormula() {
 }
 
 function SourceRows({ source, zh }) {
-  const rows = (source.rows || []).filter((row) => Object.keys(row).length);
-  const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
-  const label = `${source.name} · ${source.row_count ?? rows.length} ${zh ? "条来源记录" : "source records"}`;
-  if (source.summary_only) {
-    return <p className="rounded-control border border-line bg-surface p-3 type-caption font-medium">{label}</p>;
-  }
-  return (
-    <details className="rounded-control border border-line bg-surface p-3">
-      <summary className="cursor-pointer type-caption font-medium">
-        {label}
-      </summary>
-      {rows.length > 0 ? (
-        <div className="mt-2 max-h-64 overflow-auto" tabIndex={0} role="region" aria-label={source.name}>
-          <table className="w-full border-collapse text-left type-caption">
-            <thead><tr>{columns.map((key) => <th className="whitespace-nowrap border-b p-2" key={key}>{key}</th>)}</tr></thead>
-            <tbody>{rows.map((row, i) => <tr key={i}>{columns.map((key) => <td className="whitespace-nowrap border-b border-line p-2" key={key}>{String(row[key] ?? "—")}</td>)}</tr>)}</tbody>
-          </table>
-        </div>
-      ) : <p className="mt-2 type-caption text-muted">{zh ? "没有可展示的来源行。" : "No displayable source rows attached."}</p>}
-    </details>
-  );
+  const count = source.row_count ?? (source.rows || []).length;
+  const label = source.label || `${source.name} · ${count} ${zh ? "条来源记录" : "source records"}`;
+  return <p className="rounded-control border border-line bg-surface p-3 type-caption font-medium">{label}</p>;
 }
 
 export default function TracePanel({ traces = [], why }) {
@@ -71,10 +53,6 @@ export default function TracePanel({ traces = [], why }) {
           </li>
         ))}
       </ol> : <p className="type-caption text-foreground/70">This response has source records only. A four-step explanation was not attached.</p>}
-      {why?.limitations?.length > 0 && <div className="rounded bg-warningSoft p-3 type-caption text-warning">
-        <h3 className="font-semibold">{zh ? "适用范围与限制" : "Scope and limitations"}</h3>
-        {why.limitations.map((item, i) => <p className="mt-1" key={i}>{item}</p>)}
-      </div>}
       {sources.map((source, i) => <SourceRows key={i} source={source} zh={zh} />)}
     </section>
   );

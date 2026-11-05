@@ -28,6 +28,7 @@ Reply with one JSON object, no markdown:
 {"kind":"fact"|"action"|"follow_up","stored":true|false,"table":string|null,"column":string|null,"reason":string}
 
 kind=action: email, note, reminder, watch, or audit. Then stored=true, table=null, column=null.
+If History is included, it is not the question. This turn's question is the only request to judge. A short reply continues the last history turn. Decide kind and stored for that combined request, not for the reply words alone.
 kind=follow_up: the question asks how a figure already present in Previous tool JSON was calculated. Then stored=true, table=null, column=null. If there is no Previous tool JSON, do not use follow_up.
 If Previous tool JSON listed rows and the new question asks a further fact about those same rows, kind=fact and stored=true. Name the column for the new fact. Do not use follow_up.
 kind=fact: pick table and column from the semantic layer only.
@@ -62,6 +63,7 @@ Reply with one JSON object, no markdown:
 {"ambiguous":true|false,"readings":[{"tool":string,"label":string,"message":string}],"reason":string}
 
 ambiguous=false when one answer method fits. readings has that one object.
+If History is included, it is not the question. This turn's question is the only request to judge. A short reply continues the last history turn. ambiguous=false when those turns already make one request.
 ambiguous=true when more than one answer method fits. readings has one object per method.
 ambiguous=true when the question joins terms that cannot describe the same orders. Do not pick one term for the order, but asking back to the user to use which term.
 One row and the list of those same rows are one method: name only one tool.
@@ -87,6 +89,7 @@ When needs_tool is true, has_tool=true when one registered tool or a combination
 filter_rows may keep rows from a lookup by a condition on a column that lookup already returns. summarize_rows may count or sum a returned column. draw and render_table only display.
 A tool that merely mentions another table as a side effect does not count.
 If kind is action, needs_tool=true and pick the matching action tool.
+If History is included, it is not the question. This turn's question is the only request to judge. Choose the tool for that combined request, not for the reply words alone.
 reason: one or two sentences.
 Do not invent numbers. Do not add names the manager did not write.
 The language rule in the user message overrides every other language. Do not translate into French or Spanish.
@@ -281,6 +284,7 @@ Reply with one JSON object, no markdown:
 {"terms":[{"term":string,"prompt":string,"options":[{"tool":string,"label":string,"message":string}]}]}
 
 terms is empty when the question has no such word, the manager already gave the threshold, or no registered tool can apply a definition.
+If History is included, it is not the question. This turn's question is the only request to judge. When it only answers the last history turn, terms is empty.
 A word needs a definition when changing it would select different rows and no stored column defines it. "Large" with no piece count is one.
 Each term is one question. Give exactly two recommended options. Each option must be implementable by the registered tools in the user message.
 tool is one of those names, or several joined with +. A threshold on a column the lookup returns is find_orders + filter_rows. Do not offer a choice those tools cannot carry out.
@@ -349,7 +353,19 @@ def _terms_from_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return terms
 
 
-def _ask_term_questions(model: Any, question: str) -> list[dict[str, Any]]:
+def _previous_turns(recent_turns: str) -> str:
+    text = (recent_turns or "").strip()
+    if not text:
+        return ""
+    return (
+        "\nHistory, oldest first. These earlier turns are not the question to answer now. "
+        "Use them only to understand This turn's question below.\n"
+        + text
+        + "\n"
+    )
+
+
+def _ask_term_questions(model: Any, question: str, recent_turns: str = "") -> list[dict[str, Any]]:
     try:
         payload = _ask_json(
             model,
@@ -357,7 +373,8 @@ def _ask_term_questions(model: Any, question: str) -> list[dict[str, Any]]:
             language_rule(question)
             + "\n\n"
             + _clarification_catalog()
-            + "\n\nManager question:\n"
+            + _previous_turns(recent_turns)
+            + "\n\nThis turn's question:\n"
             + (question or ""),
         )
     except Exception:  # noqa: BLE001 — a term failure must not block method clarification
@@ -602,7 +619,12 @@ _ACTION_TOOLS = {
 
 
 def _ask_tool_coverage(
-    model: Any, data: DataVerdict, question: str, *, chosen_reading: bool = False
+    model: Any,
+    data: DataVerdict,
+    question: str,
+    *,
+    chosen_reading: bool = False,
+    recent_turns: str = "",
 ) -> ToolVerdict:
     from backend.tools.registry import MVP_TOOLS
 
@@ -623,8 +645,9 @@ def _ask_tool_coverage(
         "render_table may display it. filter_rows may keep rows by a condition on a column "
         "that lookup already returns. That is covered. Do not mark has_tool=false because "
         "no single tool both looks up the rows and draws the chart. "
-        "has_tool=false only when no combination can produce the fact.\n\n "
-        "Manager question:\n"
+        "has_tool=false only when no combination can produce the fact.\n"
+        + _previous_turns(recent_turns)
+        + "\nThis turn's question:\n"
         + (question or "")
     )
     system = _TOOL_SYSTEM + ("\n" + _CHOSEN_READING if chosen_reading else "")
@@ -703,12 +726,48 @@ def pinned_clarification(question: str) -> AnswerabilityGate | None:
     )
 
 
+_ORDER_ID = re.compile(r"\bORD-\d+\b", re.I)
+
+
+def peer_progress_requested(question: str) -> bool:
+    """True when the manager asks whether one named order is normal for its category and size."""
+    text = question or ""
+    if not _ORDER_ID.search(text):
+        return False
+    folded = text.lower()
+    compares = any(word in folded for word in ("compared", "compare", "versus", " vs ")) or any(
+        word in text for word in ("相比", "对比")
+    )
+    group = any(word in folded for word in ("category", "similar")) or any(
+        word in text for word in ("同类", "相近", "类似")
+    )
+    progress = any(word in folded for word in ("progress", "normally")) or any(
+        word in text for word in ("进展", "正常")
+    )
+    return compares and group and progress
+
+
+def earliest_delivery_requested(question: str) -> bool:
+    """True when a new order has pieces and a garment, but no due date, and the manager wants the earliest date."""
+    text = question or ""
+    if _ORDER_ID.search(text):
+        return False
+    folded = text.lower()
+    asks_earliest = any(word in folded for word in ("earliest", "soonest")) or "最早" in text
+    asks_date = any(
+        word in folded for word in ("delivery date", "completion date", "due date", "deliver")
+    ) or any(word in text for word in ("交期", "完成日期", "交货"))
+    new_order = "new order" in folded or any(word in text for word in ("新订单", "新单"))
+    return asks_earliest and asks_date and new_order
+
+
 def assess_answerability(
     question: str,
     model: Any | None = None,
     *,
     prior_tool_json: str = "",
     clarification_reply: bool = False,
+    recent_turns: str = "",
 ) -> AnswerabilityGate:
     """Clarify first, without a stored-field check. Then stored-data and tool coverage."""
     if not clarification_reply:
@@ -729,14 +788,15 @@ def assess_answerability(
             + _clarification_catalog()
             + "\nPrevious tool JSON:\n"
             + (prior or "(none)")
-            + "\nManager question:\n"
+            + _previous_turns(recent_turns)
+            + "\nThis turn's question:\n"
             + (question or "")
         )
         ambiguity = _tools_from_payload(
             _ask_json(model, _AMBIGUITY_SYSTEM, ambiguity_user)
         )
         method_card = interpretation_clarification(question, ambiguity.options, ambiguity.reason)
-        terms = _ask_term_questions(model, question)
+        terms = _ask_term_questions(model, question, recent_turns)
         card = combine_clarification(method_card, terms, question)
         if card is not None:
             logger.info(
@@ -780,7 +840,8 @@ def assess_answerability(
         + render_semantic_prompt()
         + "\nPrevious tool JSON:\n"
         + (prior or "(none)")
-        + "\nManager question:\n"
+        + _previous_turns(recent_turns)
+        + "\nThis turn's question:\n"
         + (question or "")
     )
     data = _data_from_payload(_ask_json(model, data_system, data_user))
@@ -814,7 +875,7 @@ def assess_answerability(
             data.stored = False
 
     tools = _ask_tool_coverage(
-        model, data, question, chosen_reading=clarification_reply
+        model, data, question, chosen_reading=clarification_reply, recent_turns=recent_turns
     )
     if data.kind == "action" and (tools.tool or "") not in _ACTION_TOOLS:
         data = _data_from_payload(
@@ -831,7 +892,7 @@ def assess_answerability(
             if not data.column:
                 data.stored = False
         tools = _ask_tool_coverage(
-            model, data, question, chosen_reading=clarification_reply
+            model, data, question, chosen_reading=clarification_reply, recent_turns=recent_turns
         )
     data, tools = apply_catalog(data, tools)
     if data.kind != "action" and not data.stored:
@@ -865,9 +926,35 @@ def assess_answerability(
             data.kind = "fact"
             data.stored = True
         tools = _ask_tool_coverage(
-            model, data, question, chosen_reading=clarification_reply
+            model, data, question, chosen_reading=clarification_reply, recent_turns=recent_turns
         )
         data, tools = apply_catalog(data, tools)
+
+    if not tools.has_tool and peer_progress_requested(question):
+        data.stored = True
+        data.kind = "fact"
+        data.table = data.table or "orders"
+        data.column = data.column or "category"
+        tools.has_tool = True
+        tools.needs_tool = True
+        tools.tool = "compare_order_progress"
+        tools.reason = (
+            "compare_order_progress returns the same-category size band, "
+            "each completed peer's cycle days, and this order's elapsed days."
+        )
+
+    if not tools.has_tool and earliest_delivery_requested(question):
+        data.stored = True
+        data.kind = "fact"
+        data.table = data.table or "production_log"
+        data.column = data.column or "pieces_completed"
+        tools.has_tool = True
+        tools.needs_tool = True
+        tools.tool = "earliest_delivery_date"
+        tools.reason = (
+            "earliest_delivery_date finds the first due date the existing "
+            "capacity check would accept."
+        )
 
     traces = [
         _trace(

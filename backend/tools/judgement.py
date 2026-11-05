@@ -9,7 +9,10 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from backend.services.database import get_db
-from backend.services.feasibility import check_feasibility as run_feasibility
+from backend.services.feasibility import (
+    check_feasibility as run_feasibility,
+    earliest_delivery_date as run_earliest_delivery,
+)
 from backend.tools.common import tool_error, tool_json
 
 logger = logging.getLogger(__name__)
@@ -77,3 +80,46 @@ def check_feasibility(
     except Exception as exc:  # noqa: BLE001
         logger.exception("check_feasibility failed")
         return tool_error("check_feasibility", "INTERNAL", str(exc))
+
+
+class EarliestDeliveryInput(BaseModel):
+    pieces: int = Field(..., description="How many garments are requested, e.g. 2000")
+    product: Optional[str] = Field(
+        default=None,
+        description="Garment as spoken, singular or plural (Scarf, scarves, Hoodie, hoodies).",
+    )
+    category: Optional[str] = Field(
+        default=None,
+        description="TOPS or ACCESSORIES only when the garment is not in orders.csv.",
+    )
+
+
+@tool(args_schema=EarliestDeliveryInput)
+def earliest_delivery_date(
+    pieces: int,
+    product: Optional[str] = None,
+    category: Optional[str] = None,
+) -> str:
+    """Earliest due date a new order passes the existing feasibility check.
+
+    Use when the manager asks for the earliest realistic delivery or completion
+    date and does not name a due date. Do not invent the date, and do not call
+    check_feasibility once with a guessed date. Throughput stays the 30-day
+    bottleneck median.
+    """
+    try:
+        result = run_earliest_delivery(
+            get_db(),
+            pieces=pieces,
+            product=product,
+            category=category,
+        )
+        logger.info(
+            "earliest_delivery_date pieces=%s date=%s",
+            pieces,
+            result.get("data", {}).get("earliest_date") if result.get("ok") else result.get("error"),
+        )
+        return tool_json(result)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("earliest_delivery_date failed")
+        return tool_error("earliest_delivery_date", "INTERNAL", str(exc))

@@ -4,8 +4,25 @@ from backend.agent.answerability import (
     DataVerdict,
     ToolVerdict,
     apply_catalog,
+    earliest_delivery_requested,
+    peer_progress_requested,
     scope_clarification,
 )
+
+
+def test_peer_progress_question_is_recognized():
+    question = (
+        "Has ORD-029 progressed normally compared with orders "
+        "in the same category and of similar size?"
+    )
+    assert peer_progress_requested(question) is True
+    assert peer_progress_requested("Which orders are at risk?") is False
+
+
+def test_earliest_delivery_question_is_recognized():
+    question = "What is the earliest realistic delivery date for a new order of 2,000 Scarves?"
+    assert earliest_delivery_requested(question) is True
+    assert earliest_delivery_requested("Can we take 800 hoodies by August 25?") is False
 
 
 def test_missing_data_clears_tool_even_if_llm_claimed_one():

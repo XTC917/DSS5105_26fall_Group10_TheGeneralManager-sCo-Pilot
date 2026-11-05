@@ -121,9 +121,11 @@ def _is_pace_miss(row: dict[str, Any], *, min_slack: float = 0.0) -> bool:
     return est - working >= min_slack and est > working
 
 
-def likely_to_miss_due_dates(db: FactoryDB) -> list[dict[str, Any]]:
-    """Not overdue; due within 3 calendar days; cannot finish at 30-day stage pace."""
-    medians = stage_medians(db)
+def likely_to_miss_due_dates(
+    db: FactoryDB, medians: dict[str, float] | None = None
+) -> list[dict[str, Any]]:
+    """Not overdue; due within 3 calendar days; cannot finish at the given stage pace."""
+    medians = stage_medians(db) if medians is None else medians
     rows = []
     for order in db.in_progress_orders():
         row = pace_fields(order, medians)
@@ -133,9 +135,11 @@ def likely_to_miss_due_dates(db: FactoryDB) -> list[dict[str, Any]]:
     return rows
 
 
-def likely_to_miss_due_next_n_days(db: FactoryDB) -> list[dict[str, Any]]:
+def likely_to_miss_due_next_n_days(
+    db: FactoryDB, medians: dict[str, float] | None = None
+) -> list[dict[str, Any]]:
     """Tomorrow through 7 calendar days ahead, at least one working day short."""
-    medians = stage_medians(db)
+    medians = stage_medians(db) if medians is None else medians
     rows = []
     for order in db.in_progress_orders():
         row = pace_fields(order, medians)
@@ -143,6 +147,20 @@ def likely_to_miss_due_next_n_days(db: FactoryDB) -> list[dict[str, Any]]:
         if cal is None or cal < NEXT_WEEK_MIN_CALENDAR_DAYS or cal > NEXT_WEEK_MAX_CALENDAR_DAYS:
             continue
         if _is_pace_miss(row, min_slack=PACE_SLACK_DAYS):
+            rows.append(row)
+    rows.sort(key=lambda r: (r["calendar_days_until_due"], -r["estimated_remaining_working_days"]))
+    return rows
+
+
+def would_miss_due_date(
+    db: FactoryDB, medians: dict[str, float] | None = None
+) -> list[dict[str, Any]]:
+    """Not overdue, and days_left exceeds working days until due. No near-term window."""
+    medians = stage_medians(db) if medians is None else medians
+    rows = []
+    for order in db.in_progress_orders():
+        row = pace_fields(order, medians)
+        if _is_pace_miss(row, min_slack=0.0):
             rows.append(row)
     rows.sort(key=lambda r: (r["calendar_days_until_due"], -r["estimated_remaining_working_days"]))
     return rows

@@ -42,10 +42,61 @@ def test_risk_explanation_uses_current_tool_comparison_not_reference_example():
     assert why["sources"][0]["rows"][0]["Customer"] == "Actual customer"
 
 
+def test_stage_only_trace_does_not_use_the_old_empty_wording():
+    why = build_why("Are there any unusual production issues I should know about today?", {
+        "answer": "Assembly is slow.",
+        "traces": [{
+            "tool": "discover_factory_issues",
+            "source_file": "production_log.csv",
+            "rows": [{"stage": "ASSEMBLY", "issue_id": "stage:ASSEMBLY"}],
+            "calculations": [{"name": "total_found", "result": 1}],
+        }],
+    })
+    text = json.dumps(why)
+    assert "Stage: ASSEMBLY" not in text
+    assert "No numeric calculation" not in text
+    assert "business causation" not in text
+    assert "did not include a comparison" in text
+
+
+def test_stage_issue_explanation_states_the_median_comparison():
+    why = build_why("Are there any unusual production issues I should know about today?", {
+        "answer": "Assembly is slow.",
+        "traces": [{
+            "tool": "discover_factory_issues",
+            "source_file": "production_log.csv",
+            "rows": [{"stage": "ASSEMBLY"}],
+            "calculations": [{"name": "total_found", "result": 1}],
+        }],
+        "evidence_results": [{
+            "tool": "discover_factory_issues",
+            "data": {
+                "production": {
+                    "in_progress_order_count": 34,
+                    "in_progress_by_stage": {"KNITTING": 12, "ASSEMBLY": 10, "WASHING": 10, "PACKING": 2},
+                    "stage_vs_30day_median": [{
+                        "stage": "ASSEMBLY",
+                        "last_working_date": "2026-03-31",
+                        "last_day_pieces": 455,
+                        "lookback_median": 758,
+                        "ratio_to_median": 0.6,
+                        "flagged": True,
+                    }],
+                },
+            },
+        }],
+    })
+    text = json.dumps(why)
+    assert "455" in text and "758" in text and "60%" in text
+    assert "No numeric calculation" not in text
+    assert "Stage: ASSEMBLY" not in text
+    assert "30-working-day median" in why["sources"][0]["label"]
+
+
 def test_no_rows_or_calculations_does_not_claim_verification():
     why = build_why("Why?", {"answer": "Unknown", "traces": []})
-    assert "verification is unavailable" in why["steps"][1]["items"][0]
-    assert "No numeric calculation" in why["steps"][2]["items"][0]
+    assert "did not include a record" in why["steps"][1]["items"][0]
+    assert "did not include a comparison" in why["steps"][2]["items"][0]
 
 
 def test_chinese_and_clarification_do_not_choose_an_order():

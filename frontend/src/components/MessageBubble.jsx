@@ -59,6 +59,78 @@ function ChevronIcon({ open }) {
   );
 }
 
+function CopyIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+    </svg>
+  );
+}
+
+function answerPlainText(markdown, tables) {
+  const prose = String(markdown || "")
+    .replace(/```[a-zA-Z]*\n?([\s\S]*?)```/g, (_, code) => code.trim())
+    .replace(/!\[[^\]]*]\([^)]*\)/g, "")
+    .replace(/\[([^\]]+)]\([^)]*\)/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/(\*\*|__)(.*?)\1/g, "$2")
+    .replace(/(\*|_)(.*?)\1/g, "$2")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^>\s?/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  const tableBlocks = (tables || []).map((table) => {
+    const columns = Array.isArray(table?.columns) ? table.columns : [];
+    const rows = Array.isArray(table?.rows) ? table.rows : [];
+    if (!columns.length || !rows.length) return "";
+    const header = columns.map((column) => column.label || column.key).join("\t");
+    const lines = rows.map((row) => columns.map((column) => (row?.[column.key] == null ? "" : String(row[column.key]))).join("\t"));
+    return [table.title, header, ...lines].filter(Boolean).join("\n");
+  }).filter(Boolean);
+  return [prose, ...tableBlocks].filter(Boolean).join("\n\n");
+}
+
+async function writeClipboard(value) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const area = document.createElement("textarea");
+  area.value = value;
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.left = "-9999px";
+  document.body.appendChild(area);
+  area.select();
+  document.execCommand("copy");
+  area.remove();
+}
+
+function CopyButton({ text, label }) {
+  const [copied, setCopied] = useState(false);
+  if (!text) return null;
+  return (
+    <button
+      type="button"
+      aria-label={copied ? "Copied" : label}
+      title={copied ? "Copied" : label}
+      onClick={async () => {
+        try {
+          await writeClipboard(text);
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1500);
+        } catch {
+          setCopied(false);
+        }
+      }}
+      className="focus-ring inline-flex items-center gap-1.5 rounded-full px-2 py-1 type-caption font-medium text-muted transition-colors hover:bg-surfaceMuted hover:text-foreground"
+    >
+      {copied ? <CheckIcon /> : <CopyIcon />}
+    </button>
+  );
+}
+
 function CheckIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -74,24 +146,73 @@ function limitationLabel(limitation) {
 }
 
 function MessageMeta({ message }) {
-  const tools = message.toolsUsed || [];
-  const limitation = message.limitation;
-  if (!tools.length && !limitation) return null;
+  const label = limitationLabel(message.limitation);
+  if (!label || /^[a-z][a-z0-9_]*$/.test(label)) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5 pt-1">
-      {limitation && (
-        <span className="inline-flex max-w-full items-center rounded-full border border-warning/30 bg-warningSoft px-2.5 py-0.5 type-caption text-warning">
-          <span className="truncate">{limitationLabel(limitation)}</span>
-        </span>
+      <span className="inline-flex max-w-full items-center rounded-full border border-warning/30 bg-warningSoft px-2.5 py-0.5 type-caption text-warning">
+        <span className="truncate">{label}</span>
+      </span>
+    </div>
+  );
+}
+
+function choiceLines(choice) {
+  return String(choice || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function optionWasChosen(option, choice) {
+  const lines = choiceLines(choice);
+  const label = String(option?.label || "").trim();
+  const message = String(option?.message || "").trim();
+  return Boolean(
+    (label && (choice === label || lines.includes(label))) ||
+      (message && (choice === message || lines.includes(message))),
+  );
+}
+
+function FrozenOptions({ options, choice }) {
+  return (
+    <div className="grid gap-2">
+      {(options || []).map((option, index) => {
+        const chosen = optionWasChosen(option, choice);
+        return (
+          <div
+            key={`${option.label}-${index}`}
+            className={`rounded-xl border px-3.5 py-2.5 text-left type-sm ${
+              chosen
+                ? "border-accent bg-accent font-semibold text-accentContrast"
+                : "border-line bg-surfaceMuted text-muted"
+            }`}
+          >
+            {option.label}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function FrozenClarification({ clarification, choice }) {
+  const questions = clarification.questions || [];
+  return (
+    <div className="space-y-4 rounded-2xl border border-line bg-surfaceMuted/40 p-4">
+      {clarification.prompt && <p className="type-sm text-muted">{clarification.prompt}</p>}
+      {questions.length > 0 ? (
+        questions.map((question) => (
+          <div key={question.id} className="space-y-2">
+            {question.prompt && question.prompt !== clarification.prompt && (
+              <p className="type-sm font-medium text-foreground">{question.prompt}</p>
+            )}
+            <FrozenOptions options={question.options} choice={choice} />
+          </div>
+        ))
+      ) : (
+        <FrozenOptions options={clarification.options} choice={choice} />
       )}
-      {tools.map((tool) => (
-        <span
-          key={tool}
-          className="inline-flex items-center rounded-full border border-line/60 bg-surfaceMuted px-2.5 py-0.5 type-caption text-muted"
-        >
-          {tool}
-        </span>
-      ))}
     </div>
   );
 }
@@ -184,7 +305,7 @@ export default function MessageBubble({
   busy,
   clarificationOpen = false,
   actionOffer = null,
-  actionNote = "",
+  actionOfferDecision = null,
   onAcceptOffer,
   onDeclineOffer,
 }) {
@@ -199,12 +320,16 @@ export default function MessageBubble({
   const decision = message.decision;
 
   const content = isUser ? message.content : stripEmbeddedImages(message.content);
+  const copyText = isUser ? "" : answerPlainText(content, message.tables || []);
 
   if (isUser) {
     return (
       <article className="message-enter flex justify-end">
-        <div className="max-w-[min(85%,42rem)] rounded-2xl bg-accentSoft px-4 py-2.5 type-sm leading-relaxed text-foreground shadow-xs">
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        <div className="flex max-w-[min(85%,42rem)] flex-col items-end gap-1">
+          <div className="select-text rounded-2xl bg-accentSoft px-4 py-2.5 type-sm leading-relaxed text-foreground shadow-xs">
+            <p className="question-text cursor-text select-text whitespace-pre-wrap break-words">{message.content}</p>
+          </div>
+          <CopyButton text={String(message.content || "").trim()} label="Copy question" />
         </div>
       </article>
     );
@@ -241,7 +366,7 @@ export default function MessageBubble({
 
         {message.turnId && message.emailDrafts?.map((draft, index) => (
           <EmailDraft key={`${message.turnId}-${index}`} draft={draft}
-            turnId={message.turnId} index={index} />
+            turnId={message.turnId} index={index} locked={!clarificationOpen} />
         ))}
         <MessageMeta message={message} />
 
@@ -257,11 +382,16 @@ export default function MessageBubble({
           </div>
         ))}
 
-        {clarificationOpen && clarification?.questions?.length > 0 && (
+        {clarification && (message.clarificationChoice || !clarificationOpen) && (
+          <FrozenClarification clarification={clarification} choice={message.clarificationChoice || ""} />
+        )}
+
+        {clarificationOpen && !message.clarificationChoice && clarification?.questions?.length > 0 && (
           <ClarificationCard clarification={clarification} busy={busy} onClarify={onClarify} />
         )}
 
         {clarificationOpen &&
+          !message.clarificationChoice &&
           !clarification?.questions?.length &&
           clarification?.options?.length > 0 && (
             <div className="space-y-2 rounded-2xl border border-line bg-surfaceMuted/40 p-4">
@@ -321,7 +451,7 @@ export default function MessageBubble({
                   <div className="flex shrink-0 items-center gap-1.5">
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={busy || !clarificationOpen}
                       onClick={() => onConfirm?.(item)}
                       className="rounded-full bg-accent px-3 py-1.5 type-caption font-semibold text-accentContrast transition-opacity hover:brightness-110 disabled:opacity-40"
                     >
@@ -329,7 +459,7 @@ export default function MessageBubble({
                     </button>
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={busy || !clarificationOpen}
                       onClick={() => onDismiss?.(item)}
                       className="rounded-full border border-line px-3 py-1.5 type-caption font-medium text-muted transition-colors hover:bg-surfaceMuted hover:text-foreground disabled:opacity-40"
                     >
@@ -352,32 +482,35 @@ export default function MessageBubble({
           <p className="type-caption text-muted">Dismissed. Nothing was saved.</p>
         )}
 
-        {(actionOffer || actionNote) && (
+        {actionOffer && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-l-2 border-accent pl-3">
-            {actionOffer && (
-              <>
-                <p className="min-w-0 flex-1 type-sm leading-6 text-foreground">{actionOffer.prompt}</p>
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={onAcceptOffer}
-                    className="rounded-full bg-foreground px-3 py-1 type-caption font-medium text-surface transition-opacity hover:opacity-80 disabled:opacity-40"
-                  >
-                    Yes
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={onDeclineOffer}
-                    className="rounded-full px-2.5 py-1 type-caption text-muted transition-colors hover:text-foreground disabled:opacity-40"
-                  >
-                    No
-                  </button>
-                </div>
-              </>
+            <p className="min-w-0 flex-1 type-sm leading-6 text-foreground">{actionOffer.prompt}</p>
+            {actionOfferDecision?.status === "confirmed" && (
+              <p className="type-caption text-success">{actionOfferDecision.summary || "Saved."}</p>
             )}
-            {actionNote && <p className="type-caption text-muted">{actionNote}</p>}
+            {actionOfferDecision?.status === "dismissed" && (
+              <p className="type-caption text-muted">Dismissed. Nothing was saved.</p>
+            )}
+            {!actionOfferDecision && (
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  disabled={busy || !clarificationOpen}
+                  onClick={onAcceptOffer}
+                  className="rounded-full bg-foreground px-3 py-1 type-caption font-medium text-surface transition-opacity hover:opacity-80 disabled:opacity-40"
+                >
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || !clarificationOpen}
+                  onClick={onDeclineOffer}
+                  className="rounded-full px-2.5 py-1 type-caption text-muted transition-colors hover:text-foreground disabled:opacity-40"
+                >
+                  No
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -399,6 +532,8 @@ export default function MessageBubble({
             )}
           </div>
         )}
+
+        {!message.streaming && <div className="flex justify-start"><CopyButton text={copyText} label="Copy answer" /></div>}
       </div>
     </article>
   );

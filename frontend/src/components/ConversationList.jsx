@@ -26,6 +26,7 @@ function ConversationRow({
   conversation,
   active,
   disabled,
+  deleteDisabled = false,
   canDelete,
   deleting,
   menuOpen,
@@ -47,7 +48,11 @@ function ConversationRow({
       >
         <span className="block truncate type-caption font-medium">{conversation.title}</span>
         <span className={`mt-0.5 block text-[10px] ${active ? "text-accentText" : "text-subtle"}`}>
-          {conversation.turn_count} turns · {formatUpdatedAt(conversation.updated_at)}
+          {conversation.pending || (conversation.in_progress && !(conversation.turn_count > 0))
+            ? "Asking…"
+            : `${conversation.turn_count} turns`}
+          {" · "}
+          {formatUpdatedAt(conversation.updated_at)}
         </span>
       </button>
       {canDelete && (
@@ -57,7 +62,7 @@ function ConversationRow({
             aria-label={`Conversation actions for ${conversation.title}`}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            disabled={disabled || deleting}
+            disabled={disabled || deleteDisabled || deleting}
             onClick={(event) => {
               event.stopPropagation();
               onToggleMenu(conversation.id);
@@ -103,6 +108,7 @@ export default function ConversationList({
   searchUnavailable = false,
   onSearchChange,
   disabled,
+  busyIds,
   canDelete = false,
   deleteUnavailable = false,
   deletingId = null,
@@ -147,7 +153,7 @@ export default function ConversationList({
   return (
     <div ref={rootRef} className="space-y-2">
       {showSearch && (
-        <div className="space-y-1">
+        <div className="sticky top-0 z-10 space-y-1 bg-surface pb-2">
           <label htmlFor={searchId} className="sr-only">
             Search conversations
           </label>
@@ -212,6 +218,7 @@ export default function ConversationList({
               conversation={conversation}
               active={conversation.id === activeConversationId}
               disabled={disabled}
+              deleteDisabled={busyIds?.has(conversation.id)}
               canDelete={canDelete}
               deleting={deletingId === conversation.id}
               menuOpen={openMenuId === conversation.id}

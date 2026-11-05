@@ -336,7 +336,7 @@ export default function MorningBriefingModal({
     setError("");
     fetchBriefing()
       .then((result) => {
-        if (!result.dashboard) throw new Error("Briefing data is unavailable. Restart the updated backend.");
+      if (!result.dashboard) throw new Error("Briefing data is unavailable. Restart the updated backend.");
         if (!cancelled) {
           setData(result);
           setSelected((previous) => {
@@ -465,7 +465,7 @@ export default function MorningBriefingModal({
               </button>
             ))}
 
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {METRIC_CARDS.map(([key, title, metricKey, color]) => (
               <button
                 type="button"
@@ -481,12 +481,12 @@ export default function MorningBriefingModal({
                 <span className="mt-2 block type-caption text-subtle">View orders →</span>
               </button>
             ))}
-          </div>
+            </div>
           <p className="mb-3 mt-2 type-caption text-subtle">
             Due within 2 days includes today. Stalled means ≥3 working days without activity. Indicators can overlap.
           </p>
 
-          <div className="grid gap-3 lg:grid-cols-[0.85fr_1.15fr]">
+            <div className="grid gap-3 lg:grid-cols-[0.85fr_1.15fr]">
             <section className="rounded-card border border-line bg-surface p-5 shadow-xs">
               <h3 className="type-h3 text-foreground">Completed orders</h3>
               <p className="mb-4 type-caption text-muted">Previous working day · {board.completion_date}</p>
@@ -512,7 +512,7 @@ export default function MorningBriefingModal({
                   ))}
                 </div>
               )}
-            </section>
+              </section>
 
             <section className="rounded-card border border-line bg-surface p-5 shadow-xs">
               <h3 className="type-h3 text-foreground">Delivery outlook</h3>
@@ -546,7 +546,7 @@ export default function MorningBriefingModal({
                       </button>
                     );
                   })}
-              </div>
+            </div>
             </section>
           </div>
 
@@ -888,7 +888,7 @@ export default function MorningBriefingModal({
             <button type="button" onClick={onClose} aria-label="Close briefing" className="rounded-control border border-line px-3 py-2 type-sm">
               &times;
             </button>
-          </div>
+        </div>
         </header>
         {body}
       </section>
