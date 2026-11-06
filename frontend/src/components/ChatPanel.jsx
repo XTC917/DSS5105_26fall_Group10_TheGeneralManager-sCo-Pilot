@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { confirmAction, declineAction, fetchActionOffer, saveActionOffer, sendChatStream } from "../services/api.js";
+import { confirmAction, declineAction, fetchActionOffer, fetchSuggestions, saveActionOffer, sendChatStream } from "../services/api.js";
 import MessageBubble from "./MessageBubble.jsx";
 
 const CHAR_MS = 14;
@@ -123,9 +123,11 @@ export default function ChatPanel({
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [followups, setFollowups] = useState([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [suggestionsPos, setSuggestionsPos] = useState(null);
   const listRef = useRef(null);
+  const suggestSeq = useRef(0);
   const textareaRef = useRef(null);
   const suggestionsRef = useRef(null);
   const suggestionsPopoverRef = useRef(null);
@@ -153,6 +155,31 @@ export default function ChatPanel({
   }
 
   useEffect(() => resetTyper, []);
+
+  async function loadFollowups(query, asked) {
+    const seq = ++suggestSeq.current;
+    try {
+      const data = await fetchSuggestions({ query, asked, focus: "" });
+      const suggestions = Array.isArray(data.suggestions) ? data.suggestions.slice(0, 3) : [];
+      return { seq, suggestions };
+    } catch {
+      return { seq, suggestions: [] };
+    }
+  }
+
+  useEffect(() => {
+    const users = (initialMessages || []).filter((item) => item.role === "user").map((item) => item.content);
+    const lastUser = users.at(-1);
+    const lastAssistant = [...(initialMessages || [])].reverse().find((item) => item.role === "assistant");
+    if (!lastUser || !lastAssistant || lastAssistant.clarification) return undefined;
+    let active = true;
+    loadFollowups(lastUser, users).then((pending) => {
+      if (active && pending.seq === suggestSeq.current) setFollowups(pending.suggestions);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function paintTyped() {
     const content = typer.current.chars.slice(0, typer.current.shown).join("");
@@ -346,6 +373,10 @@ export default function ChatPanel({
     setInput("");
     setError("");
     setProgress("");
+    suggestSeq.current += 1;
+    setFollowups([]);
+    const prior = messages.filter((item) => item.role === "user").map((item) => item.content);
+    const asked = [...prior, content];
     const userMsg = { role: "user", content };
     stickToBottomRef.current = true;
     setMessages((prev) => [...prev, userMsg]);
@@ -364,6 +395,7 @@ export default function ChatPanel({
         },
       });
       const official = assistantMessage(result);
+      const pending = result.clarification ? null : loadFollowups(content, asked);
       const offerPromise = result.clarification
         ? null
         : fetchActionOffer({
@@ -375,6 +407,10 @@ export default function ChatPanel({
           }).catch(() => null);
       await revealOfficial(official, result.instant ? CHAR_MS / 4 : CHAR_MS);
       onConversationUpdated?.();
+      if (pending) {
+        const done = await pending;
+        if (done.seq === suggestSeq.current) setFollowups(done.suggestions);
+      }
       if (offerPromise) {
         const offer = await offerPromise;
         const turnId = official.turnId;
@@ -758,6 +794,27 @@ export default function ChatPanel({
           </button>
         )}
       </div>
+
+      {followups.length > 0 && (
+        <div className="shrink-0 px-3 pt-2 md:px-6">
+          <div className="mx-auto w-full max-w-4xl space-y-2">
+            <p className="type-overline text-muted">Go deeper</p>
+            <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto">
+              {followups.map((question) => (
+                <button
+                  key={question}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => submit(question)}
+                  className="rounded-full border border-line bg-surfaceMuted px-3 py-1 text-left type-caption text-foreground transition-colors hover:border-accentText hover:bg-accentSoft/40 disabled:cursor-default disabled:opacity-70"
+                >
+                  {question}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mx-3 mb-2 flex items-start justify-between gap-3 rounded-2xl border border-danger/30 bg-dangerSoft px-4 py-2.5 type-caption text-danger md:mx-6">
