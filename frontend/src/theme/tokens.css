@@ -31,6 +31,12 @@
   --success-soft: 209 250 229;
   --warning: 180 120 20;
   --warning-soft: 254 243 199;
+  --priority-1: 190 40 45;
+  --priority-1-soft: 254 226 226;
+  --priority-2: 194 65 12;
+  --priority-2-soft: 255 237 213;
+  --priority-3: 133 77 14;
+  --priority-3-soft: 254 249 195;
 
   /* ---- Accent source (defaults to Ocean) ---- */
   --a-fill: 29 78 216;

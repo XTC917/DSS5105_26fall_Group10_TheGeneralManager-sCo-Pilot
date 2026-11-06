@@ -537,7 +537,9 @@ def run_agent(
     ):
         prior_ids = " ".join(_previous_turn_order_ids(memory_thread))
     held_ids = _PRIOR_ORDER_IDS.set(prior_ids)
-    spoken = _manager_text(memory_thread, message)
+    # Clarification clicks omit the original wording. The model already sees
+    # that wording in model_message; the order-id check must see it too.
+    spoken = _manager_text(memory_thread, model_message)
     if prior_ids:
         spoken = spoken + "\n" + prior_ids
     manager = set_manager_text(spoken)
@@ -688,6 +690,120 @@ def _ambiguous_tool_payload(turn: list[Any]) -> dict[str, Any] | None:
     return found
 
 
+_CONFIRM_TYPES = frozenset(
+    {"send_email", "create_watch", "cancel_watch", "add_order_note", "create_reminder"}
+)
+
+
+def _proposal_from_confirmation(tool_name: str, data: dict[str, Any]) -> dict[str, Any] | None:
+    """Rebuild a confirm box when the tool asked for one but the proposal key is missing."""
+    if not isinstance(data, dict) or not data.get("needs_confirmation"):
+        return None
+    proposal = data.get("proposed_action")
+    if isinstance(proposal, dict) and proposal.get("type") in _CONFIRM_TYPES:
+        return proposal
+    draft = data.get("draft") if isinstance(data.get("draft"), dict) else {}
+    if tool_name == "add_order_note" and data.get("order_id") and str(data.get("note") or "").strip():
+        return {
+            "type": "add_order_note",
+            "order_id": data.get("order_id"),
+            "note": str(data.get("note") or "").strip(),
+            "requires_confirmation": True,
+            "confirmed": False,
+        }
+    if tool_name == "create_reminder" and data.get("order_id") and data.get("remind_on"):
+        return {
+            "type": "create_reminder",
+            "order_id": data.get("order_id"),
+            "remind_on": data.get("remind_on"),
+            "message": data.get("message"),
+            "requires_confirmation": True,
+            "confirmed": False,
+        }
+    if tool_name == "send_email":
+        order_id = data.get("order_id") or draft.get("order_id")
+        if not order_id:
+            return None
+        return {
+            "type": "send_email",
+            "order_id": order_id,
+            "language": data.get("language") or draft.get("language"),
+            "audience": data.get("audience") or draft.get("audience"),
+            "requires_confirmation": True,
+            "confirmed": False,
+        }
+    if tool_name == "create_watch" and data.get("order_id") and data.get("check_date"):
+        return {
+            "type": "create_watch",
+            "order_id": data.get("order_id"),
+            "condition_type": data.get("condition_type"),
+            "check_date": data.get("check_date"),
+            "message": data.get("message"),
+            "requires_confirmation": True,
+            "confirmed": False,
+        }
+    if tool_name == "cancel_watch" and data.get("order_id") and (data.get("watch_id") or data.get("id")):
+        return {
+            "type": "cancel_watch",
+            "watch_id": data.get("watch_id") or data.get("id"),
+            "order_id": data.get("order_id"),
+            "requires_confirmation": True,
+            "confirmed": False,
+        }
+    return None
+
+
+def _confirmation_key(action: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        action.get("type"),
+        action.get("order_id"),
+        action.get("watch_id"),
+        action.get("check_date"),
+        action.get("remind_on"),
+        action.get("note"),
+    )
+
+
+def _confirmations_from_turn(turn: list[Any]) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+    for msg in turn:
+        if not isinstance(msg, ToolMessage):
+            continue
+        payload = _parse_json(getattr(msg, "content", None))
+        if not payload or not payload.get("ok"):
+            continue
+        tool_name = str(payload.get("tool") or getattr(msg, "name", "") or "")
+        proposal = _proposal_from_confirmation(tool_name, payload.get("data") or {})
+        if proposal is None:
+            continue
+        key = _confirmation_key(proposal)
+        if key in seen:
+            continue
+        seen.add(key)
+        found.append(proposal)
+    return found
+
+
+def _reply_expects_confirmation(answer: str) -> set[str]:
+    """Which confirm boxes the reply itself tells the manager to use."""
+    text = answer or ""
+    folded = text.lower()
+    asks = "click confirm" in folded or "needs confirmation" in folded or "确认" in text
+    if not asks:
+        return set()
+    expected: set[str] = set()
+    if "email" in folded or "e-mail" in folded or "邮件" in text:
+        expected.add("send_email")
+    if "watch" in folded or "warning" in folded or "观察" in text:
+        expected.update({"create_watch", "cancel_watch"})
+    if "note" in folded or "笔记" in text:
+        expected.add("add_order_note")
+    if "reminder" in folded or "提醒" in text:
+        expected.add("create_reminder")
+    return expected
+
+
 def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str, Any]:
     messages: list[BaseMessage] = result.get("messages") or []
     # MemorySaver returns the whole thread. The UI must only show tools from
@@ -727,7 +843,7 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
                     if isinstance(draft, dict) and draft not in email_drafts:
                         email_drafts.append(draft)
             proposal = data.get("proposed_action")
-            if isinstance(proposal, dict):
+            if isinstance(proposal, dict) and proposal.get("type") in _CONFIRM_TYPES:
                 proposed_actions.append(proposal)
             chart = data.get("chart")
             if isinstance(chart, dict):
@@ -752,6 +868,23 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
                 break
         if not answer and turn:
             answer = _content_to_text(getattr(turn[-1], "content", ""))
+
+    recovered = _confirmations_from_turn(turn)
+    seen = {_confirmation_key(item) for item in proposed_actions}
+    for proposal in recovered:
+        key = _confirmation_key(proposal)
+        if key in seen:
+            continue
+        proposed_actions.append(proposal)
+        seen.add(key)
+    expected = _reply_expects_confirmation(answer)
+    if expected and not any(item.get("type") in expected for item in proposed_actions):
+        logger.warning(
+            "confirm box missing conversation=%s expected=%s tools=%s",
+            conversation_id,
+            sorted(expected),
+            tools_used,
+        )
 
     question = ""
     for msg in turn:
@@ -846,12 +979,22 @@ def _audit_turn(
 def _parse_json(content: Any) -> dict[str, Any] | None:
     if isinstance(content, dict):
         return content
+    if isinstance(content, list):
+        content = _content_to_text(content)
     if not isinstance(content, str):
         return None
+    text = content.strip()
     try:
-        data = json.loads(content)
+        data = json.loads(text)
     except json.JSONDecodeError:
-        return None
+        start = text.find("{")
+        end = text.rfind("}")
+        if start < 0 or end <= start:
+            return None
+        try:
+            data = json.loads(text[start : end + 1])
+        except json.JSONDecodeError:
+            return None
     return data if isinstance(data, dict) else None
 
 

@@ -1,8 +1,11 @@
 """Retrieve the closest development-set questions as answer-style templates.
 
-Matching is TF-IDF cosine over question text (numpy only). Numbers in those
-templates are not ground truth for the live query — the agent must still copy
-facts from this turn's tool JSON.
+Matching is TF-IDF cosine over question text (numpy only). A retrieval returns
+three templates when both languages exist: the two closest questions in the
+query's language, then one closest question in the other language. The other
+language is chosen by the model, because Chinese and English tokens do not
+overlap. Numbers in those templates are not ground truth for the live query —
+the agent must still copy facts from this turn's tool JSON.
 """
 
 from __future__ import annotations
@@ -20,13 +23,20 @@ from backend.config import PROJECT_ROOT
 logger = logging.getLogger(__name__)
 
 QUESTIONS_PATH = PROJECT_ROOT / "evaluation" / "questions.json"
-DEFAULT_K = 2
+DEFAULT_K = 3
+_SAME_LANGUAGE_K = 2
 _TOKEN = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _ORDER_ID = re.compile(r"ORD-\d+", re.IGNORECASE)
 
 
 def _tokens(text: str) -> list[str]:
-    return _TOKEN.findall((text or "").lower())
+    tokens: list[str] = []
+    for tok in _TOKEN.findall((text or "").lower()):
+        if len(tok) > 1 and "\u4e00" <= tok[0] <= "\u9fff":
+            tokens.extend(tok[i : i + 2] for i in range(len(tok) - 1))
+        else:
+            tokens.append(tok)
+    return tokens
 
 
 def _index() -> tuple[tuple[dict[str, str], ...], dict[str, int], np.ndarray, np.ndarray]:
@@ -107,7 +117,7 @@ def _query_scores(query: str) -> np.ndarray | None:
 
 
 def retrieve_answer_templates(query: str, k: int = DEFAULT_K) -> list[dict[str, Any]]:
-    """Return up to k bank questions most similar to the manager's query."""
+    """Two closest questions in the query language, then one in the other language."""
     items, _, _, _ = _index()
     scores = _query_scores(query)
     if scores is None or not items:
@@ -115,19 +125,106 @@ def retrieve_answer_templates(query: str, k: int = DEFAULT_K) -> list[dict[str, 
     k = max(0, min(int(k), len(items)))
     if k == 0:
         return []
-    order = np.argsort(scores)[::-1][:k]
-    hits: list[dict[str, Any]] = []
-    for idx in order:
-        score = float(scores[int(idx)])
-        if score <= 0:
-            continue
-        hits.append({**items[int(idx)], "score": round(score, 4)})
+    same_limit = min(_SAME_LANGUAGE_K, k)
+    hits = _language_hits(query, scores, items, same=True, limit=same_limit)
+    if len(hits) < k:
+        other = _other_language_hit(query)
+        if other is not None and all(hit["id"] != other["id"] for hit in hits):
+            hits.append(other)
     logger.info(
         "retrieved answer templates %s query=%r",
         [(h["id"], h["score"]) for h in hits],
         (query or "")[:120],
     )
+    return hits[:k]
+
+
+def _language_hits(
+    query: str,
+    scores: np.ndarray,
+    items: tuple[dict[str, str], ...] | list[dict[str, str]],
+    *,
+    same: bool,
+    limit: int,
+) -> list[dict[str, Any]]:
+    want_cjk = _has_cjk(query)
+    ranked = sorted(
+        (
+            index
+            for index, item in enumerate(items)
+            if (_has_cjk(item["question"]) == want_cjk) is same
+        ),
+        key=lambda index: float(scores[index]),
+        reverse=True,
+    )
+    hits: list[dict[str, Any]] = []
+    for index in ranked:
+        score = float(scores[index])
+        if score <= 0:
+            break
+        hits.append({**items[index], "score": round(score, 4)})
+        if len(hits) >= limit:
+            break
     return hits
+
+
+def _other_language_hit(query: str) -> dict[str, Any] | None:
+    """One closest question in the other language. TF-IDF cannot cross scripts."""
+    qid = _pick_other_language(query)
+    if not qid:
+        return None
+    items, _, _, _ = _index()
+    item = next((row for row in items if row["id"] == qid), None)
+    if item is None or _has_cjk(item["question"]) == _has_cjk(query):
+        return None
+    return {**item, "score": 0.01}
+
+
+def _pick_other_language(query: str) -> str:
+    """Ask the model for one id in the language the query is not written in."""
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    from backend.agent.graph import build_model, llm_is_configured
+
+    if not llm_is_configured():
+        return ""
+    items, _, _, _ = _index()
+    want_cjk = not _has_cjk(query)
+    pool = [item for item in items if _has_cjk(item["question"]) is want_cjk]
+    if not pool:
+        return ""
+    listing = "\n".join(f"{row['id']}: {row['question'][:180]}" for row in pool)
+    language = "Chinese" if want_cjk else "English"
+    system = (
+        f"Choose the one {language} question closest in meaning to the manager's question. "
+        'Return JSON only: {"id":"<id>"}. Use only an id from the list.'
+    )
+    user = f"Question:\n{query[:400]}\n\n{language}:\n{listing}"
+    try:
+        # This call runs inside the answering turn. "nostream" keeps its JSON
+        # id out of the manager's live answer.
+        result = build_model().invoke(
+            [SystemMessage(content=system), HumanMessage(content=user)],
+            config={"tags": ["nostream"]},
+        )
+    except Exception:
+        logger.exception("other-language template match failed")
+        return ""
+    text = getattr(result, "content", result)
+    if isinstance(text, list):
+        text = "\n".join(
+            str(block.get("text") or "") if isinstance(block, dict) else str(block)
+            for block in text
+        )
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", str(text or ""), flags=re.IGNORECASE).strip()
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        logger.info("other-language template match was not JSON")
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    return str(payload.get("id") or "").strip()
 
 
 def without_foreign_order_templates(
@@ -392,41 +489,23 @@ def _stages(text: str) -> list[str]:
 
 
 def _anchor_order_ids(questions: list[str]) -> list[str] | None:
-    """One clear order id, an empty list when none was named, or None when unclear."""
+    """The latest question's order id. Earlier questions do not choose the subject."""
     if not questions:
         return []
     latest = _order_ids(questions[-1])
     if len(latest) > 1:
         return None
-    if len(latest) == 1:
-        return latest
-    seen: list[str] = []
-    for text in questions:
-        for order_id in _order_ids(text):
-            if order_id not in seen:
-                seen.append(order_id)
-    if len(seen) > 1:
-        return None
-    return seen
+    return latest
 
 
 def _anchor_stage(questions: list[str]) -> str | None:
-    """One clear stage, empty when none was named, or None when several were named."""
+    """The latest question's stage. Earlier questions do not choose the subject."""
     if not questions:
         return ""
     latest = _stages(questions[-1])
     if len(latest) > 1:
         return None
-    if len(latest) == 1:
-        return latest[0]
-    seen: list[str] = []
-    for text in questions:
-        for stage in _stages(text):
-            if stage.lower() not in {item.lower() for item in seen}:
-                seen.append(stage)
-    if len(seen) > 1:
-        return None
-    return seen[0] if seen else ""
+    return latest[0] if latest else ""
 
 
 def _entity_span(text: str) -> bool:
@@ -445,9 +524,9 @@ def accept_grounded_rewrite(template: str, proposed: str, questions: list[str]) 
     from difflib import SequenceMatcher
 
     corpus = "\n".join(questions)
-    corpus_ids = set(_order_ids(corpus))
+    latest_ids = set(_order_ids(questions[-1])) if questions else set()
     proposed_ids = _order_ids(proposed)
-    if any(order_id not in corpus_ids for order_id in proposed_ids):
+    if any(order_id not in latest_ids for order_id in proposed_ids):
         return False
     template_ids = _order_ids(template)
     anchor = _anchor_order_ids(questions)
@@ -518,6 +597,10 @@ def _draft_with_model(
     history = "\n".join(f"- {text}" for text in asked[-6:])
     system = (
         "You choose the next progressive-disclosure questions for a factory manager. "
+        "The subject is the latest question only. Earlier questions show what was already asked. "
+        "If the latest question names an order, every rewritten question uses that order. "
+        "Do not keep or insert an order from an earlier question. "
+        "If the latest question names no order, do not insert one. "
         "Read the latest question and the screened templates. "
         "You decide which templates reveal the next useful detail. "
         "There is no fixed list of steps. "
@@ -527,11 +610,10 @@ def _draft_with_model(
         "Swapping the order, stage, customer, product, or number is not a deeper question. Skip it. "
         "Do not pick three templates that ask the same thing. "
         "Change an order id, a stage (Knitting, Assembly, Washing, Packing), "
-        "a customer or product name, or a number only when that value already "
-        "appears in the manager's questions. "
+        "a customer or product name, or a number only when that value is in the latest question. "
         "Do not invent a question, an order id, or a name. "
-        "If a template names one order and the manager named a different one, replace it. "
-        "If the manager named several orders, skip templates that need a single order. "
+        "If a template names one order and the latest question names a different one, replace it with the latest order. "
+        "If the manager named several orders in the latest question, skip templates that need a single order. "
         'Return JSON only: {"questions":[{"source_id":"...","question":"..."}]}. '
         "Keep each template's language."
     )
@@ -601,8 +683,8 @@ def compose_deep_dive_questions(
     if not query:
         return []
     asked_list = [text.strip() for text in (asked or []) if str(text or "").strip()][-12:]
-    if query not in asked_list:
-        asked_list.append(query)
+    asked_list = [text for text in asked_list if text != query]
+    asked_list.append(query)
     asked_norm = {_norm(text) for text in asked_list}
     k = max(0, min(int(k), 3))
     candidates = _ranked_followups(query, asked=asked_list, pool=8)

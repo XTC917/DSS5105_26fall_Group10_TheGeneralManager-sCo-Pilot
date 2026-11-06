@@ -175,18 +175,17 @@ def find_orders(
 class DiscoverFactoryIssuesInput(BaseModel):
     limit: int = Field(
         default=DEFAULT_LIMIT,
-        description="Maximum number of ranked stage issues to return (1–20). Default 5.",
+        description="Maximum number of ranked issues to return (1–20). Default 5.",
     )
 
 
 @tool(args_schema=DiscoverFactoryIssuesInput)
 def discover_factory_issues(limit: int = DEFAULT_LIMIT) -> str:
-    """Production snapshot and ranked production_log stage issues.
+    """Ranked issues: overdue orders are P1, stalled or tight-due orders are P2, and a stage below its 30-day baseline is P3.
 
-    Copy data.production and data.issues. stage_vs_30day_median lists each
-    stage's 30 working days as date and pieces next to its median. Read that
-    series for a sustained high or low. flagged is only the last working day.
-    Do not answer with an order-priority list.
+    Copy data.production and data.issues in the returned order. Do not rerank.
+    stage_vs_30day_median lists each stage's 30 working days as date and pieces
+    next to its median. flagged is only the last working day.
     """
     tool_name = "discover_factory_issues"
     try:
@@ -217,7 +216,7 @@ def discover_factory_issues(limit: int = DEFAULT_LIMIT) -> str:
                 "data": data,
                 "trace": {
                     "tool": tool_name,
-                    "source_file": "production_log.csv",
+                    "source_file": "orders.csv, production_log.csv",
                     "filter": {
                         "factory_today": data["factory_today"],
                         "limit": limit,
@@ -249,9 +248,9 @@ def discover_factory_issues(limit: int = DEFAULT_LIMIT) -> str:
                         },
                     ],
                     "basis": (
-                        "Stage issues flag the last working day against "
-                        "0.70 × the 30-day median. working_days is that same "
-                        "median window, one date and pieces per working day."
+                        "P1 is an overdue order, P2 is stalled or tight-due, "
+                        "and P3 flags a stage's last working day against "
+                        "0.70 × the 30-day median."
                     ),
                 },
             }

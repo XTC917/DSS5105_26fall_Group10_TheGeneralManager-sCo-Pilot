@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import pinUrl from "../assets/pin.png";
 
 function formatUpdatedAt(value) {
   if (!value) return "";
@@ -12,17 +13,22 @@ function formatUpdatedAt(value) {
   }).format(date);
 }
 
-function PinIcon({ filled }) {
+function PinIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M9 3.5h6l-.8 6.2H17L12 20.5 7 9.7h2.8L9 3.5z"
-        fill={filled ? "currentColor" : "none"}
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <span
+      aria-hidden="true"
+      className="inline-block h-5 w-5 bg-current"
+      style={{
+        maskImage: `url(${pinUrl})`,
+        WebkitMaskImage: `url(${pinUrl})`,
+        maskSize: "contain",
+        WebkitMaskSize: "contain",
+        maskRepeat: "no-repeat",
+        WebkitMaskRepeat: "no-repeat",
+        maskPosition: "center",
+        WebkitMaskPosition: "center",
+      }}
+    />
   );
 }
 
@@ -84,7 +90,7 @@ function ConversationRow({
           pinned ? "text-accentText" : "text-muted hover:bg-surface hover:text-foreground"
         }`}
       >
-        <PinIcon filled={pinned} />
+        <PinIcon />
       </button>
       {canDelete && (
         <div className="relative shrink-0 self-center pr-1">

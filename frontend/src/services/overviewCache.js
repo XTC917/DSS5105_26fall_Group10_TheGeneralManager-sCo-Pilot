@@ -34,7 +34,7 @@ export function invalidateOverviewCache() {
 async function fetchAll(gen) {
   const [briefing, discovery, board] = await Promise.all([
     fetchBriefing(),
-    fetchDiscovery(8),
+    fetchDiscovery(5, { all: true }),
     fetchWatches(),
   ]);
   if (gen !== generation) return null;
@@ -42,6 +42,7 @@ async function fetchAll(gen) {
     briefing,
     discovery,
     watches: {
+      asOf: board.as_of || "",
       fired: board.fired || [],
       active: board.active || [],
       cancelled: board.cancelled || [],
@@ -88,13 +89,12 @@ export async function loadOverviewData({ force = false } = {}) {
 
 /** Lightweight factory-date fetch that reuses overview cache when present. */
 export async function loadFactoryDate() {
-  if (cache.briefing?.factory_today) {
-    return cache.briefing.factory_today;
-  }
+  const cachedClock = cache.briefing?.clock_date || cache.briefing?.factory_today;
+  if (cachedClock) return cachedClock;
   try {
     const data = await loadOverviewData();
-    return data.briefing?.factory_today || "";
+    return data.briefing?.clock_date || data.briefing?.factory_today || "";
   } catch {
-    return cache.briefing?.factory_today || "";
+    return cache.briefing?.clock_date || cache.briefing?.factory_today || "";
   }
 }

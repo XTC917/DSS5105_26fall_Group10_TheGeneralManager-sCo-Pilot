@@ -40,7 +40,7 @@ def test_find_orders_does_not_pick_one_trendcart_order(db):
 def test_find_orders_by_stage(db):
     payload = parse_tool(find_orders.invoke({"current_stage": "ASSEMBLY"}))
     assert payload["ok"] is True
-    assert payload["data"]["count"] == 10
+    assert payload["data"]["count"] == 11
     assert all(row["current_stage"] == "ASSEMBLY" for row in payload["data"]["orders"])
 
 
@@ -116,17 +116,21 @@ def _order_issues(db):
     return sort_issues(collect_order_risk_issues(db))
 
 
-def test_discover_is_production_log_only(db):
-    payload = _tool_data()
+def test_discover_includes_all_three_priorities(db):
+    payload = parse_tool(discover_factory_issues.invoke({"limit": 20}))
     assert payload["ok"] is True
     data = payload["data"]
     assert data["factory_today"] == "2026-04-01"
-    assert data["total_found"] == 1
-    assert data["returned_count"] == 1
     assert "today_priority" not in data
+    priorities = {item["priority"] for item in data["issues"]}
+    assert priorities == {1, 2, 3}
     types = {item["issue_type"] for item in data["issues"]}
-    assert types == {ISSUE_STAGE_BELOW_BASELINE}
-    assert payload["trace"]["source_file"] == "production_log.csv"
+    assert ISSUE_ORDER_OVERDUE in types
+    assert ISSUE_ORDER_STALLED in types or ISSUE_ORDER_TIGHT_DUE in types
+    assert ISSUE_STAGE_BELOW_BASELINE in types
+    assert data["issues"][0]["priority"] == 1
+    assert data["issues"][-1]["issue_type"] == ISSUE_STAGE_BELOW_BASELINE
+    assert payload["trace"]["source_file"] == "orders.csv, production_log.csv"
 
 
 def test_order_risk_collector_still_includes_overdue(db):
@@ -186,10 +190,15 @@ def test_discover_priority_sort_is_deterministic(db):
         "order:ORD-093",
         "order:ORD-020",
         "order:ORD-055",
+        "order:ORD-029",
         "order:ORD-103",
         "order:ORD-108",
-        "order:ORD-029",
+        "order:ORD-096",
+        "order:ORD-017",
         "order:ORD-005",
+        "order:ORD-035",
+        "order:ORD-040",
+        "order:ORD-095",
         "stage:ASSEMBLY",
     ]
     priorities = [i["priority"] for i in first]
@@ -202,13 +211,47 @@ def test_discover_priority_sort_is_deterministic(db):
     assert [i["issue_id"] for i in resorted] == ids
 
 
+def test_overview_board_lists_every_today_priority_order(db):
+    from backend.services.discovery import discover_priority_board
+    from backend.services.pace import today_priority
+
+    board = discover_priority_board(db)
+    buckets = today_priority(db)
+    assert [item["order_id"] for item in board["issues"] if item["priority"] == 1] == [
+        row["order_id"] for row in buckets["1st_priority"]
+    ]
+    assert [item["order_id"] for item in board["issues"] if item["priority"] == 2] == [
+        row["order_id"] for row in buckets["2nd_priority"]
+    ]
+    assert [item["order_id"] for item in board["issues"] if item["priority"] == 3] == [
+        row["order_id"] for row in buckets["3rd_priority"]
+    ]
+    assert board["returned_count"] == board["total_found"] == len(board["issues"])
+    assert all(item["issue_type"] != ISSUE_STAGE_BELOW_BASELINE for item in board["issues"])
+    assert board["issues"][0]["title"] == "ORD-114 is overdue and close to completion"
+    due_today = next(item for item in board["issues"] if item["order_id"] == "ORD-029")
+    assert due_today["priority"] == 2
+    assert due_today["title"] == "ORD-029 is due today"
+
+
+def test_discover_without_limit_returns_every_issue(db):
+    data = run_discover(db, limit=None)
+    assert data["returned_count"] == data["total_found"] == 18
+    assert data["limit"] == data["returned_count"]
+    assert {item["priority"] for item in data["issues"]} == {1, 2, 3}
+    assert data["issues"][-1]["issue_type"] == ISSUE_STAGE_BELOW_BASELINE
+
+
 def test_discover_limit_five(db):
     payload = _tool_data(5)
     data = payload["data"]
-    assert data["returned_count"] == 1
-    assert len(data["issues"]) == 1
-    assert data["total_found"] == 1
+    assert data["returned_count"] == 5
+    assert len(data["issues"]) == 5
+    assert data["total_found"] > 5
     assert data["limit"] == 5
+    assert [item["priority"] for item in data["issues"][:4]] == [1, 1, 1, 1]
+    assert data["issues"][-1]["issue_type"] == ISSUE_STAGE_BELOW_BASELINE
+    assert data["issues"][-1]["priority"] == 3
 
 
 def test_discover_one_issue_per_order_with_combined_flags(db):
@@ -239,10 +282,11 @@ def test_discover_issue_has_traceability(db):
         "result",
     ):
         assert key in item
-    assert item["source_file"] == "production_log.csv"
+    assert item["issue_type"] == ISSUE_ORDER_OVERDUE
+    assert item["source_file"] == "orders.csv"
     assert item["result"] is True
-    assert item["inputs"]["stage"] == "ASSEMBLY"
-    assert payload["trace"]["source_file"] == "production_log.csv"
+    assert item["inputs"]["order_id"] == item["order_id"]
+    assert payload["trace"]["source_file"] == "orders.csv, production_log.csv"
 
 
 def test_discover_empty_list_when_no_rules_fire(db, monkeypatch):
@@ -250,11 +294,16 @@ def test_discover_empty_list_when_no_rules_fire(db, monkeypatch):
         "backend.services.discovery.collect_stage_issues",
         lambda _db: [],
     )
+    monkeypatch.setattr(
+        "backend.services.discovery.collect_order_risk_issues",
+        lambda _db: [],
+    )
     result = run_discover(db, limit=5)
     assert result["issues"] == []
     assert result["total_found"] == 0
     assert result["returned_count"] == 0
     assert result["message"]
+    assert result["counts_by_type"][ISSUE_ORDER_OVERDUE] == 0
     assert result["counts_by_type"][ISSUE_STAGE_BELOW_BASELINE] == 0
 
 
@@ -262,10 +311,7 @@ def test_get_today_priority_tool(db):
     payload = parse_tool(get_today_priority.invoke({}))
     assert payload["ok"] is True
     buckets = payload["data"]["today_priority"]
-    assert [r["order_id"] for r in buckets["1st_priority"]] == [
-        "ORD-107",
-        "ORD-114",
-    ]
+    assert [r["order_id"] for r in buckets["1st_priority"]] == ["ORD-114"]
     assert payload["data"]["factory_today"] == run_today_priority(db)["factory_today"]
     assert buckets["days_left_formula"] == run_today_priority(db)["today_priority"]["days_left_formula"]
     assert "days_left" in buckets["1st_priority"][0]

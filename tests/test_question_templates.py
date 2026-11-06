@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 
+import pytest
 from langchain_core.messages import HumanMessage, ToolMessage
 
 from backend.agent.graph import _TEMPLATE_QUERY, _react_prompt
@@ -18,7 +19,30 @@ from backend.services.question_templates import (
     supplement_templates_for_tools,
     without_foreign_order_templates,
 )
+from backend.services.question_templates import _has_cjk
 from backend.services import question_templates as qt
+
+
+@pytest.fixture(autouse=True)
+def _offline_other_language(monkeypatch):
+    monkeypatch.setattr(qt, "_pick_other_language", lambda _query: "")
+
+
+def test_retrieval_is_two_same_language_and_one_other(monkeypatch):
+    monkeypatch.setattr(qt, "_pick_other_language", lambda _query: "ETS-002")
+    hits = retrieve_answer_templates("Which orders are likely to miss their due dates?")
+    assert len(hits) == 3
+    assert hits[0]["id"] == "Q001"
+    assert all(not _has_cjk(hit["question"]) for hit in hits[:2])
+    assert hits[2]["id"] == "ETS-002"
+    assert _has_cjk(hits[2]["question"])
+
+    monkeypatch.setattr(qt, "_pick_other_language", lambda _query: "Q001")
+    chinese = retrieve_answer_templates("哪些订单可能会错过交期？")
+    assert len(chinese) == 3
+    assert all(_has_cjk(hit["question"]) for hit in chinese[:2])
+    assert chinese[2]["id"] == "Q001"
+    assert not _has_cjk(chinese[2]["question"])
 
 
 def test_exact_question_is_top_hit():
@@ -108,6 +132,8 @@ def test_template_prompt_block_is_style_only():
     assert "Retrieved answer templates" in text
     assert "tool JSON" in text
     assert "sentence shape" in text
+    assert "2026-04-01" in text
+    assert "MUST redo the calculation" in text
     assert "field listing" in text
     assert "Q005" in text or "prioritize" in text.lower()
     assert "Few-shot answers" in __import__(
@@ -280,3 +306,30 @@ def test_compose_rewrites_a_foreign_template_order_without_the_model(monkeypatch
     hits = compose_deep_dive_questions("How is ORD-062 doing?")
     assert hits == ["Why is ORD-062 considered risky?"]
     assert all("ORD-061" not in hit for hit in hits)
+
+
+def test_compose_follows_the_latest_order_not_an_earlier_one(monkeypatch):
+    monkeypatch.setattr(
+        qt,
+        "_ranked_followups",
+        lambda *args, **kwargs: [
+            {
+                "id": "T1",
+                "question": "Why is ORD-061 considered risky?",
+                "relevant_tool": "trace_order",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        qt,
+        "_draft_with_model",
+        lambda *args, **kwargs: [
+            {"source_id": "T1", "question": "Why is ORD-005 considered risky?"},
+        ],
+    )
+    hits = compose_deep_dive_questions(
+        "How is ORD-029 doing?",
+        asked=["How is ORD-005 doing?", "How is ORD-029 doing?"],
+    )
+    assert hits == ["Why is ORD-029 considered risky?"]
+    assert all("ORD-005" not in hit for hit in hits)

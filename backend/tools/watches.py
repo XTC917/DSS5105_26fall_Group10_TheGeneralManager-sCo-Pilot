@@ -27,7 +27,7 @@ from backend.services.watches import (
     resolve_watch_for_cancel,
     watch_summary,
 )
-from backend.tools.common import order_id_named_by_manager, tool_error, tool_json, ungrounded_order_error
+from backend.tools.common import tool_error, tool_json
 
 logger = logging.getLogger(__name__)
 

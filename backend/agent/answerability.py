@@ -218,9 +218,12 @@ def _candidate_sentence(row: dict[str, Any], question: str) -> str:
     customer = str(row.get("customer") or "").strip()
     pieces = row.get("pieces")
     if order_id and watch_id not in (None, ""):
+        when = str(row.get("check_date") or "").strip()
         if zh:
-            return f"取消订单 {order_id} 上的观察 {watch_id}。"
-        return f"Cancel watch {watch_id} on {order_id}."
+            return f"取消订单 {order_id} 在 {when} 前未移动的观察。" if when else f"取消订单 {order_id} 上的观察。"
+        if when:
+            return f"Cancel the watch on {order_id} for no movement by {when}."
+        return f"Cancel the watch on {order_id}."
     if order_id:
         detail: list[str] = []
         if pieces not in (None, "") and product:
@@ -419,6 +422,49 @@ def combine_clarification(
     else:
         prompt = "Answer every question below, then send."
     return attach_other({"prompt": prompt, "questions": questions}, question)
+
+
+def email_audience_clarification(question: str) -> AnswerabilityGate | None:
+    """An email with no stated recipient role is not drafted as internal follow-up."""
+    text = question or ""
+    asks_email = re.search(
+        r"\b(send|draft|write|chase)\b.{0,48}\be-?mails?\b"
+        r"|\be-?mails?\b.{0,24}\b(to|for)\b"
+        r"|发.{0,8}邮件|写.{0,6}邮件|起草.{0,8}邮件",
+        text,
+        re.IGNORECASE,
+    )
+    named = re.search(
+        r"\b(customers?|clients?|internal(?:ly)?)\b|客户|内部",
+        text,
+        re.IGNORECASE,
+    )
+    if not asks_email or named:
+        return None
+    zh = reply_language(text) == "zh"
+    card = attach_other(
+        {
+            "prompt": "这封邮件是写给客户，还是写给内部跟进？" if zh else "Who should this email be written for?",
+            "options": [
+                {"label": "写给客户", "message": "写给客户"},
+                {"label": "写给内部跟进", "message": "写给内部跟进"},
+            ]
+            if zh
+            else [
+                {"label": "Write it to the customer", "message": "Write it to the customer"},
+                {"label": "Write it for internal follow-up", "message": "Write it for internal follow-up"},
+            ],
+        },
+        text,
+    )
+    return AnswerabilityGate(
+        proceed=False,
+        data=DataVerdict(reason="The email has no recipient role yet."),
+        tools=ToolVerdict(reason="Ask before draft_chase_email."),
+        answer=card["prompt"],
+        limitation="needs_clarification",
+        clarification=card,
+    )
 
 
 def scope_clarification(reason: str, question: str = "") -> dict[str, Any]:
@@ -774,6 +820,9 @@ def assess_answerability(
         pinned = pinned_clarification(question)
         if pinned is not None:
             return pinned
+        audience = email_audience_clarification(question)
+        if audience is not None:
+            return audience
 
     if model is None:
         from backend.agent.graph import build_model

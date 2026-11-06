@@ -24,7 +24,6 @@ from backend.services.pace import (
     would_miss_due_date,
 )
 from backend.tools.common import (
-    order_id_named_by_manager,
     several_orders_message,
     tool_error,
     tool_json,
@@ -82,15 +81,11 @@ def get_order_status(
 ) -> str:
     """Look up one order from orders.csv.
 
-    Pass order_id only when the manager wrote that id.
-    Otherwise pass the customer and/or product they named.
+    Pass order_id, or the customer and/or product they named.
     If several rows match, the result is AMBIGUOUS — ask which order_id.
-    Do not choose an id from an example or an answer template.
     """
     tool_name = "get_order_status"
     try:
-        if order_id and not order_id_named_by_manager(order_id):
-            return ungrounded_order_error(tool_name, order_id)
         for spoken in (customer, product):
             if spoken and not value_named_by_manager(spoken):
                 return ungrounded_order_error(tool_name, spoken)

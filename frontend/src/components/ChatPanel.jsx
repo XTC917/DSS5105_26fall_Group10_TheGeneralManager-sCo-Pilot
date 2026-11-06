@@ -764,7 +764,9 @@ export default function ChatPanel({
                 onClarify={(text) => {
                   const original = [...messages].reverse().find((item) => item.role === "user")?.content || "";
                   setMessages((prev) =>
-                    prev.map((item, i) => (i === idx ? { ...item, clarification: null } : item)),
+                    prev.map((item, i) =>
+                      i === idx ? { ...item, clarificationChoice: text } : item,
+                    ),
                   );
                   submit(text, true, original);
                 }}

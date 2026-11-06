@@ -18,7 +18,7 @@ from backend.services.calculations import (
 )
 from backend.services.database import get_db
 from backend.services.pace import flags_with_pace_tight, pace_fields, snapshot_timeline, stage_medians
-from backend.tools.common import order_id_named_by_manager, tool_error, tool_json, ungrounded_order_error
+from backend.tools.common import tool_error, tool_json
 
 logger = logging.getLogger(__name__)
 

@@ -123,13 +123,15 @@ def test_invalid_scope_or_missing_id(mail_env, args):
     assert draft(**args)["error"]["code"] == "INVALID_INPUT"
 
 
-def test_unknown_id_and_ungrounded_id(mail_env):
+def test_unknown_id(mail_env):
     assert draft(order_id="ORD-999")["error"]["code"] == "NOT_FOUND"
     token = set_manager_text("Draft a letter for ORD-120")
     try:
-        assert draft(order_id="ORD-005")["error"]["code"] == "UNGROUNDED_ID"
+        drafted = draft(order_id="ORD-005")
     finally:
         reset_manager_text(token)
+    assert drafted["ok"] is True
+    assert drafted["data"]["draft"]["order_id"] == "ORD-005"
 
 
 def test_invalid_language_rejected_by_tool_schema(mail_env):

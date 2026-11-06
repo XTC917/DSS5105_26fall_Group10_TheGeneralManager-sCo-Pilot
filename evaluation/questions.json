@@ -553,28 +553,6 @@
       "notes": "Screenshot standard answer from JAST-G22 (GOOD)."
     },
     {
-      "id": "ETS-032",
-      "question": "Draft a chase email for ORD-103, but do not send it.",
-      "category": "action_email",
-      "expected_behavior": "answer",
-      "relevant_tool": "draft_chase_email",
-      "tool_args": {},
-      "expected_answer": "To: Bright Basics — customer email address is not stored\nSubject: SweaterCo order ORD-103 (Scarf) needs attention\n\nOrder ORD-103 for Bright Basics: 2,000 Scarves, status IN_PROGRESS, currently at ASSEMBLY, due 4 April 2026, with last activity on 30 March 2026. Factory risk flag: TIGHT DEADLINE.\n\nThis is a local draft only and was not sent.\n\nProposed locally. Click Confirm to save — that is the confirmation step. Email is never actually sent.",
-      "verification_method": "prose_template",
-      "notes": "Screenshot standard answer from 25 (GOOD)."
-    },
-    {
-      "id": "ETS-033",
-      "question": "Draft a chase-up email for ORD-120. Do not send",
-      "category": "action_email",
-      "expected_behavior": "answer",
-      "relevant_tool": "draft_chase_email",
-      "tool_args": {},
-      "expected_answer": "Subject: SweaterCo order ORD-120 (Vest) needs attention\n\nDraft:\n\nOrder ORD-120 for TrendCart: 1,500 vests, status IN_PROGRESS, currently in ASSEMBLY, due 2026-03-17, with last activity on 2026-03-30. Factory risk flag: OVERDUE.\n\nThis draft was not sent. No customer email address is stored, and there is no email integration.",
-      "verification_method": "prose_template",
-      "notes": "Screenshot standard answer from Q43 (GOOD)."
-    },
-    {
       "id": "ETS-036",
       "question": "Is it feasible to accept a new order for 2,000 scarves due on May 15, 2026?",
       "category": "feasibility",

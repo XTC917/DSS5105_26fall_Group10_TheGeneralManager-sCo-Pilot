@@ -17,7 +17,138 @@ def _tool(name: str, call_id: str) -> ToolMessage:
     )
 
 
-def test_parse_agent_result_keeps_only_latest_turn_tools():
+def test_list_shaped_tool_message_still_proposes_confirmation():
+    payload = {
+        "ok": True,
+        "tool": "cancel_watch",
+        "data": {
+            "needs_confirmation": True,
+            "proposed_action": {
+                "type": "cancel_watch",
+                "order_id": "ORD-120",
+                "watch_id": 42,
+                "requires_confirmation": True,
+                "confirmed": False,
+            },
+        },
+    }
+    result = {
+        "messages": [
+            HumanMessage(content="Cancel the watch on ORD-120."),
+            AIMessage(content="", tool_calls=[{"name": "cancel_watch", "id": "1", "args": {}}]),
+            ToolMessage(
+                content=[{"type": "text", "text": json.dumps(payload)}],
+                tool_call_id="1",
+                name="cancel_watch",
+            ),
+            AIMessage(content="Cancellation proposed for watch 42 on ORD-120. Click Confirm to stop it."),
+        ]
+    }
+    parsed = parse_agent_result(result, "thread-1")
+    assert parsed["proposed_actions"][0]["order_id"] == "ORD-120"
+    assert parsed["proposed_actions"][0]["type"] == "cancel_watch"
+
+
+def test_email_confirm_box_is_restored_when_the_reply_asks_for_it():
+    payload = {
+        "ok": True,
+        "tool": "send_email",
+        "data": {
+            "needs_confirmation": True,
+            "draft": {"order_id": "ORD-120", "language": "en", "audience": "customer"},
+        },
+    }
+    result = {
+        "messages": [
+            HumanMessage(content="Send the chase email for ORD-120."),
+            AIMessage(content="", tool_calls=[{"name": "send_email", "id": "1", "args": {}}]),
+            ToolMessage(content="Result:\n" + json.dumps(payload), tool_call_id="1", name="send_email"),
+            AIMessage(content="The email is ready. Click Confirm to record the simulated send."),
+        ]
+    }
+    parsed = parse_agent_result(result, "thread-1")
+    assert parsed["proposed_actions"] == [
+        {
+            "type": "send_email",
+            "order_id": "ORD-120",
+            "language": "en",
+            "audience": "customer",
+            "requires_confirmation": True,
+            "confirmed": False,
+        }
+    ]
+
+
+def test_note_and_reminder_confirm_boxes_are_restored():
+    note = {
+        "ok": True,
+        "tool": "add_order_note",
+        "data": {
+            "needs_confirmation": True,
+            "order_id": "ORD-120",
+            "note": "Check packing",
+        },
+    }
+    reminder = {
+        "ok": True,
+        "tool": "create_reminder",
+        "data": {
+            "needs_confirmation": True,
+            "order_id": "ORD-120",
+            "remind_on": "2026-04-02",
+            "message": "Check packing",
+        },
+    }
+    note_parsed = parse_agent_result(
+        {
+            "messages": [
+                HumanMessage(content="Note ORD-120."),
+                ToolMessage(content="Result:\n" + json.dumps(note), tool_call_id="1", name="add_order_note"),
+                AIMessage(content="Click Confirm to save the note."),
+            ]
+        },
+        "thread-1",
+    )
+    assert note_parsed["proposed_actions"] == [
+        {
+            "type": "add_order_note",
+            "order_id": "ORD-120",
+            "note": "Check packing",
+            "requires_confirmation": True,
+            "confirmed": False,
+        }
+    ]
+    reminder_parsed = parse_agent_result(
+        {
+            "messages": [
+                HumanMessage(content="Remind me about ORD-120."),
+                ToolMessage(content="Result:\n" + json.dumps(reminder), tool_call_id="1", name="create_reminder"),
+                AIMessage(content="Click Confirm to save the reminder."),
+            ]
+        },
+        "thread-1",
+    )
+    assert reminder_parsed["proposed_actions"] == [
+        {
+            "type": "create_reminder",
+            "order_id": "ORD-120",
+            "remind_on": "2026-04-02",
+            "message": "Check packing",
+            "requires_confirmation": True,
+            "confirmed": False,
+        }
+    ]
+
+
+def test_confirm_sentence_without_a_tool_does_not_invent_a_box():
+    result = {
+        "messages": [
+            HumanMessage(content="Cancel the watch."),
+            AIMessage(content="Cancellation proposed for watch 42 on ORD-120. Click Confirm to stop it."),
+        ]
+    }
+    parsed = parse_agent_result(result, "thread-1")
+    assert parsed["proposed_actions"] == []
     result = {
         "messages": [
             HumanMessage(content="How is ORD-120 doing?"),

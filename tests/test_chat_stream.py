@@ -51,6 +51,25 @@ def test_answer_tokens_skip_tool_calls_and_keep_the_final_state():
     assert state is final
 
 
+def test_template_id_pick_is_kept_out_of_the_answer_stream(monkeypatch):
+    from langchain_core.messages import AIMessage
+
+    from backend.services import question_templates as qt
+
+    captured = {}
+
+    class _Model:
+        def invoke(self, messages, config=None):
+            captured["config"] = config or {}
+            return AIMessage(content='{"id":"ETS-077"}')
+
+    monkeypatch.setattr("backend.agent.graph.llm_is_configured", lambda: True)
+    monkeypatch.setattr("backend.agent.graph.build_model", lambda: _Model())
+
+    assert qt._pick_other_language("send an email to ord-120") == "ETS-077"
+    assert "nostream" in captured["config"].get("tags", [])
+
+
 def test_progress_labels_do_not_include_tool_arguments():
     seen = []
     handler = ToolProgress(seen.append)

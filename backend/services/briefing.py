@@ -49,8 +49,10 @@ def build_morning_briefing(db: FactoryDB) -> dict[str, Any]:
         if w.get("status") == "SUSPENDED"
     ]
 
+    latest = db.latest_record_date()
     return {
         "factory_today": factory_date().isoformat(),
+        "latest_data_date": latest.isoformat() if latest else None,
         "dashboard": build_dashboard(db),
         "in_progress_order_count": len(in_progress),
         "in_progress_by_stage": by_stage,
@@ -148,18 +150,23 @@ def build_last_week(db: FactoryDB, today: date | None = None) -> dict[str, Any]:
             "basis": "No weekly factory records are available.",
         }
 
-    monday = _week_monday(min(dated))
+    first_record = min(dated)
+    monday = _week_monday(first_record)
+    # Records that begin after Monday make the opening week a short week.
+    if first_record > monday:
+        monday += timedelta(days=7)
     last_monday = _week_monday(today)
     weeks: list[dict[str, Any]] = []
     week_number = 1
     while monday <= last_monday:
         week_end = monday + timedelta(days=5)
-        partial = week_end > today
+        if week_end > today:
+            break
         item = {
             "week": week_number,
             "start": monday.isoformat(),
-            "end": (today if partial else week_end).isoformat(),
-            "partial": partial,
+            "end": week_end.isoformat(),
+            "partial": False,
             "on_time": 0,
             "overdue": 0,
             "completed": 0,
@@ -214,8 +221,9 @@ def build_last_week(db: FactoryDB, today: date | None = None) -> dict[str, Any]:
         "products": product_rows,
         "customers": sorted({row["customer"] for row in product_rows}),
         "basis": (
-            "Each point is a Monday–Saturday factory week. The week containing factory today "
-            "stops on that date, so it is shorter than six working days. "
+            "Each point is a complete Monday–Saturday factory week. The opening week is omitted "
+            "when records begin after its Monday, and the week that contains factory today is "
+            "omitted until Saturday, so a short week does not look like a drop. "
             "Products are the previous complete Monday–Saturday. Brand is orders.customer. "
             "Stage pieces are factory-wide output, not finished garments."
         ),

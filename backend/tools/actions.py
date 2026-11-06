@@ -19,7 +19,7 @@ from backend.services.pace import flags_with_pace_tight, pace_fields, stage_medi
 from backend.services.database import get_db
 from backend.services.request_context import get_current_user_id
 from backend.services.email_templates import EmailAudience, EmailLanguage, compose_email, email_language
-from backend.tools.common import manager_text, order_id_named_by_manager, tool_error, tool_json, ungrounded_order_error
+from backend.tools.common import manager_text, tool_error, tool_json
 
 logger = logging.getLogger(__name__)
 
@@ -112,8 +112,6 @@ def draft_chase_email(order_id: str | None = None, language: EmailLanguage = "au
                                         "calculations": [], "basis": "Existing OVERDUE rule; one draft per order; nothing sent."}})
         if not order_id or not order_id.strip():
             return tool_error(tool_name, "INVALID_INPUT", "order_id is required for a single-order draft.")
-        if not order_id_named_by_manager(order_id):
-            return ungrounded_order_error(tool_name, order_id)
         order = _lookup_order(order_id)
         if not order:
             return tool_error(tool_name, "NOT_FOUND", "No order with that id in orders.csv.")
@@ -165,8 +163,6 @@ def send_email(order_id: str, confirmed: bool = False, language: EmailLanguage =
     """
     tool_name = "send_email"
     try:
-        if not order_id_named_by_manager(order_id):
-            return ungrounded_order_error(tool_name, order_id)
         order = _lookup_order(order_id)
         if not order:
             return tool_error(tool_name, "NOT_FOUND", "No order with that id in orders.csv.")
@@ -251,8 +247,6 @@ def add_order_note(order_id: str, note: str, confirmed: bool = False) -> str:
     """Propose or locally save an order note. Requires confirmation to persist."""
     tool_name = "add_order_note"
     try:
-        if not order_id_named_by_manager(order_id):
-            return ungrounded_order_error(tool_name, order_id)
         text = (note or "").strip()
         if not text:
             return tool_error(tool_name, "INVALID_INPUT", "note must be non-empty.")
@@ -344,8 +338,6 @@ def create_reminder(
     """Propose or locally save a reminder. No push notification is sent."""
     tool_name = "create_reminder"
     try:
-        if not order_id_named_by_manager(order_id):
-            return ungrounded_order_error(tool_name, order_id)
         text = (message or "").strip()
         if not text:
             return tool_error(tool_name, "INVALID_INPUT", "message must be non-empty.")

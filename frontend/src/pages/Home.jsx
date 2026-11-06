@@ -15,6 +15,7 @@ import {
   fetchConversationHistory,
   fetchConversations,
 } from "../services/conversationsApi.js";
+import { partitionWatches } from "../services/watchDisplay.js";
 import { invalidateOverviewCache, loadOverviewData, peekOverviewCache } from "../services/overviewCache.js";
 import { friendlyAuthError } from "../services/authErrors.js";
 import {
@@ -209,8 +210,8 @@ export default function Home() {
   busyIdsRef.current = busyIds;
   const watchSaveHolds = useRef(0);
   const [composerDraft, setComposerDraft] = useState("");
-  const [factoryDate, setFactoryDateState] = useState(() => peekOverviewCache()?.briefing?.factory_today || "");
-  const [dateDraft, setDateDraft] = useState(() => peekOverviewCache()?.briefing?.factory_today || "");
+  const [factoryDate, setFactoryDateState] = useState(() => peekOverviewCache()?.briefing?.clock_date || peekOverviewCache()?.briefing?.factory_today || "");
+  const [dateDraft, setDateDraft] = useState(() => peekOverviewCache()?.briefing?.clock_date || peekOverviewCache()?.briefing?.factory_today || "");
   const [dateSaving, setDateSaving] = useState(false);
   const [dateError, setDateError] = useState("");
   const [dateNotice, setDateNotice] = useState("");
@@ -254,18 +255,20 @@ export default function Home() {
     loadOverviewData({ force: boardTick > 0 || !peekOverviewCache()?.briefing })
       .then((payload) => {
         if (cancelled) return;
-        if (payload.briefing?.factory_today) {
-          setFactoryDateState(payload.briefing.factory_today);
-          setDateDraft(payload.briefing.factory_today);
+        const clock = payload.briefing?.clock_date || payload.briefing?.factory_today;
+        if (clock) {
+          setFactoryDateState(clock);
+          setDateDraft(clock);
         }
         setWatches(payload.watches || { fired: [], active: [], cancelled: [] });
       })
       .catch(() => {
         const cached = peekOverviewCache();
         if (!cancelled && cached) {
-          if (cached.briefing?.factory_today) {
-            setFactoryDateState(cached.briefing.factory_today);
-            setDateDraft(cached.briefing.factory_today);
+          const cachedClock = cached.briefing?.clock_date || cached.briefing?.factory_today;
+          if (cachedClock) {
+            setFactoryDateState(cachedClock);
+            setDateDraft(cachedClock);
           }
           setWatches(cached.watches || { fired: [], active: [], cancelled: [] });
         }
