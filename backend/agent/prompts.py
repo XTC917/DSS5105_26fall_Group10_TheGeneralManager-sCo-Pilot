@@ -165,7 +165,8 @@ def format_retrieved_templates(hits: list | tuple | None) -> str:
         "shape for the final reply: the same grouping and the same kind of "
         "analysis (why it is late or at risk, what remains, what to do). "
         "Do not turn the reply into a field listing.",
-        "Every template was written from the factory data as of 2026-04-01. "
+        "Every template is the morning of 2026-04-02 looking at records through 2026-04-01. "
+        "April 2 itself is not in the template data. "
         "You MUST redo the calculation and the analysis from this turn's tool JSON "
         "for the current factory date. Do not copy a template's counts, "
         "numerators, totals, dates, order ids, or customers, and do not pass "

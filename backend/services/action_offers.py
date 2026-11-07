@@ -7,6 +7,7 @@ builders that already have every required field. It cannot invent an action.
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 import logging
 import re
 from collections.abc import Callable
@@ -40,11 +41,14 @@ def _orders_in_traces(traces: list[dict[str, Any]] | None) -> dict[str, dict[str
 
 
 def _check_date(order: dict[str, Any]) -> str:
+    """Earliest push is the next factory day. An order due today may be watched today."""
+    today = factory_date()
     due = str(order.get("due_date") or "").strip()
-    today = factory_date().isoformat()
-    if due >= today:
+    if due == today.isoformat():
         return due
-    return today
+    if due > today.isoformat():
+        return due
+    return (today + timedelta(days=1)).isoformat()
 
 
 def _watch_offer(order: dict[str, Any]) -> dict[str, Any] | None:

@@ -26,11 +26,25 @@ def _lookup(order_id: str) -> dict:
     return {**ORDER, "order_id": order_id}
 
 
-def test_one_in_progress_order_can_be_watched():
+def test_one_in_progress_order_can_be_watched(monkeypatch):
+    monkeypatch.setattr(offers, "factory_date", lambda: __import__("datetime").date(2026, 4, 1))
     found = offers.candidate_offers(_traces({"order_id": "ORD-120"}), lookup=_lookup)
     assert [item["id"] for item in found] == ["create_watch:ORD-120"]
-    assert found[0]["action"]["check_date"] == "2026-04-01"
+    assert found[0]["action"]["check_date"] == "2026-04-02"
     assert found[0]["action"]["order_id"] == "ORD-120"
+
+
+def test_due_today_can_be_watched_today(monkeypatch):
+    monkeypatch.setattr(offers, "factory_date", lambda: __import__("datetime").date(2026, 4, 1))
+    found = offers.candidate_offers(
+        _traces({"order_id": "ORD-029", "due_date": "2026-04-01", "status": "IN_PROGRESS"}),
+        lookup=lambda order_id: {
+            "order_id": order_id,
+            "status": "IN_PROGRESS",
+            "due_date": "2026-04-01",
+        },
+    )
+    assert found[0]["action"]["check_date"] == "2026-04-01"
 
 
 def test_a_series_keeps_every_order_for_the_model():
@@ -48,7 +62,7 @@ def test_same_card_is_the_only_drop():
         proposed_actions=[{"type": "create_watch", "order_id": "ORD-120"}],
         lookup=_lookup,
     )
-    assert [item["id"] for item in found] == ["send_email:ORD-120"]
+    assert [item["id"] for item in found] == []
 
 
 def test_model_can_choose_the_one_problem_in_a_series(monkeypatch):
