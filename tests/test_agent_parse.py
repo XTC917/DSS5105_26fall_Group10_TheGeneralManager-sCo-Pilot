@@ -6,7 +6,15 @@ import json
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from backend.agent.graph import _drop_superseded_error_tables, _model_turn, parse_agent_result
+from backend.agent.graph import (
+    _TEMPLATE_QUERY,
+    _display_needed,
+    _drop_superseded_error_tables,
+    _model_turn,
+    _prefetch_args,
+    _react_prompt,
+    parse_agent_result,
+)
 
 
 def _tool(name: str, call_id: str) -> ToolMessage:
@@ -353,3 +361,42 @@ def test_clarification_reply_is_wrapped_only_for_the_model():
     assert "以下内容是对这个问题的澄清：" in zh
     assert "以澄清为准。" in zh
     assert chinese in zh
+
+
+def test_reply_is_written_before_the_display_tool():
+    token = _TEMPLATE_QUERY.set("Which orders are likely to miss their due dates?")
+    try:
+        system = _react_prompt(
+            {
+                "messages": [
+                    HumanMessage(content="Which orders are likely to miss their due dates?"),
+                    _tool("get_orders_at_risk", "call-1"),
+                ]
+            }
+        )[0].content
+    finally:
+        _TEMPLATE_QUERY.reset(token)
+    assert "write the reply now" in system
+    assert "Do not call draw or render_table in this message." in system
+    assert "call a different registered tool" in system
+    assert "MUST be exactly one tool call" not in system
+
+
+def test_prefetch_runs_only_when_the_arguments_are_determined():
+    assert _prefetch_args("get_morning_briefing", "How is the factory doing?") == {}
+    assert _prefetch_args("get_orders_at_risk", "Which orders are at risk?") == {}
+    assert _prefetch_args("trace_order", "How is ORD-120 doing?") == {"order_id": "ORD-120"}
+    assert _prefetch_args("trace_order", "Compare ORD-120 and ORD-005") is None
+    assert _prefetch_args("find_orders", "List TrendCart orders") is None
+    assert _prefetch_args("draft_chase_email", "Email ORD-120") is None
+
+
+def test_display_waits_until_a_lookup_has_rows_and_no_chart():
+    turn = [
+        HumanMessage(content="Which orders are at risk?"),
+        _tool("get_orders_at_risk", "call-1"),
+        AIMessage(content="Three orders may miss their due dates."),
+    ]
+    assert _display_needed(turn) is True
+    turn.append(_tool("render_table", "call-2"))
+    assert _display_needed(turn) is False
