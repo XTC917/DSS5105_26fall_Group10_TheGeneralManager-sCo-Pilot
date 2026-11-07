@@ -29,8 +29,8 @@ class GetStageOutputInput(BaseModel):
         ge=1,
         le=MAX_WORKING_DAYS,
         description=(
-            "How many working days of production_log to include, ending the "
-            "last working day before factory today. Sundays are closed and "
+            "How many working days of production_log to include, ending on "
+            "factory today when that day is a working day. Sundays are closed and "
             "are not counted. Default 30."
         ),
     )
@@ -40,7 +40,7 @@ def _working_dates(log: list[dict[str, Any]], today: date) -> list[date]:
     found: set[date] = set()
     for row in log:
         day = parse_iso_date(row.get("date"))
-        if day is not None and day < today and is_working_day(day):
+        if day is not None and day <= today and is_working_day(day):
             found.add(day)
     return sorted(found)
 
@@ -105,7 +105,7 @@ def get_stage_output(working_days: int = 30) -> str:
                         "Factory-wide production_log totals by date and stage. Not per order.",
                         "Does not measure queue length or orders waiting at a stage.",
                         "Does not rank stage stability.",
-                        "The window is the last N working days before factory today. Sundays are excluded.",
+                        "The window is the last N working days through factory today. Sundays are excluded.",
                         "A short or unfinished week is only the working days already in the log. Missing days are not filled in.",
                     ],
                 },
@@ -118,7 +118,7 @@ def get_stage_output(working_days: int = 30) -> str:
                     },
                     "rows": series,
                     "calculations": [],
-                    "basis": "Working days before the active factory date, Sundays excluded. Pieces are copied from production_log.",
+                    "basis": "Working days through the active factory date, Sundays excluded. Pieces are copied from production_log.",
                 },
             }
         )

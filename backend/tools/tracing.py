@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import math
 import statistics
+from typing import Optional
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
@@ -17,7 +18,7 @@ from backend.services.calculations import (
     parse_iso_date,
 )
 from backend.services.database import get_db
-from backend.services.pace import flags_with_pace_tight, pace_fields, snapshot_timeline, stage_medians
+from backend.services.pace import flags_with_pace_tight, pace_fields, snapshot_timeline, stage_pace_rates
 from backend.tools.common import tool_error, tool_json
 
 logger = logging.getLogger(__name__)
@@ -25,10 +26,18 @@ logger = logging.getLogger(__name__)
 
 class TraceOrderInput(BaseModel):
     order_id: str = Field(..., description="Order id the manager wrote.")
+    lookback_working_days: Optional[int] = Field(
+        default=None,
+        description=(
+            "Recent working days that set the pace. Omit for the 30-day median. "
+            "If the manager names another window, such as the last 5 days, pass that "
+            "number. The pace then uses the average daily pieces over those working days."
+        ),
+    )
 
 
 @tool(args_schema=TraceOrderInput)
-def trace_order(order_id: str) -> str:
+def trace_order(order_id: str, lookback_working_days: Optional[int] = None) -> str:
     """Return the source row, snapshot stage history, pace estimate, and risk flags.
 
     Use when the manager asks why an order is risky or to trace its situation.
@@ -37,8 +46,6 @@ def trace_order(order_id: str) -> str:
     """
     tool_name = "trace_order"
     try:
-        if not order_id_named_by_manager(order_id):
-            return ungrounded_order_error(tool_name, order_id)
         db = get_db()
         order = db.get_order_by_id(order_id)
         if order is None:
@@ -48,10 +55,18 @@ def trace_order(order_id: str) -> str:
                 f"{order_id} is not in orders.csv.",
             )
 
+        if lookback_working_days is not None and (
+            lookback_working_days < 1 or lookback_working_days > 60
+        ):
+            return tool_error(
+                tool_name,
+                "INVALID_INPUT",
+                "lookback_working_days must be from 1 to 60.",
+            )
         computed = order_computed_fields(order)
         risk = assess_order_risk(order)
-        medians = stage_medians(db)
-        pace = pace_fields(order, medians)
+        rates, pace_window = stage_pace_rates(db, lookback_working_days)
+        pace = pace_fields(order, rates, rate_label=pace_window["rate_label"])
         flags = flags_with_pace_tight(list(risk["flags"]), pace)
         snap = snapshot_timeline(db, order["order_id"])
         consider_workshop = bool(
@@ -71,6 +86,7 @@ def trace_order(order_id: str) -> str:
                     "order": order,
                     "computed": computed,
                     "pace": pace,
+                    "pace_window": pace_window,
                     "snapshot": snap,
                     "consider_external_workshop": consider_workshop,
                     "risk": {
@@ -182,8 +198,6 @@ def compare_order_progress(order_id: str) -> str:
     """
     tool_name = "compare_order_progress"
     try:
-        if not order_id_named_by_manager(order_id):
-            return ungrounded_order_error(tool_name, order_id)
         db = get_db()
         order = db.get_order_by_id(order_id)
         if order is None:

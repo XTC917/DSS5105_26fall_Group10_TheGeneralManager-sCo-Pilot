@@ -1,37 +1,75 @@
 """One shared factory date. An administrator chooses it; every account reads it."""
 import re
-from datetime import date, timedelta
+from datetime import date
+from typing import Any
 
 from backend.config import FACTORY_TODAY
 from backend.pg_config import COPILOT_SCHEMA
 from backend.services.pg_database import connect
 
 
-def query_date_for(clock: date, latest: date | None) -> date:
-    """Use the day after the newest record when the clock is two or more days ahead.
+DATED_CSVS = ("orders.csv", "production_log.csv")
 
-    Factory queries only see the day before their date, so that day is the latest
-    record itself.
-    """
-    if latest is not None and (clock - latest).days >= 2:
-        return latest + timedelta(days=1)
+
+def query_date_for(clock: date, latest: date | None = None) -> date:
+    """The chosen factory date is the date queries use."""
     return clock
 
 
-def data_hold_note(as_of: date, question: str = "") -> str:
-    """English unless the manager's question contains Chinese."""
-    day = as_of.isoformat()
-    if re.search(r"[\u4e00-\u9fff]", question or ""):
-        return f"**回答截止到 {day}，之后的数据还未更新。**"
-    return f"**Data is current through {day}. Records after that date have not been updated.**"
+def named_csvs(source: str) -> set[str]:
+    text = source or ""
+    return {name for name in DATED_CSVS if name in text}
+
+
+def stale_csv_updates(db: Any, used: set[str], day: date) -> list[tuple[str, date]]:
+    """CSVs this answer or board actually read whose newest record is before day."""
+    latest = db.csv_latest_updates()
+    stale: list[tuple[str, date]] = []
+    for name in DATED_CSVS:
+        if name not in used:
+            continue
+        updated = latest.get(name)
+        if updated is not None and updated < day:
+            stale.append((name, updated))
+    return stale
+
+
+def partial_update_note(
+    stale: list[tuple[str, date]],
+    question: str = "",
+    *,
+    bold: bool = True,
+) -> str:
+    """Say which used CSVs stop before the factory date. Empty when none do."""
+    if not stale:
+        return ""
+    zh = bool(re.search(r"[\u4e00-\u9fff]", question or ""))
+    labels = [_csv_label(name) for name, _day in stale]
+    if zh:
+        if len({day for _name, day in stale}) == 1:
+            text = f"部分数据的更新时间截止 {stale[0][1].isoformat()}（{'、'.join(labels)}）。"
+        else:
+            bits = "、".join(f"{_csv_label(name)} {day.isoformat()}" for name, day in stale)
+            text = f"部分数据的更新时间截止 {bits}。"
+    elif len({day for _name, day in stale}) == 1:
+        text = (
+            "Some of the data used here was last updated through "
+            f"{stale[0][1].isoformat()} ({', '.join(labels)})."
+        )
+    else:
+        bits = ", ".join(f"{_csv_label(name)} {day.isoformat()}" for name, day in stale)
+        text = f"Some of the data used here was last updated through {bits}."
+    return f"**{text}**" if bold else text
+
+
+def _csv_label(name: str) -> str:
+    return name.removesuffix(".csv")
 
 
 def query_factory_date() -> tuple[date, date]:
-    """Return the saved clock and the date data queries should use."""
-    from backend.services.database import FactoryDB
-
+    """Return the saved clock. Queries use that same date."""
     clock = load_factory_date()
-    return clock, query_date_for(clock, FactoryDB().latest_record_date())
+    return clock, clock
 
 
 def load_factory_date() -> date:

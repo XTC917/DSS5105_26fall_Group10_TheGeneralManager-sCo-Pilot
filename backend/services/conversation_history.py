@@ -61,8 +61,8 @@ def _title_from_question(question: str) -> str:
 def discard_unused_conversations(user_id: int, keep: list[UUID] | None = None) -> None:
     """Drop conversations that never received a question.
 
-    A conversation stays if a question is still being answered, or if the
-    caller just submitted one and asked to keep that id.
+    A conversation stays if a question is still being answered, the caller
+    asked to keep that id, or it was created in the last 30 seconds.
     """
     keep_ids = list(dict.fromkeys(str(item) for item in (keep or [])))
     keep_clause = ""
@@ -87,6 +87,7 @@ def discard_unused_conversations(user_id: int, keep: list[UUID] | None = None) -
                     WHERE a.conversation_id = c.id
                       AND a.status = 'IN_PROGRESS'
               )
+              AND c.created_at <= NOW() - INTERVAL '30 seconds'
               {keep_clause}
             """,
             tuple(params),
@@ -271,7 +272,10 @@ def _restore_turn_metadata(turn: dict[str, Any]) -> None:
     turn["response_json"] = payload
 
 
-def recent_turn_memory(conversation_id: UUID, *, limit: int = 3) -> str:
+RECENT_TURN_LIMIT = 3
+
+
+def recent_turn_memory(conversation_id: UUID, *, limit: int = RECENT_TURN_LIMIT) -> str:
     """Question and answer text from the last saved turns, oldest first."""
     if limit < 1:
         return ""

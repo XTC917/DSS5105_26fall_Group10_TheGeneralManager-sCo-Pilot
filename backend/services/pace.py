@@ -36,6 +36,30 @@ def stage_medians(db: FactoryDB) -> dict[str, float]:
     return {stage: float(raw[stage]) for stage in PRODUCTION_STAGES_IN_ORDER if raw.get(stage)}
 
 
+def stage_pace_rates(
+    db: FactoryDB,
+    lookback_working_days: int | None = None,
+) -> tuple[dict[str, float], dict[str, Any]]:
+    """Default pace uses the 30-day median. A named window uses that window's average."""
+    packet = stage_throughput_medians(db, lookback_working_days=lookback_working_days)
+    window = int(packet["lookback_working_days"])
+    if lookback_working_days is None:
+        raw = packet["medians_pieces_per_working_day"]
+        statistic = "median"
+        label = "30-day_median(stage)"
+    else:
+        raw = packet["averages_pieces_per_working_day"]
+        statistic = "average"
+        label = f"{window}-day_average(stage)"
+    rates = {stage: float(raw[stage]) for stage in PRODUCTION_STAGES_IN_ORDER if raw.get(stage)}
+    return rates, {
+        "lookback_working_days": window,
+        "statistic": statistic,
+        "rate_label": label,
+        "rates_pieces_per_working_day": rates,
+    }
+
+
 def estimated_remaining_working_days(
     pieces: int,
     stages: list[str],
@@ -54,7 +78,12 @@ def estimated_remaining_working_days(
     return float(max(round(total, 1), len(productive)))
 
 
-def pace_fields(order: dict[str, Any], medians: dict[str, float]) -> dict[str, Any]:
+def pace_fields(
+    order: dict[str, Any],
+    medians: dict[str, float],
+    *,
+    rate_label: str = "30-day_median(stage)",
+) -> dict[str, Any]:
     computed = order_computed_fields(order)
     stages = remaining_stages(order.get("current_stage") or "")
     pieces = int(order.get("pieces") or 0)
@@ -83,7 +112,7 @@ def pace_fields(order: dict[str, Any], medians: dict[str, float]) -> dict[str, A
         "pace_slack_working_days": slack,
         "formula": (
             "days_left = max(sum_over_remaining_stages "
-            "pieces / 30-day_median(stage), remaining_stage_count)"
+            f"pieces / {rate_label}, remaining_stage_count)"
         ),
     }
 
@@ -122,13 +151,16 @@ def _is_pace_miss(row: dict[str, Any], *, min_slack: float = 0.0) -> bool:
 
 
 def likely_to_miss_due_dates(
-    db: FactoryDB, medians: dict[str, float] | None = None
+    db: FactoryDB,
+    medians: dict[str, float] | None = None,
+    *,
+    rate_label: str = "30-day_median(stage)",
 ) -> list[dict[str, Any]]:
     """Not overdue; due within 3 calendar days; cannot finish at the given stage pace."""
     medians = stage_medians(db) if medians is None else medians
     rows = []
     for order in db.in_progress_orders():
-        row = pace_fields(order, medians)
+        row = pace_fields(order, medians, rate_label=rate_label)
         if pace_tight_deadline(row):
             rows.append(row)
     rows.sort(key=lambda r: (r["calendar_days_until_due"], -r["estimated_remaining_working_days"]))
@@ -136,13 +168,16 @@ def likely_to_miss_due_dates(
 
 
 def likely_to_miss_due_next_n_days(
-    db: FactoryDB, medians: dict[str, float] | None = None
+    db: FactoryDB,
+    medians: dict[str, float] | None = None,
+    *,
+    rate_label: str = "30-day_median(stage)",
 ) -> list[dict[str, Any]]:
     """Tomorrow through 7 calendar days ahead, at least one working day short."""
     medians = stage_medians(db) if medians is None else medians
     rows = []
     for order in db.in_progress_orders():
-        row = pace_fields(order, medians)
+        row = pace_fields(order, medians, rate_label=rate_label)
         cal = row["calendar_days_until_due"]
         if cal is None or cal < NEXT_WEEK_MIN_CALENDAR_DAYS or cal > NEXT_WEEK_MAX_CALENDAR_DAYS:
             continue
@@ -153,13 +188,16 @@ def likely_to_miss_due_next_n_days(
 
 
 def would_miss_due_date(
-    db: FactoryDB, medians: dict[str, float] | None = None
+    db: FactoryDB,
+    medians: dict[str, float] | None = None,
+    *,
+    rate_label: str = "30-day_median(stage)",
 ) -> list[dict[str, Any]]:
     """Not overdue, and days_left exceeds working days until due. No near-term window."""
     medians = stage_medians(db) if medians is None else medians
     rows = []
     for order in db.in_progress_orders():
-        row = pace_fields(order, medians)
+        row = pace_fields(order, medians, rate_label=rate_label)
         if _is_pace_miss(row, min_slack=0.0):
             rows.append(row)
     rows.sort(key=lambda r: (r["calendar_days_until_due"], -r["estimated_remaining_working_days"]))
@@ -248,7 +286,7 @@ def production_attention(db: FactoryDB) -> dict[str, Any]:
         "yesterday_output": {
             "date": last_date,
             "by_stage": last_by_stage,
-            "note": "Last working day in production_log.csv before factory today.",
+            "note": "Last working day in production_log.csv on or before factory today.",
         },
         "stage_vs_30day_median": unusual,
         "flagged_stages": flagged,

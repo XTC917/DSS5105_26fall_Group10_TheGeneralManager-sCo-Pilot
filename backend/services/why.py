@@ -351,9 +351,23 @@ _EMPTY_SOURCE = re.compile(
 )
 
 
-def _step_text(text: str) -> str:
-    """Keep the whole step. Code fences are removed; sentences and formulas are not cut."""
-    return re.sub(r"^```(?:\w+)?\s*|\s*```$", "", str(text or "")).strip()
+def _step_text(text: str, titles: tuple[str, ...] = ()) -> str:
+    """Keep the whole step. Code fences and a repeated step title are removed."""
+    cleaned = re.sub(r"^```(?:\w+)?\s*|\s*```$", "", str(text or "")).strip()
+    lines = cleaned.splitlines()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if not lines or not titles:
+        return cleaned
+    first = re.sub(r"^#{1,6}\s*", "", lines[0].strip())
+    first = re.sub(r"^\d+\.\s*", "", first).strip().rstrip("：:").strip()
+    known = {title.casefold() for title in titles}
+    if first.casefold() not in known:
+        return cleaned
+    lines.pop(0)
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    return "\n".join(lines).strip()
 
 
 def _lookup_rows(packet: dict[str, Any]) -> list[dict[str, Any]]:
@@ -448,6 +462,7 @@ def _draft_step(question: str, answer: str, evidence: str, step: tuple[str, str,
         )
         + "Write the full step. Do not stop early or leave a sentence unfinished. "
         + "A display formula inside \\[ \\] must be copied intact. "
+        "Do not repeat the step title and do not start with a heading. "
         "Return only the step text."
     )
     user = (
@@ -462,7 +477,7 @@ def _draft_step(question: str, answer: str, evidence: str, step: tuple[str, str,
             str(block.get("text") or "") if isinstance(block, dict) else str(block)
             for block in content
         )
-    return _step_text(str(content or ""))
+    return _step_text(str(content or ""), (step[0], step[1]))
 
 
 def explain_why(question: str, response: dict[str, Any]) -> dict[str, Any]:

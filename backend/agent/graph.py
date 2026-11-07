@@ -441,10 +441,19 @@ def _model_turn(
         return message
     zh = reply_language(original_question or message) == "zh"
     note = "以下内容是对这个问题的澄清：" if zh else "The following is the clarification of that question:"
+    scope = (
+        "以澄清为准。原问题里的对象、订单和其他细节仍然要看。澄清给某个词下了定义，或选定了一种读法时，以这个定义为准。"
+        if zh
+        else (
+            "The clarification decides what this question means. "
+            "Still read the original question for the subject, the order, and the other details it contains. "
+            "When the clarification defines a term or chooses a reading, that definition wins."
+        )
+    )
     original = (original_question or "").strip()
     if original:
-        return f"{original}\n\n{note}\n{message}"
-    return f"{note}\n{message}"
+        return f"{original}\n\n{note}\n{message}\n\n{scope}"
+    return f"{note}\n{message}\n\n{scope}"
 
 
 def run_agent(

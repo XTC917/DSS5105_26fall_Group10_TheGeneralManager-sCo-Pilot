@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { confirmAction, declineAction, fetchActionOffer, fetchSuggestions, saveActionOffer, sendChatStream } from "../services/api.js";
 import MessageBubble from "./MessageBubble.jsx";
 
-const CHAR_MS = 14;
+const CHAR_MS = 20;
 
 const FEATURED_STARTERS = [
   "Which orders are at risk right now?",
@@ -156,10 +156,10 @@ export default function ChatPanel({
 
   useEffect(() => resetTyper, []);
 
-  async function loadFollowups(query, asked) {
+  async function loadFollowups(query, asked, answer = "") {
     const seq = ++suggestSeq.current;
     try {
-      const data = await fetchSuggestions({ query, asked, focus: "" });
+      const data = await fetchSuggestions({ query, asked, focus: "", answer });
       const suggestions = Array.isArray(data.suggestions) ? data.suggestions.slice(0, 3) : [];
       return { seq, suggestions };
     } catch {
@@ -173,7 +173,7 @@ export default function ChatPanel({
     const lastAssistant = [...(initialMessages || [])].reverse().find((item) => item.role === "assistant");
     if (!lastUser || !lastAssistant || lastAssistant.clarification) return undefined;
     let active = true;
-    loadFollowups(lastUser, users).then((pending) => {
+    loadFollowups(lastUser, users, lastAssistant.content || "").then((pending) => {
       if (active && pending.seq === suggestSeq.current) setFollowups(pending.suggestions);
     });
     return () => {
@@ -395,7 +395,7 @@ export default function ChatPanel({
         },
       });
       const official = assistantMessage(result);
-      const pending = result.clarification ? null : loadFollowups(content, asked);
+      const pending = result.clarification ? null : loadFollowups(content, asked, result.answer || "");
       const offerPromise = result.clarification
         ? null
         : fetchActionOffer({

@@ -3,21 +3,6 @@ import MorningBriefingModal from "./MorningBriefingModal.jsx";
 import { loadOverviewData, peekOverviewCache } from "../services/overviewCache.js";
 import { Button, Skeleton } from "./ui/index.js";
 
-function dayGap(later, earlier) {
-  const parse = (iso) => Date.parse(`${String(iso).slice(0, 10)}T00:00:00Z`);
-  const span = parse(later) - parse(earlier);
-  return Number.isNaN(span) ? 0 : Math.round(span / 86400000);
-}
-
-function formatFactoryDate(iso) {
-  if (!iso) return "";
-  const parts = String(iso).slice(0, 10).split("-");
-  if (parts.length !== 3) return iso;
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const month = months[Number(parts[1]) - 1];
-  return month ? `${Number(parts[2])} ${month} ${parts[0]}` : iso;
-}
-
 function Chevron({ dir = "left" }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -92,7 +77,7 @@ function IssueRow({ item }) {
             {computed.working_days_since_last_activity ?? "?"} working days without activity
             {computed.days_left != null ? ` · about ${computed.days_left} working days of work left` : ""}
           </p>
-          {item.evidence?.flags?.includes("STALLED") && (
+          {/\bstalled\b/i.test(String(item.title || "")) && (
             <p className="mt-2 type-caption text-subtle">
               Stalled means this order is still in progress and has not moved for at least 3 working days.
             </p>
@@ -184,11 +169,7 @@ export default function Sidebar({ refreshToken = 0, onFactoryDate }) {
 
   const issues = discovery?.issues || [];
   const visibleIssues = issues.filter((item) => priorities.has(Number(item.priority)));
-  const latestDataDate = briefing?.latest_data_date || "";
-  const clockDate = briefing?.clock_date || briefing?.factory_today || "";
-  const dataHoldNote = latestDataDate && dayGap(clockDate, latestDataDate) >= 2
-    ? `Data is current through ${formatFactoryDate(latestDataDate)}. Records after that date have not been updated.`
-    : "";
+  const dataHoldNote = briefing?.data_note || "";
 
   function togglePriority(priority) {
     setPriorities((current) => {

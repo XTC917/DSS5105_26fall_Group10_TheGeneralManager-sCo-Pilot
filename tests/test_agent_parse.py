@@ -345,9 +345,11 @@ def test_clarification_reply_is_wrapped_only_for_the_model():
     assert wrapped.startswith(original)
     assert "The following is the clarification of that question:" in wrapped
     assert chosen in wrapped
+    assert "The clarification decides what this question means." in wrapped
     assert _model_turn(chosen, clarification_reply=False) == chosen
     chinese = "给我今天的订单和生产快照。"
     zh = _model_turn(chinese, clarification_reply=True, original_question="销售怎么样？")
     assert zh.startswith("销售怎么样？")
     assert "以下内容是对这个问题的澄清：" in zh
+    assert "以澄清为准。" in zh
     assert chinese in zh

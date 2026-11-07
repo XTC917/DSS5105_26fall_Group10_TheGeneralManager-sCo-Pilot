@@ -1,7 +1,7 @@
 """Canonical PostgreSQL data access for factory operational tables."""
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from typing import Any
 
 import pandas as pd
@@ -14,8 +14,8 @@ from backend.services.pg_database import connect
 
 
 def visible_through() -> date:
-    """Last date the database may return. Factory today is n; only n-1 and earlier exist."""
-    return factory_date() - timedelta(days=1)
+    """Last date the database may return. Factory today is n, and n itself is included."""
+    return factory_date()
 
 
 def _as_date(value: Any) -> date | None:
@@ -112,6 +112,33 @@ class FactoryDB:
             out.append(item)
         return out
 
+
+    def csv_latest_updates(self) -> dict[str, date]:
+        """Newest observed date in each dated CSV. A planned due date is not an update."""
+        row = self._fetch(
+            f"""
+            SELECT
+                GREATEST(
+                    MAX(order_date),
+                    MAX(last_activity_date),
+                    MAX(completed_date)
+                ) AS orders_csv,
+                (SELECT MAX(production_date) FROM {PG_SCHEMA}.production_log) AS production_log_csv
+            FROM {PG_SCHEMA}.orders
+            """
+        )
+        latest: dict[str, date] = {}
+        if not row:
+            return latest
+        mapping = {
+            "orders.csv": row[0].get("orders_csv"),
+            "production_log.csv": row[0].get("production_log_csv"),
+        }
+        for name, value in mapping.items():
+            parsed = value if isinstance(value, date) else parse_iso_date(value)
+            if isinstance(parsed, date):
+                latest[name] = parsed
+        return latest
 
     def latest_record_date(self) -> date | None:
         """Latest observed factory date. Planned due dates and the visibility cutoff are not included."""

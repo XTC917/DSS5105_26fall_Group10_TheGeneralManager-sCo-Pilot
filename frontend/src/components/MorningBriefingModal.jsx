@@ -19,18 +19,6 @@ import { filterOrders, deadlineText } from "./briefingFilters.mjs";
 import { ChartTooltip, useChartTheme } from "./chartTheme.jsx";
 
 const number = (value) => Number(value || 0).toLocaleString();
-function dayGap(later, earlier) {
-  const parse = (iso) => Date.parse(`${String(iso).slice(0, 10)}T00:00:00Z`);
-  const span = parse(later) - parse(earlier);
-  return Number.isNaN(span) ? 0 : Math.round(span / 86400000);
-}
-
-function formatFactoryDate(iso) {
-  const parts = String(iso || "").slice(0, 10).split("-");
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const month = months[Number(parts[1]) - 1];
-  return month ? `${Number(parts[2])} ${month} ${parts[0]}` : String(iso || "");
-}
 const label = (value) => String(value || "Unknown").replaceAll("_", " ").toLowerCase();
 const percentLabel = (value) => (Number(value) > 0 ? `${value}%` : "");
 
@@ -867,10 +855,8 @@ export default function MorningBriefingModal({
             <h2 id="briefing-title" className="mt-1 type-h2 text-foreground">
               {panel === "week" ? "Last week's briefing" : "Morning briefing"}
             </h2>
-            {data?.clock_date && data?.latest_data_date && dayGap(data.clock_date, data.latest_data_date) >= 2 && (
-              <p className="mt-1 type-caption text-muted">
-                Data is current through {formatFactoryDate(data.latest_data_date)}. Records after that date have not been updated.
-              </p>
+            {data?.data_note && (
+              <p className="mt-1 type-caption text-muted">{data.data_note}</p>
             )}
             <p className="mt-1 type-caption text-muted">
               {panel === "week" && data?.last_week

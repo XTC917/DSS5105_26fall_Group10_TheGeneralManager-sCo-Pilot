@@ -28,6 +28,7 @@ from backend.config import (
 )
 from backend.services.calculations import (
     is_working_day,
+    mean_or_none,
     median_or_none,
     parse_iso_date,
     working_days_until_due,
@@ -143,8 +144,12 @@ def resolve_category(db: FactoryDB, product: str | None, category: str | None) -
     }
 
 
-def stage_throughput_medians(db: FactoryDB, today: date | None = None) -> dict[str, Any]:
-    """Median pieces_completed per stage on the last N working days (Sundays excluded)."""
+def stage_throughput_medians(
+    db: FactoryDB,
+    today: date | None = None,
+    lookback_working_days: int | None = None,
+) -> dict[str, Any]:
+    """Median and average pieces_completed per stage on the last N working days."""
     log = db.production_log()
     by_stage: dict[str, list[int]] = {s: [] for s in PRODUCTION_STAGES_IN_ORDER}
     today = today or factory_date()
@@ -154,10 +159,11 @@ def stage_throughput_medians(db: FactoryDB, today: date | None = None) -> dict[s
             for row in log
             if parse_iso_date(row["date"]) is not None
             and is_working_day(parse_iso_date(row["date"]))  # type: ignore[arg-type]
-            and parse_iso_date(row["date"]) < today  # type: ignore[operator]
+            and parse_iso_date(row["date"]) <= today  # type: ignore[operator]
         }
     )
-    lookback_dates = set(working_dates[-THROUGHPUT_LOOKBACK_WORKING_DAYS:])
+    window = lookback_working_days or THROUGHPUT_LOOKBACK_WORKING_DAYS
+    lookback_dates = set(working_dates[-window:])
     used_rows: list[dict[str, Any]] = []
     for row in log:
         d = parse_iso_date(row["date"])
@@ -166,6 +172,7 @@ def stage_throughput_medians(db: FactoryDB, today: date | None = None) -> dict[s
             used_rows.append(row)
 
     medians = {stage: median_or_none(vals) for stage, vals in by_stage.items()}
+    averages = {stage: mean_or_none(vals) for stage, vals in by_stage.items()}
     present = [m for m in medians.values() if m is not None]
     bottleneck_stage = None
     bottleneck_median = None
@@ -177,7 +184,8 @@ def stage_throughput_medians(db: FactoryDB, today: date | None = None) -> dict[s
         bottleneck_median = medians[bottleneck_stage]
 
     return {
-        "lookback_working_days": THROUGHPUT_LOOKBACK_WORKING_DAYS,
+        "lookback_working_days": window,
+        "averages_pieces_per_working_day": averages,
         "lookback_dates": [day.isoformat() for day in sorted(lookback_dates)],
         "lookback_date_from": min(lookback_dates).isoformat() if lookback_dates else None,
         "lookback_date_to": max(lookback_dates).isoformat() if lookback_dates else None,

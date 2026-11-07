@@ -80,6 +80,7 @@ class SuggestionRequest(BaseModel):
     query: str = ""
     asked: list[str] = Field(default_factory=list)
     focus: str = ""
+    answer: str = ""
 
 
 class SuggestionResponse(BaseModel):

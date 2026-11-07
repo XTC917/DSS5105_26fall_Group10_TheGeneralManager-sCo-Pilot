@@ -230,6 +230,7 @@ export default function Home() {
   const pinnedIdsRef = useRef(new Set());
   const pinnedRowsRef = useRef(new Map());
   const conversationCatalogRef = useRef([]);
+  const activeConversationIdRef = useRef(null);
 
   const isAdmin = user?.role === "ADMIN";
   const searching = Boolean(debouncedSearch.trim());
@@ -308,7 +309,14 @@ export default function Home() {
   }, [searchInput]);
 
   function keepIds() {
-    return [...new Set([...pinnedIdsRef.current, ...busyIdsRef.current])];
+    return [...new Set(
+      [...pinnedIdsRef.current, ...busyIdsRef.current, activeConversationIdRef.current].filter(Boolean),
+    )];
+  }
+
+  function keepIdsForNewConversation() {
+    const leaving = activeConversationIdRef.current;
+    return keepIds().filter((id) => id !== leaving);
   }
 
   function listedConversation(row) {
@@ -391,6 +399,7 @@ export default function Home() {
   const openConversation = useCallback(
     async (conversationId) => {
       if (!user?.id || !conversationId) return;
+      activeConversationIdRef.current = conversationId;
       const requestId = ++historyRequest.current;
       setConversationLoading(true);
       setConversationError("");
@@ -429,6 +438,7 @@ export default function Home() {
     setSearchInput("");
     searchInputRef.current = "";
     setDebouncedSearch("");
+    activeConversationIdRef.current = null;
     setActiveConversationId(null);
     setMessageSeeds({});
     setBusyIds(new Set());
@@ -443,8 +453,9 @@ export default function Home() {
         let rows = mergeCatalog(await fetchConversations(50, "", keepIds()));
         if (cancelled) return;
         if (rows.length === 0) {
-          const created = await createConversation(keepIds());
+          const created = await createConversation(keepIdsForNewConversation());
           if (cancelled) return;
+          activeConversationIdRef.current = created.id;
           replaceCatalog([]);
           await openConversation(created.id);
           bootstrappedRef.current = true;
@@ -558,7 +569,8 @@ export default function Home() {
     setAskAiNotice("");
     setHistoryDrawerOpen(false);
     try {
-      const created = await createConversation(keepIds());
+      const created = await createConversation(keepIdsForNewConversation());
+      activeConversationIdRef.current = created.id;
       replaceCatalog(conversationCatalogRef.current.filter(listedConversation));
       setDebouncedSearch("");
       setSearchResults(null);
@@ -666,7 +678,8 @@ export default function Home() {
         if (catalog.length > 0) {
           await openConversation(catalog[0].id);
         } else {
-          const created = await createConversation(keepIds());
+          const created = await createConversation(keepIdsForNewConversation());
+          activeConversationIdRef.current = created.id;
           replaceCatalog([]);
           setSearchInput("");
           searchInputRef.current = "";

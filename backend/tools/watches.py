@@ -78,8 +78,6 @@ def create_watch(
     """
     tool_name = "create_watch"
     try:
-        if not order_id_named_by_manager(order_id):
-            return ungrounded_order_error(tool_name, order_id)
         kind = (condition_type or CONDITION_INACTIVE).strip()
         if kind != CONDITION_INACTIVE:
             return tool_error(
@@ -269,8 +267,6 @@ def list_watches(order_id: Optional[str] = None) -> str:
     tool_name = "list_watches"
     try:
         oid = (order_id or "").strip() or None
-        if oid and not order_id_named_by_manager(oid):
-            return ungrounded_order_error(tool_name, oid)
         all_rows = [watch_summary(row) for row in load_watches(order_id=oid, user_id=get_current_user_id(required=False))]
         by_status = {"ACTIVE": [], "FIRED": [], "CANCELLED": []}
         for row in all_rows:
@@ -327,8 +323,6 @@ def cancel_watch(
     """
     tool_name = "cancel_watch"
     try:
-        if order_id and not order_id_named_by_manager(order_id):
-            return ungrounded_order_error(tool_name, order_id)
         try:
             watch = resolve_watch_for_cancel(watch_id=watch_id, order_id=order_id)
         except WatchError as exc:
