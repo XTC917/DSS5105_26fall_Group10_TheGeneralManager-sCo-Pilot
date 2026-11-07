@@ -132,8 +132,8 @@ def test_template_prompt_block_is_style_only():
     assert "Retrieved answer templates" in text
     assert "tool JSON" in text
     assert "sentence shape" in text
-    assert "morning of 2026-04-02" in text
-    assert "records through 2026-04-01" in text
+    assert "morning of 2026-04-01" in text
+    assert "records through 2026-03-31" in text
     assert "MUST redo the calculation" in text
     assert "field listing" in text
     assert "Q005" in text or "prioritize" in text.lower()
