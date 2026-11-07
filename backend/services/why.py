@@ -295,7 +295,7 @@ _WHY_STEPS = (
     (
         "Read what the data says",
         "查看数据事实",
-        "State every record the lookup tools returned: order, customer, product, pieces, status, current stage, due date, and last activity, plus the dates and quantities on any other lookup. Leave out only a field that is null. Do not replace those records with a sentence that only names the order. filter_rows, summarize_rows, draw, and render_table are intermediate tools: do not include their rows, counts, or sums.",
+        "State every record the lookup tools returned: order, customer, product, pieces, status, current stage, due date, and last activity, plus the dates and quantities on any other lookup. Leave out only a field that is null. Do not say a record has no details when those fields are present. Do not replace those records with a sentence that only names the order. filter_rows, summarize_rows, draw, and render_table are intermediate tools: do not include their rows, counts, or sums.",
         "写上查询工具返回的每一条记录：订单、客户、产品、件数、状态、当前工序、交期和最近活动，以及其他查询里的日期和数量。只有字段本身为空才省略。不要只写选中了哪张订单。filter_rows、summarize_rows、draw、render_table 是中间工具，不要写入它们的行、计数或合计。",
     ),
     (
@@ -318,18 +318,22 @@ _WHY_STEPS = (
 
 
 def _compact_evidence(value: Any, depth: int = 0) -> Any:
-    if depth > 4:
-        return None
+    # Tool JSON is packet → trace → rows → order → fields. A depth of 4
+    # turned every order field into null, so the model reported empty records.
     if isinstance(value, dict):
+        if depth > 8:
+            return None
         return {
             key: _compact_evidence(item, depth + 1)
             for key, item in value.items()
             if key not in {"working_days", "lookback_dates"}
         }
     if isinstance(value, list):
-        return [_compact_evidence(item, depth + 1) for item in value[:6]]
-    if isinstance(value, str) and len(value) > 300:
-        return value[:300]
+        if depth > 8:
+            return None
+        return [_compact_evidence(item, depth + 1) for item in value[:40]]
+    if isinstance(value, str) and len(value) > 500:
+        return value[:500]
     return value
 
 
@@ -337,7 +341,6 @@ _INTERMEDIATE_TOOLS = frozenset({
     "filter_rows", "summarize_rows", "draw", "render_table",
     "assess_stored_data", "assess_tool_coverage",
 })
-_MATH_BLOCK = re.compile(r"\\\[[\s\S]*?\\\]")
 _EMPTY_SOURCE = re.compile(
     r"no populated|source row has no|unpopulated|selected for the source|source lookup"
     r"|没有可引用|来源行为空|来源记录为空|选中了|被选为来源|来源查询",
@@ -345,18 +348,9 @@ _EMPTY_SOURCE = re.compile(
 )
 
 
-def _two_lines(text: str, *, sentences: int = 2, limit: int = 220) -> str:
-    raw = re.sub(r"^```(?:\w+)?\s*|\s*```$", "", str(text or "")).strip()
-    formulas = _MATH_BLOCK.findall(raw)
-    prose = re.sub(r"\s+", " ", _MATH_BLOCK.sub(" ", raw)).strip()
-    parts = [part.strip() for part in re.split(r"(?<=[.。！？])\s+", prose) if part.strip()]
-    kept = " ".join(parts[:sentences]) if parts else prose
-    if len(kept) > limit:
-        kept = kept[:limit - 1].rstrip() + "…"
-    if not formulas:
-        return kept
-    block = "\n".join(formula.strip() for formula in formulas)
-    return f"{kept}\n{block}".strip() if kept else block
+def _step_text(text: str) -> str:
+    """Keep the whole step. Code fences are removed; sentences and formulas are not cut."""
+    return re.sub(r"^```(?:\w+)?\s*|\s*```$", "", str(text or "")).strip()
 
 
 def _lookup_rows(packet: dict[str, Any]) -> list[dict[str, Any]]:
@@ -396,7 +390,7 @@ def _source_fact(evidence: str, zh: bool) -> str:
     if not rows:
         return ""
     sentences = []
-    for row in rows[:8]:
+    for row in rows:
         oid = row.get("order_id")
         if zh:
             sentences.append(
@@ -410,9 +404,6 @@ def _source_fact(evidence: str, zh: bool) -> str:
                 f"status {row.get('status')}, currently in {row.get('current_stage')}, "
                 f"due {row.get('due_date')}, last activity {row.get('last_activity_date')}."
             )
-    hidden = len(rows) - len(sentences)
-    if hidden > 0:
-        sentences.append(f"另有 {hidden} 条查询记录。" if zh else f"{hidden} more lookup records are in the result.")
     return " ".join(sentences)
 
 
@@ -450,9 +441,10 @@ def _draft_step(question: str, answer: str, evidence: str, step: tuple[str, str,
         + (
             "For this step, include every lookup record. Do not compress them into one sentence that only names the order. "
             if step[0] == "Read what the data says"
-            else "At most two short sentences of prose. "
+            else ""
         )
-        + "A display formula inside \\[ \\] does not count as a sentence and must be copied intact. "
+        + "Write the full step. Do not stop early or leave a sentence unfinished. "
+        + "A display formula inside \\[ \\] must be copied intact. "
         "Return only the step text."
     )
     user = (
@@ -467,8 +459,7 @@ def _draft_step(question: str, answer: str, evidence: str, step: tuple[str, str,
             str(block.get("text") or "") if isinstance(block, dict) else str(block)
             for block in content
         )
-    records = step[0] == "Read what the data says"
-    return _two_lines(str(content or ""), sentences=8 if records else 2, limit=900 if records else 220)
+    return _step_text(str(content or ""))
 
 
 def explain_why(question: str, response: dict[str, Any]) -> dict[str, Any]:

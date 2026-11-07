@@ -38,8 +38,11 @@ class CreateWatchInput(BaseModel):
         ...,
         description=(
             "Factory-calendar deadline: YYYY-MM-DD or a weekday name. "
-            "Pass weekday names as spoken; Python resolves them from the active factory date. "
-            "Do not compute the ISO date yourself."
+            "If the manager named a date or weekday, pass it as spoken; Python resolves weekdays. "
+            "If they did not, pass the next key point: the projected finish, which is the "
+            "factory date plus days_left (estimated remaining working days) already in this "
+            "turn's tool JSON. Count those as working days and skip Sunday. Copy the day count; "
+            "do not recompute it. Never the factory date itself unless the order is due that day."
         ),
     )
     condition_type: str = Field(

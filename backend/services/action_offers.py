@@ -7,19 +7,22 @@ builders that already have every required field. It cannot invent an action.
 from __future__ import annotations
 
 import json
-from datetime import timedelta
 import logging
+import math
 import re
 from collections.abc import Callable
+from datetime import date, timedelta
 from typing import Any
 
 from backend.config import factory_date
+from backend.services.calculations import is_working_day
 from backend.services.confirm_actions import ALLOWED_ACTIONS
 from backend.services.watches import CONDITION_INACTIVE
 
 logger = logging.getLogger(__name__)
 
 _ORDER_ID = re.compile(r"ORD-\d+", re.IGNORECASE)
+_PACE_KEYS = ("days_left", "estimated_remaining_working_days")
 Lookup = Callable[[str], dict[str, Any] | None]
 
 
@@ -34,21 +37,91 @@ def _orders_in_traces(traces: list[dict[str, Any]] | None) -> dict[str, dict[str
             if not _ORDER_ID.fullmatch(order_id):
                 continue
             slot = found.setdefault(order_id, {})
-            for key in ("status", "due_date", "customer", "current_stage", "flags"):
+            for key in (
+                "status",
+                "due_date",
+                "customer",
+                "current_stage",
+                "flags",
+                "pieces",
+                *_PACE_KEYS,
+            ):
                 if row.get(key) not in (None, "", []):
                     slot[key] = row[key]
+        ids = [
+            str(row.get("order_id") or "").strip().upper()
+            for row in trace.get("rows") or []
+            if isinstance(row, dict) and _ORDER_ID.fullmatch(str(row.get("order_id") or "").strip().upper())
+        ]
+        if len(set(ids)) != 1:
+            continue
+        slot = found[ids[0]]
+        for calc in trace.get("calculations") or []:
+            if not isinstance(calc, dict):
+                continue
+            name = str(calc.get("name") or "")
+            if name in _PACE_KEYS and calc.get("result") not in (None, ""):
+                slot[name] = calc["result"]
     return found
 
 
+def _pace_days(order: dict[str, Any]) -> float | None:
+    """Use the pace already on the row. Otherwise the same remaining-days estimate."""
+    for key in _PACE_KEYS:
+        value = order.get(key)
+        if value in (None, ""):
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    if order.get("pieces") in (None, "") or not order.get("current_stage"):
+        return None
+    try:
+        from backend.services.database import get_db
+        from backend.services.pace import pace_fields, stage_medians
+
+        estimated = pace_fields(order, stage_medians(get_db())).get("days_left")
+        return None if estimated is None else float(estimated)
+    except Exception:
+        logger.exception("watch date pace failed")
+        return None
+
+
+def _finish_date(today: date, days: float) -> date:
+    """Factory date plus the estimated remaining working days. Sunday is skipped."""
+    needed = math.ceil(days - 1e-9)
+    if needed <= 0:
+        return today
+    seen = 0
+    cursor = today
+    while True:
+        if is_working_day(cursor):
+            seen += 1
+            if seen >= needed:
+                return cursor
+        cursor += timedelta(days=1)
+
+
 def _check_date(order: dict[str, Any]) -> str:
-    """Earliest push is the next factory day. An order due today may be watched today."""
+    """Next key date, and never the factory date unless the order is due that day.
+
+    The key date is the projected finish: today plus estimated remaining working
+    days. Without that estimate, a future due date is the key date. The earliest
+    other date is the next factory day.
+    """
     today = factory_date()
     due = str(order.get("due_date") or "").strip()
-    if due == today.isoformat():
-        return due
+    earliest = today if due == today.isoformat() else today + timedelta(days=1)
+    remaining = _pace_days(order)
+    if remaining is not None and remaining >= 0:
+        projected = _finish_date(today, remaining)
+        if projected < earliest:
+            projected = earliest
+        return projected.isoformat()
     if due > today.isoformat():
         return due
-    return (today + timedelta(days=1)).isoformat()
+    return earliest.isoformat()
 
 
 def _watch_offer(order: dict[str, Any]) -> dict[str, Any] | None:

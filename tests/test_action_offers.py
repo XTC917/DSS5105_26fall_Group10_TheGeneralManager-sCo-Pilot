@@ -47,6 +47,41 @@ def test_due_today_can_be_watched_today(monkeypatch):
     assert found[0]["action"]["check_date"] == "2026-04-01"
 
 
+def test_projected_finish_is_the_watch_date(monkeypatch):
+    monkeypatch.setattr(offers, "factory_date", lambda: __import__("datetime").date(2026, 4, 1))
+    found = offers.candidate_offers(
+        _traces(
+            {
+                "order_id": "ORD-120",
+                "status": "IN_PROGRESS",
+                "due_date": "2026-03-17",
+                "days_left": 6.3,
+            }
+        ),
+        lookup=_lookup,
+    )
+    assert found[0]["action"]["check_date"] == "2026-04-08"
+
+
+def test_finish_today_moves_to_the_next_day_unless_due_today(monkeypatch):
+    monkeypatch.setattr(offers, "factory_date", lambda: __import__("datetime").date(2026, 4, 1))
+    overdue = offers.candidate_offers(
+        _traces({"order_id": "ORD-120", "days_left": 1}),
+        lookup=_lookup,
+    )
+    assert overdue[0]["action"]["check_date"] == "2026-04-02"
+    due_today = offers.candidate_offers(
+        _traces({"order_id": "ORD-029", "due_date": "2026-04-01", "days_left": 1}),
+        lookup=lambda order_id: {
+            "order_id": order_id,
+            "status": "IN_PROGRESS",
+            "due_date": "2026-04-01",
+            "days_left": 1,
+        },
+    )
+    assert due_today[0]["action"]["check_date"] == "2026-04-01"
+
+
 def test_a_series_keeps_every_order_for_the_model():
     found = offers.candidate_offers(
         _traces({"order_id": "ORD-120", "flags": ["OVERDUE"]}, {"order_id": "ORD-108"}),
