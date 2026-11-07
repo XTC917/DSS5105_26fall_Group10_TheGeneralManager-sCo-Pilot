@@ -350,6 +350,20 @@ _FEASIBLE = {"FEASIBLE_IN_HOUSE", "FEASIBLE_WITH_WORKSHOPS"}
 _SEARCH_DAYS = 366 * 2
 
 
+def _listed_workshops(rows: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Workshops already counted on the chosen day. Names only, no capacity math."""
+    listed: list[dict[str, Any]] = []
+    for row in rows or []:
+        listed.append(
+            {
+                "workshop_id": row.get("workshop_id"),
+                "name": row.get("name"),
+                "effective_pieces": row.get("effective_pieces"),
+            }
+        )
+    return listed
+
+
 def _first_feasible_day(
     db: FactoryDB,
     *,
@@ -472,6 +486,7 @@ def earliest_delivery_date(
             "in_progress_pieces": probe["data"]["in_progress_pieces"],
             "spare_factory_capacity": None if chosen is None else chosen["spare_factory_capacity"],
             "workshop_overflow_pieces": None if chosen is None else chosen["workshop_overflow_pieces"],
+            "workshops": [] if chosen is None else _listed_workshops(chosen.get("workshops")),
             "bottleneck_stage": probe["data"]["throughput"]["bottleneck_stage"],
             "bottleneck_median": probe["data"]["throughput"]["bottleneck_median"],
             "summary": (

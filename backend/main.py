@@ -535,14 +535,14 @@ def confirm_action(request: ConfirmActionRequest, user: CurrentUser = Depends(ge
             validate_turn_action(user.id, turn_id, action=request.action)
         with using_factory_date(load_factory_date()):
             result = confirm_proposed_action(request.action, current_user=user)
-        if isinstance(turn_id, int) and turn_id >= 1 and result.get("ok"):
-            record_turn_action_decision(
-                user.id,
-                turn_id,
-                action=request.action,
-                status="confirmed",
-                summary=result.get("summary") or "Action confirmed.",
-            )
+            if isinstance(turn_id, int) and turn_id >= 1 and result.get("ok"):
+                record_turn_action_decision(
+                    user.id,
+                    turn_id,
+                    action=request.action,
+                    status="confirmed",
+                    summary=result.get("summary") or "Action confirmed.",
+                )
     except ConversationNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Chat turn not found") from exc
     except ActionDecisionError as exc:
@@ -569,14 +569,14 @@ def decline_action(request: ConfirmActionRequest, user: CurrentUser = Depends(ge
             validate_turn_action(user.id, turn_id, action=request.action)
         with using_factory_date(load_factory_date()):
             result = decline_proposed_action(request.action, current_user=user)
-        if isinstance(turn_id, int) and turn_id >= 1:
-            record_turn_action_decision(
-                user.id,
-                turn_id,
-                action=request.action,
-                status="dismissed",
-                summary=summary,
-            )
+            if isinstance(turn_id, int) and turn_id >= 1:
+                record_turn_action_decision(
+                    user.id,
+                    turn_id,
+                    action=request.action,
+                    status="dismissed",
+                    summary=summary,
+                )
     except ConversationNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Chat turn not found") from exc
     except ActionDecisionError as exc:

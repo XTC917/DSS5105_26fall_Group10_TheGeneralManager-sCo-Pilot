@@ -96,12 +96,12 @@ def test_only_confirmed_current_version_can_send_once(email_client, monkeypatch)
     assert attempt["idempotency_key"] == calls[0]["headers"]["Idempotency-Key"]
 
 
-def test_other_user_and_non_test_recipient_are_rejected(email_client, monkeypatch):
+def test_other_user_is_rejected_and_custom_recipient_can_send(email_client, monkeypatch):
     client, path = email_client
     draft = _save(client, path, recipient="outside@example.com")
     monkeypatch.setattr(email.httpx, "post", lambda *a, **kw: pytest.fail("Unexpected provider call"))
-    assert not draft["can_send"]
-    assert _send(client, draft).status_code == 422
+    assert draft["can_send"]
+    assert draft["recipient_email"] == "outside@example.com"
     client.app.dependency_overrides[get_current_user] = lambda: CurrentUser(
         id=2, username="test_employee", email=None, role="EMPLOYEE", status="ACTIVE"
     )

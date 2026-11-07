@@ -576,7 +576,7 @@ export default function ChatPanel({
               {question}
             </button>
           ))}
-        </div>
+      </div>
       </div>,
       document.body,
     );
@@ -735,8 +735,8 @@ export default function ChatPanel({
             {!llmReady && (
               <p className="mx-auto max-w-2xl rounded-2xl border border-warning/30 bg-warningSoft px-4 py-2 text-center type-caption text-warning">
                 Chat needs OPENAI_API_KEY in the project .env. pytest still works without it.
-              </p>
-            )}
+          </p>
+        )}
 
           </div>
         </div>
@@ -754,13 +754,13 @@ export default function ChatPanel({
           className="h-full min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-3 md:px-6 md:py-5"
         >
           <div className="mx-auto w-full max-w-4xl space-y-5 md:space-y-7">
-            {messages.map((msg, idx) => (
-              <MessageBubble
-                key={`${msg.role}-${idx}`}
-                message={msg}
-                busy={busy}
-                onConfirm={(action) => confirm(idx, action)}
-                onDismiss={(action) => dismiss(idx, action)}
+        {messages.map((msg, idx) => (
+          <MessageBubble
+            key={`${msg.role}-${idx}`}
+            message={msg}
+            busy={busy}
+            onConfirm={(action) => confirm(idx, action)}
+            onDismiss={(action) => dismiss(idx, action)}
                 onClarify={(text) => {
                   const original = [...messages].reverse().find((item) => item.role === "user")?.content || "";
                   setMessages((prev) =>
@@ -775,8 +775,8 @@ export default function ChatPanel({
                 actionOfferDecision={msg.actionOfferDecision}
                 onAcceptOffer={() => acceptOffer(msg.actionOffer)}
                 onDeclineOffer={() => declineOffer(msg.actionOffer)}
-              />
-            ))}
+          />
+        ))}
             {busy && !(messages.at(-1)?.streaming && messages.at(-1)?.content) && (
               <div className="flex items-center gap-2 type-caption text-muted" role="status" aria-live="polite">
                 <span className="stream-dot h-1.5 w-1.5 rounded-full bg-accent" />

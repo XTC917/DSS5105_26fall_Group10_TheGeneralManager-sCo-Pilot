@@ -223,11 +223,14 @@ def _react_prompt(state: dict[str, Any]):
                 )
         elif email_result:
             system += (
-                "\n\nAn email tool returned this turn. Present its subject and body as "
-                "an email with paragraphs, preserving the returned language and facts. "
-                "Show its draft-only disclaimer separately. Do not call draw or render_table "
-                "for the email, and do not replace it with a status table. If the tool "
-                "returned an error, explain the error instead of inventing a draft. "
+                "\n\nAn email tool returned this turn. Do not copy the subject or body. "
+                "Do not call draw or render_table. If the tool returned an error, explain "
+                "the error instead of inventing a draft. Otherwise the entire reply is one "
+                "of these sentences, matching the question language. English: "
+                "\"I will prepare an email draft for you. Please verify the recipient and "
+                "email address. **To send the email, open the email draft, save and preview, "
+                "then confirm and send.**\" Chinese: "
+                "\"我会为你准备一封邮件草稿。请核对收件人和邮箱。**要发送的话，请打开邮件草稿，保存并预览，然后确认发送。**\" "
                 "Drafting alone does not require a confirmation or a send_email call."
             )
         else:
@@ -914,6 +917,15 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
             "limitation": "needs_clarification",
             "routing_intent": "proceed",
         }
+
+    if email_drafts and "draft_chase_email" in tools_used:
+        from backend.agent.answerability import reply_language
+
+        answer = (
+            "我会为你准备一封邮件草稿。请核对收件人和邮箱。**要发送的话，请打开邮件草稿，保存并预览，然后确认发送。**"
+            if reply_language(question) == "zh"
+            else "I will prepare an email draft for you. Please verify the recipient and email address. **To send the email, open the email draft, save and preview, then confirm and send.**"
+        )
 
     logger.info(
         "agent done conversation=%s tools=%s",

@@ -43,7 +43,7 @@ def _delivery_config():
     recipient = os.getenv("EMAIL_TEST_RECIPIENT", "").strip()
     key = os.getenv("RESEND_API_KEY", "").strip()
     enabled = os.getenv("EMAIL_DELIVERY_ENABLED", "").lower() == "true"
-    return sender, recipient, key, bool(enabled and sender and key and MAILBOX.fullmatch(recipient))
+    return sender, recipient, key, bool(enabled and sender and key)
 
 
 def _payload(sender, recipient, subject, body):
@@ -71,7 +71,7 @@ def _source(conn, user_id, turn_id, index):
 
 
 def _view(row):
-    sender, recipient, _, enabled = _delivery_config()
+    sender, _, _, enabled = _delivery_config()
     status = row["status"]
     # A process can stop after committing the attempt but before recording the
     # provider response. Surface the uncertainty and keep the send locked.
@@ -83,7 +83,7 @@ def _view(row):
         "subject": row["subject"], "body": row["body"], "content_hash": row["content_hash"],
         "can_send": bool(enabled and row["status"] == "DRAFT" and row["content_hash"]
                          and row["from_address"] == sender
-                         and (row["recipient_email"] or "").casefold() == recipient.casefold()),
+                         and MAILBOX.fullmatch(row["recipient_email"] or "")),
     }
 
 
@@ -165,7 +165,7 @@ def _submit(payload, attempt_id, api_key):
 @router.post("/drafts/{draft_id}/send")
 def send_confirmed_email(draft_id: UUID, confirmation: SendConfirmation,
                          user: CurrentUser = Depends(get_current_user)):
-    sender, allowed_recipient, api_key, enabled = _delivery_config()
+    sender, _, api_key, enabled = _delivery_config()
     with connect(admin=True) as conn:
         row = conn.execute(f"SELECT * FROM {DRAFTS} WHERE id = %s AND user_id = %s FOR UPDATE",
                            (draft_id, user.id)).fetchone()
@@ -180,8 +180,8 @@ def send_confirmed_email(draft_id: UUID, confirmation: SendConfirmation,
         if not enabled:
             raise HTTPException(503, "Email delivery is not configured.")
         recipient = row["recipient_email"] or ""
-        if not MAILBOX.fullmatch(recipient) or recipient.casefold() != allowed_recipient.casefold():
-            raise HTTPException(422, "Use the configured test recipient.")
+        if not MAILBOX.fullmatch(recipient):
+            raise HTTPException(422, "Enter a single valid recipient email address.")
         payload = _payload(row["from_address"], recipient, row["subject"], row["body"])
         if row["from_address"] != sender or _digest(payload) != confirmation.content_hash:
             raise HTTPException(409, "The sending details changed. Save and review again.")

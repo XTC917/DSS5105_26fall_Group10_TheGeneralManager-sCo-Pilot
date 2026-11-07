@@ -748,9 +748,9 @@ export default function Home() {
   const navButton = (item) => {
     const active = activeView === item.key;
     return (
-      <button
+    <button
         key={item.key}
-        type="button"
+      type="button"
         onClick={() => handleNav(item.key)}
         className={`focus-ring flex w-full items-center gap-3 rounded-control px-3 py-2.5 text-left type-sm font-medium transition-colors duration-[var(--dur-fast)] ${
           active
@@ -760,8 +760,8 @@ export default function Home() {
       >
         <span className={active ? "text-accentContrast" : "text-muted"}>{item.icon}</span>
         <span>{item.label}</span>
-      </button>
-    );
+    </button>
+  );
   };
 
   const viewMeta = VIEW_META[activeView] || VIEW_META.copilot;
@@ -825,14 +825,14 @@ export default function Home() {
 
           <div className="flex shrink-0 items-center justify-between gap-2 border-t border-line px-3 py-2">
             <p className="type-overline text-muted">Conversations</p>
-            <button
-              type="button"
+                  <button
+                    type="button"
               disabled={conversationLoading}
               onClick={() => handleNewConversation()}
               className="focus-ring rounded-control border border-line px-2 py-1 type-caption font-medium text-foreground transition-colors hover:border-accentText hover:text-accentText disabled:opacity-50"
             >
               New
-            </button>
+                  </button>
           </div>
 
           <div id="conversation-history" className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
@@ -1028,17 +1028,17 @@ export default function Home() {
                         <Button size="sm" variant="ghost" onClick={() => { setConfirmDeactivate(false); setDeactivateError(""); }}>
                           Cancel
                         </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDeactivate(true)}
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmDeactivate(true)}
                       className="focus-ring mt-4 rounded-control border border-danger/40 px-4 py-2 type-sm font-medium text-danger transition-colors hover:bg-dangerSoft"
-                    >
-                      Deactivate my account
-                    </button>
-                  )}
+              >
+                Deactivate my account
+              </button>
+            )}
                 </section>
               </div>
             </div>

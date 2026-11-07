@@ -258,8 +258,8 @@ export default function Sidebar({ refreshToken = 0, onFactoryDate }) {
           <h3 className="type-h3 text-foreground">Top issues</h3>
           <div className="flex items-center gap-1">
             <span className="type-caption text-subtle">{visibleIssues.length} open</span>
-            <button
-              type="button"
+        <button
+          type="button"
               aria-expanded={issuesOpen}
               aria-label={issuesOpen ? "Hide top issues" : "Show top issues"}
               onClick={() => setIssuesOpen((open) => !open)}
@@ -294,7 +294,7 @@ export default function Sidebar({ refreshToken = 0, onFactoryDate }) {
                   style={PRIORITY_STYLE[priority]}
                 >
                   P{priority}
-                </button>
+        </button>
               );
             })}
           </div>
@@ -346,8 +346,8 @@ export default function Sidebar({ refreshToken = 0, onFactoryDate }) {
             {showingWeek && briefing?.last_week && (
               <p className="truncate type-caption text-subtle">
                 {briefing.last_week.start} – {briefing.last_week.end}
-              </p>
-            )}
+          </p>
+        )}
           </div>
           <button
             type="button"

@@ -182,6 +182,14 @@ def test_earliest_delivery_date_for_new_scarves(db):
     )
     assert on_day["data"]["verdict"] == data["verdict"]
     assert on_day["data"]["verdict"] != "NOT_FEASIBLE"
+    assert data["workshops"] == [
+        {
+            "workshop_id": row["workshop_id"],
+            "name": row["name"],
+            "effective_pieces": row["effective_pieces"],
+        }
+        for row in on_day["data"]["workshops"]
+    ]
     day_before = chosen - timedelta(days=1)
     if day_before >= date(2026, 4, 1):
         earlier = parse_tool(

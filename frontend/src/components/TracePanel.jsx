@@ -10,6 +10,34 @@ function isPaceFormula(item) {
     || item.startsWith("预计仍需工作日取两个数");
 }
 
+function Formula({ tex }) {
+  const html = katex.renderToString(tex, { throwOnError: false, displayMode: true });
+  return (
+    <div
+      className="pace-formula mt-1 overflow-x-auto text-foreground"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
+function WhyItem({ item }) {
+  if (isPaceFormula(item) && !item.includes(String.raw`\]`)) return <PaceFormula />;
+  const parts = item.split(/(\\\[[\s\S]*?\\\])/g);
+  if (parts.length === 1) {
+    return <p className="mt-1 whitespace-pre-wrap break-words type-caption leading-relaxed text-foreground/75">{item}</p>;
+  }
+  return parts.map((part, index) => {
+    const formula = part.match(/^\\\[([\s\S]*)\\\]$/);
+    if (formula) return <Formula key={index} tex={formula[1].trim()} />;
+    if (!part.trim()) return null;
+    return (
+      <p key={index} className="mt-1 whitespace-pre-wrap break-words type-caption leading-relaxed text-foreground/75">
+        {part.trim()}
+      </p>
+    );
+  });
+}
+
 function PaceFormula() {
   const html = katex.renderToString(PACE_LATEX, { throwOnError: false, displayMode: true });
   return (
@@ -47,7 +75,7 @@ export default function TracePanel({ traces = [], why }) {
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent type-caption text-accentContrast">{i + 1}</span>
             <div className="min-w-0"><h3 className="type-sm font-semibold">{step.title}</h3>
               {step.items.map((item, j) => (
-                isPaceFormula(item) ? <PaceFormula key={j} /> : <p key={j} className="mt-1 whitespace-pre-wrap break-words type-caption leading-relaxed text-foreground/75">{item}</p>
+                <WhyItem key={j} item={item} />
               ))}
             </div>
           </li>

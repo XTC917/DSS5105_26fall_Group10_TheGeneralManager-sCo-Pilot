@@ -105,7 +105,9 @@ def earliest_delivery_date(
     Use when the manager asks for the earliest realistic delivery or completion
     date and does not name a due date. Do not invent the date, and do not call
     check_feasibility once with a guessed date. Throughput stays the 30-day
-    bottleneck median.
+    bottleneck median. data.workshops is the ACTIVE workshops counted on that
+    earliest date: workshop_id, name, and effective_pieces. Copy those rows
+    when the manager asks which workshop. Do not recompute them.
     """
     try:
         result = run_earliest_delivery(
