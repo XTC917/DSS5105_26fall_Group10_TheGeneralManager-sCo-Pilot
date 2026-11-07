@@ -164,7 +164,10 @@ def build_why(question: str, response: dict[str, Any]) -> dict[str, Any]:
     zh = reply_language(question) == "zh"
     idx = int(zh)
     traces = [t for t in response.get("traces", []) if isinstance(t, dict)
-              and t.get("tool") not in {"draw", "render_table", "assess_stored_data", "assess_tool_coverage"}]
+              and t.get("tool") not in {
+                  "draw", "render_table", "filter_rows", "summarize_rows",
+                  "assess_stored_data", "assess_tool_coverage",
+              }]
     facts, comparisons, sources, reasons = [], [], [], []
     discovery_in_evidence = any(
         item.get("tool") == "discover_factory_issues" and isinstance((item.get("data") or {}).get("production"), dict)
