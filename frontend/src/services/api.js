@@ -35,7 +35,8 @@ export async function fetchBriefing() {
   return authed("/api/briefing");
 }
 
-export async function fetchDiscovery(limit = 5) {
+export async function fetchDiscovery(limit = 5, { all = false } = {}) {
+  if (all) return authed("/api/discovery?all=true");
   return authed(`/api/discovery?limit=${limit}`);
 }
 

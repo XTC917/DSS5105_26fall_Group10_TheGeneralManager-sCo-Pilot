@@ -19,6 +19,18 @@ import { filterOrders, deadlineText } from "./briefingFilters.mjs";
 import { ChartTooltip, useChartTheme } from "./chartTheme.jsx";
 
 const number = (value) => Number(value || 0).toLocaleString();
+function dayGap(later, earlier) {
+  const parse = (iso) => Date.parse(`${String(iso).slice(0, 10)}T00:00:00Z`);
+  const span = parse(later) - parse(earlier);
+  return Number.isNaN(span) ? 0 : Math.round(span / 86400000);
+}
+
+function formatFactoryDate(iso) {
+  const parts = String(iso || "").slice(0, 10).split("-");
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const month = months[Number(parts[1]) - 1];
+  return month ? `${Number(parts[2])} ${month} ${parts[0]}` : String(iso || "");
+}
 const label = (value) => String(value || "Unknown").replaceAll("_", " ").toLowerCase();
 const percentLabel = (value) => (Number(value) > 0 ? `${value}%` : "");
 
@@ -76,7 +88,16 @@ function ChartFrame({ children, className = "h-80" }) {
 export function LastWeekBriefing({ week }) {
   const theme = useChartTheme();
   const tick = { fill: theme.axis, fontSize: 11 };
-  const weeks = week.weeks || [];
+  const weeks = (week.weeks || []).map((row) => {
+    const onTime = Number(row.on_time) || 0;
+    const late = Number(row.overdue) || 0;
+    const total = onTime + late;
+    return {
+      ...row,
+      on_time_share: total ? (100 * onTime) / total : 0,
+      overdue_share: total ? (100 * late) / total : 0,
+    };
+  });
   const customers = week.customers || [];
   const productChart = [];
   for (const row of week.products || []) {
@@ -94,7 +115,7 @@ export function LastWeekBriefing({ week }) {
       <section className="rounded-card border border-line bg-surface p-4 shadow-xs sm:p-5">
         <h3 className="text-center type-h3 text-foreground">Number of orders completed weekly</h3>
         <p className="mb-2 text-center type-caption text-muted">
-          Green is finished on time. Red is finished after the due date. The line is the weekly count.
+          Each column fills the chart. Green is the share finished on time, red is the share finished after the due date. The line is the weekly count.
         </p>
         {weeks.length ? (
           <ChartFrame>
@@ -112,16 +133,16 @@ export function LastWeekBriefing({ week }) {
                   axisLine={{ stroke: theme.grid }}
                   tickLine={false}
                 />
-                <YAxis yAxisId="count" allowDecimals={false} tick={tick} axisLine={false} tickLine={false} />
                 <YAxis
                   yAxisId="share"
-                  orientation="right"
                   domain={[0, 100]}
+                  ticks={[0, 25, 50, 75, 100]}
                   tickFormatter={(value) => `${value}%`}
                   tick={tick}
                   axisLine={false}
                   tickLine={false}
                 />
+                <YAxis yAxisId="count" orientation="right" allowDecimals={false} tick={tick} axisLine={false} tickLine={false} />
                 <Tooltip
                   content={(props) => {
                     const row = props?.payload?.[0]?.payload;
@@ -130,17 +151,20 @@ export function LastWeekBriefing({ week }) {
                       <ChartTooltip
                         {...props}
                         label={range}
-                        formatter={(value, name) => [typeof value === "number" && String(name).includes("%") ? `${value}%` : number(value), name]}
+                        formatter={(value, name) => [
+                          name === "Orders completed" ? number(value) : `${Number(value).toFixed(1)}%`,
+                          name,
+                        ]}
                       />
                     );
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: 11, color: theme.legend }} />
-                <Bar yAxisId="count" dataKey="on_time" name="Done on time" stackId="done" fill={theme.success} isAnimationActive={false}>
-                  <LabelList dataKey="on_time_percent" position="center" formatter={percentLabel} style={{ fontSize: 10, fill: theme.tooltipBg }} />
+                <Bar yAxisId="share" dataKey="on_time_share" name="Done on time" stackId="done" fill={theme.success} fillOpacity={0.45} isAnimationActive={false}>
+                  <LabelList dataKey="on_time_percent" position="center" formatter={percentLabel} style={{ fontSize: 10, fill: theme.foreground }} />
                 </Bar>
-                <Bar yAxisId="count" dataKey="overdue" name="Done overdue" stackId="done" fill={theme.danger} isAnimationActive={false}>
-                  <LabelList dataKey="overdue_percent" position="center" formatter={percentLabel} style={{ fontSize: 10, fill: theme.tooltipBg }} />
+                <Bar yAxisId="share" dataKey="overdue_share" name="Done overdue" stackId="done" fill={theme.danger} fillOpacity={0.45} isAnimationActive={false}>
+                  <LabelList dataKey="overdue_percent" position="center" formatter={percentLabel} style={{ fontSize: 10, fill: theme.foreground }} />
                 </Bar>
                 <Line
                   yAxisId="count"
@@ -150,9 +174,7 @@ export function LastWeekBriefing({ week }) {
                   strokeWidth={2}
                   dot={{ r: 4, fill: theme.colors[3], stroke: theme.warning }}
                   isAnimationActive={false}
-                >
-                  <LabelList dataKey="completed" position="top" style={{ fontSize: 11, fontWeight: 700, fill: theme.foreground }} />
-                </Line>
+                />
               </ComposedChart>
             </ResponsiveContainer>
           </ChartFrame>
@@ -845,11 +867,16 @@ export default function MorningBriefingModal({
             <h2 id="briefing-title" className="mt-1 type-h2 text-foreground">
               {panel === "week" ? "Last week's briefing" : "Morning briefing"}
             </h2>
+            {data?.clock_date && data?.latest_data_date && dayGap(data.clock_date, data.latest_data_date) >= 2 && (
+              <p className="mt-1 type-caption text-muted">
+                Data is current through {formatFactoryDate(data.latest_data_date)}. Records after that date have not been updated.
+              </p>
+            )}
             <p className="mt-1 type-caption text-muted">
               {panel === "week" && data?.last_week
-                ? `Weekly trend through the factory date · products ${data.last_week.start} – ${data.last_week.end}`
-                : `Factory date: ${data?.factory_today || "Loading…"}`}{" "}
-              · Sundays closed
+                ? `Complete Monday–Saturday weeks · products ${data.last_week.start} – ${data.last_week.end} · `
+                : ""}
+              Sundays closed
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">

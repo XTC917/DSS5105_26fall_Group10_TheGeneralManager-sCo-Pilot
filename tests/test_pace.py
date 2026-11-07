@@ -44,12 +44,10 @@ def test_get_orders_at_risk_exposes_pace_groups(db):
 
 def test_today_priority_matches_q005(db):
     buckets = today_priority(db)
-    assert [r["order_id"] for r in buckets["1st_priority"]] == [
-        "ORD-107",
-        "ORD-114",
-    ]
+    assert [r["order_id"] for r in buckets["1st_priority"]] == ["ORD-114"]
     assert [r["order_id"] for r in buckets["2nd_priority"]] == [
         "ORD-029",
+        "ORD-107",
         "ORD-120",
         "ORD-083",
         "ORD-002",
@@ -107,5 +105,5 @@ def test_trace_order_107_start_delay(db):
     snap = payload["data"]["snapshot"]
     assert snap["order_date"] == "2026-03-01"
     assert snap["calendar_days_order_to_first_production"] == 22
-    assert payload["data"]["order"]["current_stage"] == "PACKING"
-    assert payload["data"]["pace"]["estimated_remaining_working_days"] == 3.0
+    assert payload["data"]["order"]["current_stage"] == "WASHING"
+    assert payload["data"]["pace"]["estimated_remaining_working_days"] == 5.8

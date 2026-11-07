@@ -13,7 +13,7 @@ import time
 import asyncio
 import json
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, timedelta
 
 import psycopg
 from fastapi import Depends, FastAPI, HTTPException
@@ -52,10 +52,15 @@ from backend.services.conversation_history import (
     validate_turn_action,
 )
 from backend.services.database import get_db, init_db
-from backend.services.factory_clock import load_factory_date, set_factory_date
+from backend.services.factory_clock import data_hold_note, load_factory_date, query_factory_date, set_factory_date
 from backend.services.request_context import set_current_user
 from backend.services.action_offers import compose_action_offer
-from backend.services.discovery import DEFAULT_LIMIT, MAX_LIMIT, discover_factory_issues
+from backend.services.discovery import (
+    DEFAULT_LIMIT,
+    MAX_LIMIT,
+    discover_factory_issues,
+    discover_priority_board,
+)
 from backend.services.question_templates import compose_deep_dive_questions
 from backend.routers.data_admin import (
     datasource_router,
@@ -135,6 +140,19 @@ def health(user: CurrentUser | None = Depends(get_optional_current_user)) -> dic
     }
 
 
+def _append_data_note(response: ChatResponse, question: str) -> ChatResponse:
+    """Tell the manager when the clock is past the newest stored factory day."""
+    clock, query_day = query_factory_date()
+    if query_day >= clock:
+        return response
+    note = data_hold_note(query_day - timedelta(days=1), question)
+    answer = (response.answer or "").rstrip()
+    if note in answer:
+        return response
+    response.answer = f"{answer}\n\n{note}" if answer else note
+    return response
+
+
 def _answer_text(response: ChatResponse) -> str:
     answer = (response.answer or "").strip()
     if response.clarification and not answer:
@@ -151,6 +169,8 @@ def _store_chat_turn(
     duration_ms: int,
 ) -> ChatResponse:
     """Save this turn, including a refusal or a user-facing error."""
+    question = (request.original_question or request.message or "").strip()
+    response = _append_data_note(response, question)
     response_json = response.model_dump(
         exclude={"answer", "conversation_id", "turn_id"},
         mode="json",
@@ -255,8 +275,9 @@ def _complete_chat(
 
         thread_id = f"user:{user.id}:conversation:{public_conversation_id}"
         set_current_user(user)
+        _clock, query_day = query_factory_date()
         try:
-            with using_factory_date(load_factory_date()):
+            with using_factory_date(query_day):
                 result = run_agent(
                     request.message,
                     public_conversation_id,
@@ -386,7 +407,8 @@ def action_offers(
     user: CurrentUser = Depends(get_current_user),
 ) -> ActionOfferResponse:
     """One yes/no action after the answer. Not called while the answer is still running."""
-    with using_factory_date(load_factory_date()):
+    _clock, query_day = query_factory_date()
+    with using_factory_date(query_day):
         offer = compose_action_offer(
             request.question.strip()[:400],
             request.answer.strip()[:800],
@@ -402,19 +424,29 @@ def action_offers(
 @app.get("/api/briefing")
 def briefing(user: CurrentUser = Depends(get_current_user)) -> dict:
     """Structured morning briefing facts (no LLM)."""
-    with using_factory_date(load_factory_date()):
-        return build_morning_briefing(get_db())
+    clock, query_day = query_factory_date()
+    with using_factory_date(query_day):
+        payload = build_morning_briefing(get_db())
+    payload["clock_date"] = clock.isoformat()
+    return payload
 
 
 @app.get("/api/discovery")
-def discovery(limit: int = DEFAULT_LIMIT, user: CurrentUser = Depends(get_current_user)) -> dict:
-    """Production-log issues from defined Python rules (no LLM)."""
-    if limit < 1 or limit > MAX_LIMIT:
+def discovery(
+    limit: int = DEFAULT_LIMIT,
+    all: bool = False,
+    user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Overview uses the today-priority buckets. A numeric limit keeps the production-issue tool."""
+    if not all and (limit < 1 or limit > MAX_LIMIT):
         raise HTTPException(
             status_code=400,
             detail=f"limit must be an integer from 1 to {MAX_LIMIT}.",
         )
-    with using_factory_date(load_factory_date()):
+    _clock, query_day = query_factory_date()
+    with using_factory_date(query_day):
+        if all:
+            return discover_priority_board(get_db())
         return discover_factory_issues(get_db(), limit=limit)
 
 

@@ -56,10 +56,14 @@ def test_last_week_tracks_every_factory_week(db):
     assert data["end"] == "2026-03-28"
     weeks = data["weeks"]
     assert weeks
-    assert weeks[-1]["partial"] is True
-    assert weeks[-1]["end"] == "2026-04-01"
+    assert weeks[0]["start"] == "2026-01-05"
+    assert weeks[0]["end"] == "2026-01-10"
+    assert weeks[0]["partial"] is False
+    assert weeks[-1]["partial"] is False
+    assert weeks[-1]["start"] == "2026-03-23"
+    assert weeks[-1]["end"] == "2026-03-28"
     assert [row["week"] for row in weeks] == list(range(1, len(weeks) + 1))
-    last_complete = next(row for row in weeks if row["start"] == "2026-03-23")
+    last_complete = weeks[-1]
     assert last_complete["completed"] == last_complete["on_time"] + last_complete["overdue"]
     assert set(data["customers"]) == {row["customer"] for row in data["products"]}
     assert all(stage in last_complete for stage in ("KNITTING", "ASSEMBLY", "WASHING", "PACKING"))

@@ -27,11 +27,6 @@ def reset_manager_text(token: Any) -> None:
     _MANAGER_TEXT.reset(token)
 
 
-def order_id_named_by_manager(order_id: str | None) -> bool:
-    """True when this chat turn did not restrict ids, or the manager wrote this id."""
-    return value_named_by_manager(order_id)
-
-
 def value_named_by_manager(value: str | None) -> bool:
     """True when the guard is off, or the manager's words contain this filter value."""
     cleaned = (value or "").strip()

@@ -4,7 +4,9 @@ from backend.agent.answerability import (
     DataVerdict,
     ToolVerdict,
     apply_catalog,
+    assess_answerability,
     earliest_delivery_requested,
+    email_audience_clarification,
     peer_progress_requested,
     scope_clarification,
 )
@@ -225,6 +227,19 @@ def test_scope_clarification_uses_chinese_for_chinese_questions():
     ]
     assert card["other_placeholder"] == "其他"
     assert card["other_submit"] == "发送"
+
+
+def test_email_without_a_recipient_role_asks_before_drafting():
+    gate = assess_answerability("send an email to ord-120", model=object())
+    assert gate.proceed is False
+    assert [row["label"] for row in gate.clarification["options"]] == [
+        "Write it to the customer",
+        "Write it for internal follow-up",
+    ]
+    chinese = email_audience_clarification("给 ORD-120 发一封邮件")
+    assert [row["label"] for row in chinese.clarification["options"]] == ["写给客户", "写给内部跟进"]
+    assert email_audience_clarification("Email the customer about ORD-120.") is None
+    assert email_audience_clarification("How is ORD-120 doing?") is None
 
 
 def test_clarification_reply_judges_the_chosen_lookup():

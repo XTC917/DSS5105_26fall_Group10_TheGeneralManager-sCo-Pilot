@@ -330,18 +330,18 @@ def resolve_watch_for_cancel(
     if watch_id is not None:
         watch = get_watch(int(watch_id))
         if watch is None:
-            raise WatchError("NOT_FOUND", "No standing watch with that id.")
+            raise WatchError("NOT_FOUND", "No standing watch matches that request.")
         if watch["status"] == STATUS_CANCELLED:
             raise WatchError("INVALID_INPUT", "That watch is already cancelled.")
         if watch["status"] not in {STATUS_ACTIVE, STATUS_FIRED}:
             raise WatchError(
                 "INVALID_INPUT",
-                f"Watch {watch_id} has status {watch['status']} and cannot be cancelled.",
+                f"The watch on {watch['order_id']} has status {watch['status']} and cannot be cancelled.",
             )
         if order_id and watch["order_id"].upper() != order_id.strip().upper():
             raise WatchError(
                 "INVALID_INPUT",
-                f"Watch {watch_id} is for {watch['order_id']}, not {order_id.strip()}.",
+                f"That watch is for {watch['order_id']}, not {order_id.strip()}.",
             )
         return watch
 

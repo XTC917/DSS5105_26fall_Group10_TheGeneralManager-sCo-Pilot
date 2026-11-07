@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import MorningBriefingModal from "./MorningBriefingModal.jsx";
-import TracePanel from "./TracePanel.jsx";
 import { loadOverviewData, peekOverviewCache } from "../services/overviewCache.js";
 import { Button, Skeleton } from "./ui/index.js";
+
+function dayGap(later, earlier) {
+  const parse = (iso) => Date.parse(`${String(iso).slice(0, 10)}T00:00:00Z`);
+  const span = parse(later) - parse(earlier);
+  return Number.isNaN(span) ? 0 : Math.round(span / 86400000);
+}
 
 function formatFactoryDate(iso) {
   if (!iso) return "";
@@ -25,126 +30,84 @@ function Chevron({ dir = "left" }) {
   );
 }
 
+const PRIORITY_STYLE = {
+  1: {
+    color: "rgb(var(--priority-1))",
+    backgroundColor: "rgb(var(--priority-1-soft))",
+    borderColor: "rgb(var(--priority-1))",
+  },
+  2: {
+    color: "rgb(var(--priority-2))",
+    backgroundColor: "rgb(var(--priority-2-soft))",
+    borderColor: "rgb(var(--priority-2))",
+  },
+  3: {
+    color: "rgb(var(--priority-3))",
+    backgroundColor: "rgb(var(--priority-3-soft))",
+    borderColor: "rgb(var(--priority-3))",
+  },
+};
+
 function stageName(stage) {
   return String(stage || "").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function issueExplanation(item) {
-  const evidence = item.evidence || {};
-  const stage = item.stage || evidence.stage;
-  if (stage) {
-    const name = stageName(stage);
-    const pieces = evidence.last_day_pieces ?? item.latest_output;
-    const median = evidence.lookback_median ?? item.median_30d;
-    const day = evidence.last_working_date || item.inputs?.last_working_date;
-    const ratio = Number(evidence.ratio_to_median ?? item.ratio);
-    const percent = Number.isFinite(ratio) ? Math.round(ratio * 100) : null;
-    return {
-      language: "en",
-      steps: [
-        {
-          title: "Start from the question",
-          items: ["Which production issue should be looked at on the current factory date?"],
-        },
-        {
-          title: "Read what the data says",
-          items: [
-            `${name} completed ${pieces} pieces on ${day}, the last working day recorded before the factory date.`,
-            `Over the previous 30 working days, the median output for ${name} is ${median} pieces a day.`,
-          ],
-        },
-        {
-          title: "Check the calculation or comparison",
-          items: [
-            `${pieces} pieces is ${percent}% of the median of ${median}. A stage is flagged when the latest day is below 70% of that median.`,
-          ],
-        },
-        {
-          title: "Understand why the conclusion follows",
-          items: [
-            `${name} is listed because its latest working day is below 70% of its own recent median. This compares factory-wide output for that stage, not one order.`,
-          ],
-        },
-      ],
-      sources: [{
-        name: "production_log.csv",
-        label: "production_log.csv · last working day compared with the 30-working-day median",
-        summary_only: true,
-        rows: [],
-      }],
-    };
-  }
-  const order = evidence.order || {};
-  const orderId = item.order_id || order.order_id;
-  if (!orderId) return null;
-  const computed = evidence.computed || {};
-  return {
-    language: "en",
-    steps: [
-      { title: "Start from the question", items: [`Why is ${orderId} on the issue list?`] },
-      {
-        title: "Read what the data says",
-        items: [
-          [
-            orderId,
-            order.customer,
-            order.product,
-            order.pieces != null ? `${order.pieces} pieces` : "",
-            order.current_stage ? `currently at ${stageName(order.current_stage)}` : "",
-            order.due_date ? `due ${order.due_date}` : "",
-          ].filter(Boolean).join(", ") + ".",
-        ],
-      },
-      {
-        title: "Check the calculation or comparison",
-        items: [
-          computed.calendar_days_until_due != null
-            ? `Calendar days until due: ${computed.calendar_days_until_due}.`
-            : "No separate numeric check was attached beyond the order record.",
-        ],
-      },
-      {
-        title: "Understand why the conclusion follows",
-        items: [item.summary || `${orderId} matched one of the issue rules on the current factory date.`],
-      },
-    ],
-    sources: [{
-      name: item.source_file || "orders.csv",
-      label: `${item.source_file || "orders.csv"} · the order record used for this issue`,
-      summary_only: true,
-      rows: [],
-    }],
-  };
-}
-
 function IssueRow({ item }) {
   const [open, setOpen] = useState(false);
+  const order = item.evidence?.order;
+  const computed = item.evidence?.computed || {};
   const where = item.order_id || item.stage || "";
-  const explanation = issueExplanation(item);
   return (
-    <li className="rounded-card border border-line bg-surface px-3 py-3 shadow-xs">
-      <div className="flex flex-wrap items-start justify-between gap-2">
+    <li className="rounded-card border border-line bg-surface shadow-xs">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full flex-wrap items-start justify-between gap-2 px-3 py-3 text-left"
+      >
         <div className="min-w-0">
           <p className="type-sm font-semibold text-foreground">
-            <span className="mr-1.5 inline-flex rounded-control bg-dangerSoft px-1.5 py-0.5 type-caption font-semibold text-danger">
+            <span
+              className="mr-1.5 inline-flex rounded-control border px-1.5 py-0.5 type-caption font-semibold"
+              style={PRIORITY_STYLE[item.priority] || PRIORITY_STYLE[3]}
+            >
               P{item.priority}
             </span>
             {item.title || item.issue_type}
           </p>
+          <p className="mt-1 type-caption text-muted">{where}</p>
+        </div>
+        <span className="shrink-0 type-caption font-medium text-accentText">{open ? "Hide" : "Details"}</span>
+      </button>
+      {open && order && (
+        <div className="border-t border-line px-3 py-3">
+          <p className="type-sm text-foreground">
+            {order.customer} · {order.product} · {order.pieces} pieces
+          </p>
           <p className="mt-1 type-caption text-muted">
-            {where}
-            {item.evidence?.flags?.length ? ` · ${item.evidence.flags.join(", ")}` : ""}
+            Due {order.due_date || "unknown"} · Stage {stageName(order.current_stage)} · Last activity{" "}
+            {order.last_activity_date || "unknown"}
+          </p>
+          <p className="mt-1 type-caption text-muted">
+            {computed.working_days_since_last_activity ?? "?"} working days without activity
+            {computed.days_left != null ? ` · about ${computed.days_left} working days of work left` : ""}
+          </p>
+          {item.evidence?.flags?.includes("STALLED") && (
+            <p className="mt-2 type-caption text-subtle">
+              Stalled means this order is still in progress and has not moved for at least 3 working days.
+            </p>
+          )}
+        </div>
+      )}
+      {open && !order && item.stage && (
+        <div className="border-t border-line px-3 py-3">
+          <p className="type-sm text-foreground">{item.summary}</p>
+          <p className="mt-1 type-caption text-muted">
+            Last working day {item.evidence?.last_working_date}: {item.evidence?.last_day_pieces} pieces, against a
+            30-day median of {item.evidence?.lookback_median}.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          className="focus-ring shrink-0 rounded-control px-2 py-1 type-caption font-medium text-accentText hover:bg-accentSoft/50"
-        >
-          {open ? "Hide" : "Why?"}
-        </button>
-      </div>
-      {open && explanation && <TracePanel why={explanation} />}
+      )}
     </li>
   );
 }
@@ -162,6 +125,8 @@ export default function Sidebar({ refreshToken = 0, onFactoryDate }) {
   const [fetchedAt, setFetchedAt] = useState(cached?.fetchedAt || 0);
   const [panel, setPanel] = useState("today");
   const [modalOpen, setModalOpen] = useState(false);
+  const [issuesOpen, setIssuesOpen] = useState(true);
+  const [priorities, setPriorities] = useState(() => new Set());
 
   const applyPayload = useCallback(
     (payload, nextStatus) => {
@@ -170,9 +135,8 @@ export default function Sidebar({ refreshToken = 0, onFactoryDate }) {
       setFetchedAt(payload.fetchedAt || Date.now());
       setError(payload.error || "");
       setStatus(nextStatus);
-      if (payload.briefing?.factory_today) {
-        onFactoryDate?.(payload.briefing.factory_today);
-      }
+      const clock = payload.briefing?.clock_date || payload.briefing?.factory_today;
+      if (clock) onFactoryDate?.(clock);
     },
     [onFactoryDate],
   );
@@ -219,6 +183,21 @@ export default function Sidebar({ refreshToken = 0, onFactoryDate }) {
   }, [applyPayload, refresh, refreshToken]);
 
   const issues = discovery?.issues || [];
+  const visibleIssues = issues.filter((item) => priorities.has(Number(item.priority)));
+  const latestDataDate = briefing?.latest_data_date || "";
+  const clockDate = briefing?.clock_date || briefing?.factory_today || "";
+  const dataHoldNote = latestDataDate && dayGap(clockDate, latestDataDate) >= 2
+    ? `Data is current through ${formatFactoryDate(latestDataDate)}. Records after that date have not been updated.`
+    : "";
+
+  function togglePriority(priority) {
+    setPriorities((current) => {
+      const next = new Set(current);
+      if (next.has(priority)) next.delete(priority);
+      else next.add(priority);
+      return next;
+    });
+  }
   const hasWeekly = Boolean(briefing?.last_week);
   const showingWeek = panel === "week" && hasWeekly;
   const busy = status === "loading" && !briefing;
@@ -277,22 +256,68 @@ export default function Sidebar({ refreshToken = 0, onFactoryDate }) {
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h3 className="type-h3 text-foreground">Top issues</h3>
-          <span className="type-caption text-subtle">{issues.length} open</span>
+          <div className="flex items-center gap-1">
+            <span className="type-caption text-subtle">{visibleIssues.length} open</span>
+            <button
+              type="button"
+              aria-expanded={issuesOpen}
+              aria-label={issuesOpen ? "Hide top issues" : "Show top issues"}
+              onClick={() => setIssuesOpen((open) => !open)}
+              className="focus-ring inline-flex h-6 w-6 items-center justify-center rounded-control text-subtle transition-colors hover:bg-surfaceMuted hover:text-foreground"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+                className={`transition-transform duration-[var(--dur-fast)] ${issuesOpen ? "rotate-180" : ""}`}
+              >
+                <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
         </div>
-        {busy && (
+        {issuesOpen && (
+          <div className="flex flex-wrap gap-1.5">
+            {[1, 2, 3].map((priority) => {
+              const selected = priorities.has(priority);
+              return (
+                <button
+                  key={priority}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => togglePriority(priority)}
+                  className={`focus-ring rounded-control border px-2 py-0.5 type-caption font-semibold transition-opacity ${
+                    selected ? "opacity-100" : "opacity-40 hover:opacity-70"
+                  }`}
+                  style={PRIORITY_STYLE[priority]}
+                >
+                  P{priority}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {issuesOpen && busy && (
           <div className="space-y-2">
             <Skeleton className="h-16 w-full rounded-card" />
             <Skeleton className="h-16 w-full rounded-card" />
           </div>
         )}
-        {!busy && issues.length === 0 && (
+        {issuesOpen && !busy && issues.length === 0 && (
           <p className="rounded-card border border-line bg-surface px-4 py-5 type-sm text-muted shadow-xs">
             No discovery issues on the current tables. Ask in chat what to be concerned about.
           </p>
         )}
-        {!busy && issues.length > 0 && (
+        {issuesOpen && !busy && issues.length > 0 && priorities.size > 0 && visibleIssues.length === 0 && (
+          <p className="rounded-card border border-line bg-surface px-4 py-5 type-sm text-muted shadow-xs">
+            No issues in the selected priorities.
+          </p>
+        )}
+        {issuesOpen && !busy && visibleIssues.length > 0 && (
           <ul className="grid gap-2">
-            {issues.map((item) => (
+            {visibleIssues.map((item) => (
               <IssueRow key={item.issue_id} item={item} />
             ))}
           </ul>
@@ -315,13 +340,14 @@ export default function Sidebar({ refreshToken = 0, onFactoryDate }) {
             <h3 className="truncate type-h3 text-foreground">
               {showingWeek ? "Weekly briefing" : "Morning briefing"}
             </h3>
-            <p className="truncate type-caption text-subtle">
-              {showingWeek && briefing?.last_week
-                ? `${briefing.last_week.start} – ${briefing.last_week.end}`
-                : briefing?.factory_today
-                  ? `Factory date ${formatFactoryDate(briefing.factory_today)}`
-                  : "Loading…"}
-            </p>
+            {dataHoldNote && (
+              <p className="mt-1 type-caption text-muted">{dataHoldNote}</p>
+            )}
+            {showingWeek && briefing?.last_week && (
+              <p className="truncate type-caption text-subtle">
+                {briefing.last_week.start} – {briefing.last_week.end}
+              </p>
+            )}
           </div>
           <button
             type="button"

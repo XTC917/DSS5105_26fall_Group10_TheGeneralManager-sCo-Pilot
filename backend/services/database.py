@@ -1,14 +1,27 @@
 """Canonical PostgreSQL data access for factory operational tables."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 import pandas as pd
 from psycopg import sql
 
+from backend.config import factory_date
 from backend.pg_config import PG_SCHEMA
+from backend.services.calculations import parse_iso_date
 from backend.services.pg_database import connect
+
+
+def visible_through() -> date:
+    """Last date the database may return. Factory today is n; only n-1 and earlier exist."""
+    return factory_date() - timedelta(days=1)
+
+
+def _as_date(value: Any) -> date | None:
+    if isinstance(value, date):
+        return value
+    return parse_iso_date(value)
 
 
 class FactoryDB:
@@ -42,7 +55,8 @@ class FactoryDB:
             f"SELECT * FROM {PG_SCHEMA}.orders WHERE UPPER(order_id) = UPPER(%s)",
             (order_id.strip(),),
         )
-        return rows[0] if rows else None
+        projected = self._visible_orders(rows)
+        return projected[0] if projected else None
 
     def find_orders(self, *, order_id=None, customer=None, product=None, products=None,
                     status=None, category=None, current_stage=None) -> list[dict[str, Any]]:
@@ -62,12 +76,17 @@ class FactoryDB:
         if names:
             clauses.append("LOWER(product) = ANY(%s)")
             params.append([n.lower() for n in names])
-        for field, value in (("status", status), ("category", category), ("current_stage", current_stage)):
-            if value:
-                clauses.append(f"{field} = %s")
-                params.append(value)
+        if category:
+            clauses.append("category = %s")
+            params.append(category)
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
-        return self._fetch(f"SELECT * FROM {PG_SCHEMA}.orders{where} ORDER BY order_id", tuple(params))
+        rows = self._fetch(f"SELECT * FROM {PG_SCHEMA}.orders{where} ORDER BY order_id", tuple(params))
+        visible = self._visible_orders(rows)
+        if status:
+            visible = [row for row in visible if row.get("status") == status]
+        if current_stage:
+            visible = [row for row in visible if row.get("current_stage") == current_stage]
+        return visible
 
     def in_progress_orders(self):
         return self.find_orders(status="IN_PROGRESS")
@@ -79,9 +98,10 @@ class FactoryDB:
             SELECT order_id, status, stage, date
             FROM {PG_SCHEMA}.snapshot
             WHERE UPPER(order_id) = UPPER(%s)
+              AND date <= %s
             ORDER BY date, stage
             """,
-            (order_id.strip(),),
+            (order_id.strip(), visible_through()),
         )
         out: list[dict[str, Any]] = []
         for row in rows:
@@ -93,13 +113,117 @@ class FactoryDB:
         return out
 
 
+    def latest_record_date(self) -> date | None:
+        """Latest observed factory date. Planned due dates and the visibility cutoff are not included."""
+        row = self._fetch(
+            f"""
+            SELECT MAX(d) AS latest FROM (
+                SELECT MAX(production_date) AS d FROM {PG_SCHEMA}.production_log
+                UNION ALL
+                SELECT MAX(date) FROM {PG_SCHEMA}.snapshot
+                UNION ALL
+                SELECT MAX(order_date) FROM {PG_SCHEMA}.orders
+                UNION ALL
+                SELECT MAX(last_activity_date) FROM {PG_SCHEMA}.orders
+                UNION ALL
+                SELECT MAX(completed_date) FROM {PG_SCHEMA}.orders
+            ) dates
+            """
+        )
+        latest = row[0]["latest"] if row else None
+        if hasattr(latest, "isoformat"):
+            return latest
+        return parse_iso_date(latest) if latest else None
+
     def list_products(self):
-        return self._fetch(f"SELECT DISTINCT product, category FROM {PG_SCHEMA}.orders ORDER BY product")
+        return self._fetch(
+            f"SELECT DISTINCT product, category FROM {PG_SCHEMA}.orders WHERE order_date <= %s ORDER BY product",
+            (visible_through(),),
+        )
 
     def production_log(self, stage: str | None = None):
+        cutoff = visible_through()
         if stage:
-            return self._fetch(f"SELECT production_date AS date, stage, pieces_completed FROM {PG_SCHEMA}.production_log WHERE stage = %s ORDER BY production_date", (stage,))
-        return self._fetch(f"SELECT production_date AS date, stage, pieces_completed FROM {PG_SCHEMA}.production_log ORDER BY production_date, stage")
+            return self._fetch(
+                f"SELECT production_date AS date, stage, pieces_completed FROM {PG_SCHEMA}.production_log WHERE stage = %s AND production_date <= %s ORDER BY production_date",
+                (stage, cutoff),
+            )
+        return self._fetch(
+            f"SELECT production_date AS date, stage, pieces_completed FROM {PG_SCHEMA}.production_log WHERE production_date <= %s ORDER BY production_date, stage",
+            (cutoff,),
+        )
+
+    def _visible_orders(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Drop orders that do not exist yet, and rewind state that happened after the cutoff."""
+        cutoff = visible_through()
+        rewind_ids: list[str] = []
+        pending: list[dict[str, Any]] = []
+        for row in rows:
+            opened = _as_date(row.get("order_date"))
+            if opened is not None and opened > cutoff:
+                continue
+            moved = _as_date(row.get("last_activity_date"))
+            done = _as_date(row.get("completed_date"))
+            if (moved is not None and moved > cutoff) or (done is not None and done > cutoff):
+                rewind_ids.append(row["order_id"])
+                pending.append({**row, "_rewind": True})
+            else:
+                pending.append(row)
+        snaps = self._latest_visible_snapshots(rewind_ids, cutoff) if rewind_ids else {}
+        out: list[dict[str, Any]] = []
+        for row in pending:
+            if not row.get("_rewind"):
+                out.append(row)
+                continue
+            projected = self._rewind_order(row, snaps.get(row["order_id"]), cutoff)
+            if projected is not None:
+                out.append(projected)
+        return out
+
+    def _latest_visible_snapshots(self, order_ids: list[str], cutoff: date) -> dict[str, dict[str, Any]]:
+        rows = self._fetch(
+            f"""
+            SELECT DISTINCT ON (order_id) order_id, status, stage, date
+            FROM {PG_SCHEMA}.snapshot
+            WHERE order_id = ANY(%s) AND date <= %s
+            ORDER BY order_id, date DESC,
+                CASE stage
+                    WHEN 'COMPLETE' THEN 6
+                    WHEN 'PACKING' THEN 5
+                    WHEN 'WASHING' THEN 4
+                    WHEN 'ASSEMBLY' THEN 3
+                    WHEN 'KNITTING' THEN 2
+                    ELSE 1
+                END DESC
+            """,
+            (order_ids, cutoff),
+        )
+        return {row["order_id"]: row for row in rows}
+
+    def _rewind_order(self, row: dict[str, Any], snap: dict[str, Any] | None, cutoff: date) -> dict[str, Any] | None:
+        item = {key: value for key, value in row.items() if key != "_rewind"}
+        if snap is None:
+            opened = _as_date(item.get("order_date"))
+            if opened is None or opened > cutoff:
+                return None
+            item["status"] = "IN_PROGRESS"
+            item["current_stage"] = "ORDERED"
+            item["last_activity_date"] = opened
+            item["completed_date"] = None
+            item["days_late"] = None
+            return item
+        item["status"] = snap["status"]
+        item["current_stage"] = snap["stage"]
+        item["last_activity_date"] = snap["date"]
+        if snap["status"] == "COMPLETE":
+            done = _as_date(snap["date"])
+            due = _as_date(item.get("due_date"))
+            item["completed_date"] = done
+            item["days_late"] = (done - due).days if done is not None and due is not None else None
+        else:
+            item["completed_date"] = None
+            item["days_late"] = None
+        return item
 
     def workshops(self, *, status: str | None = None, category: str | None = None):
         clauses: list[str] = []

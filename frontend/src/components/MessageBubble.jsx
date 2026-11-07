@@ -13,7 +13,7 @@ function actionLabel(action) {
     return `Save watch on ${order}${action.check_date ? ` by ${action.check_date}` : ""}`;
   }
   if (type === "cancel_watch") {
-    return `Cancel watch${action.watch_id ? ` ${action.watch_id}` : ""} on ${order}`;
+    return `Cancel the watch on ${order}`;
   }
   if (type === "create_reminder") {
     return `Save reminder on ${order}`;
@@ -157,6 +157,13 @@ function MessageMeta({ message }) {
   );
 }
 
+function clarificationReplyText(prompt, answer) {
+  const question = String(prompt || "").trim();
+  const chosen = String(answer || "").trim();
+  if (!question || question === chosen) return chosen;
+  return `${question}\n${chosen}`;
+}
+
 function choiceLines(choice) {
   return String(choice || "")
     .split("\n")
@@ -232,8 +239,7 @@ function ClarificationCard({ clarification, busy, onClarify }) {
     const lines = questions.map((question) => {
       const custom = (other[question.id] || "").trim();
       const chosen = picked[question.id];
-      const text = custom || chosen.message || chosen.label;
-      return `${question.prompt}\n${text}`;
+      return clarificationReplyText(question.prompt, custom || chosen?.label || "");
     });
     onClarify?.(lines.join("\n\n"));
   }
@@ -401,7 +407,7 @@ export default function MessageBubble({
                     key={`${option.label}-${index}`}
                     type="button"
                     disabled={busy}
-                    onClick={() => onClarify?.(option.label)}
+                    onClick={() => onClarify?.(clarificationReplyText(clarification.prompt, option.label))}
                     className="rounded-xl border border-line bg-surface px-3.5 py-2.5 text-left type-sm text-foreground transition-colors hover:border-accentText/60 hover:bg-surfaceMuted disabled:opacity-50"
                   >
                     {option.label}
@@ -415,7 +421,7 @@ export default function MessageBubble({
                   const text = other.trim();
                   if (!text) return;
                   setOther("");
-                  onClarify?.(text);
+                  onClarify?.(clarificationReplyText(clarification.prompt, text));
                 }}
               >
                 <input

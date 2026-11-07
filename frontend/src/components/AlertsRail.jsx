@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { confirmAction } from "../services/api.js";
+import { partitionWatches } from "../services/watchDisplay.js";
 import { Badge, Button, Modal } from "./ui/index.js";
 
 function formatFactoryDate(iso) {
@@ -92,9 +93,7 @@ export default function AlertsRail({
   const panelId = useId();
   const rootRef = useRef(null);
 
-  const fired = watches.fired || [];
-  const active = watches.active || [];
-  const cancelled = watches.cancelled || [];
+  const { triggered: fired, watching: active, done, cancelled } = partitionWatches(watches);
   const hasAlerts = fired.length > 0 || active.length > 0;
 
   useEffect(() => {
@@ -263,13 +262,24 @@ export default function AlertsRail({
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
         title="Watch history"
-        description="Cancelled watches stay here for audit. They are not deleted."
+        description="Done and cancelled watches stay here. They are not in Active Watches."
         size="md"
       >
-        {cancelled.length === 0 ? (
-          <p className="type-sm text-muted">No cancelled watches yet.</p>
+        {done.length === 0 && cancelled.length === 0 ? (
+          <p className="type-sm text-muted">No watch history yet.</p>
         ) : (
           <ul className="max-h-72 space-y-2 overflow-y-auto">
+            {done.map((item) => (
+              <li
+                key={`done-${item.watch_id}`}
+                className="rounded-control border border-line bg-surfaceMuted/50 px-3 py-2 type-sm"
+              >
+                <p className="font-medium text-foreground">{item.order_id}</p>
+                <p className="type-caption text-muted">
+                  Not moved by {formatFactoryDate(item.check_date)} · done
+                </p>
+              </li>
+            ))}
             {cancelled.map((item) => (
               <li
                 key={item.watch_id}
@@ -278,7 +288,6 @@ export default function AlertsRail({
                 <p className="font-medium text-foreground">{item.order_id}</p>
                 <p className="type-caption text-muted">
                   Inactive by {formatFactoryDate(item.check_date)} · cancelled
-                  {item.watch_id ? ` · id ${item.watch_id}` : ""}
                 </p>
               </li>
             ))}

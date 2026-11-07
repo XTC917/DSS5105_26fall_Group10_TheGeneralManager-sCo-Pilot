@@ -108,13 +108,10 @@ def _result_summary(kind: str, payload: dict[str, Any]) -> str:
         return err.get("message") or "Confirmation failed."
     data = payload.get("data") or {}
     if kind == "create_watch":
-        return (
-            f"Watch saved for {data.get('order_id')} "
-            f"(id {data.get('watch_id')}, {data.get('check_date')})."
-        )
+        return f"Watch saved for {data.get('order_id')} until {data.get('check_date')}."
     if kind == "cancel_watch":
         return (
-            f"Watch {data.get('watch_id')} for {data.get('order_id')} is CANCELLED "
+            f"The watch on {data.get('order_id')} is CANCELLED "
             "(kept in history, not deleted)."
         )
     if kind == "add_order_note":
