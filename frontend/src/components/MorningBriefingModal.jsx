@@ -154,7 +154,7 @@ export function LastWeekBriefing({ week }) {
                 />
                 <Legend wrapperStyle={{ fontSize: 11, color: theme.legend }} />
                 <Bar yAxisId="share" dataKey="on_time_share" name="Done on time" stackId="done" fill={onTimeColor} fillOpacity={0.9} isAnimationActive={false}>
-                  <LabelList dataKey="on_time_percent" position="center" formatter={percentLabel} style={{ fontSize: 10, fontWeight: 600, fill: theme.tooltipBg }} />
+                  <LabelList dataKey="on_time_percent" position="center" formatter={percentLabel} style={{ fontSize: 10, fontWeight: 600, fill: theme.foreground }} />
                 </Bar>
                 <Bar yAxisId="share" dataKey="overdue_share" name="Done overdue" stackId="done" fill={overdueColor} fillOpacity={0.9} isAnimationActive={false}>
                   <LabelList dataKey="overdue_percent" position="center" formatter={percentLabel} style={{ fontSize: 10, fontWeight: 600, fill: theme.tooltipBg }} />
@@ -250,7 +250,7 @@ export function LastWeekBriefing({ week }) {
                       dataKey={customer}
                       position="center"
                       formatter={(value) => (Number(value) > 0 ? number(value) : "")}
-                      style={{ fontSize: 10, fill: theme.tooltipBg }}
+                      style={{ fontSize: 10, fill: theme.foreground }}
                     />
                   </Bar>
                 ))}

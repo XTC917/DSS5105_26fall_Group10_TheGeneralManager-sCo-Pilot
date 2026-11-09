@@ -86,39 +86,48 @@ function hslCss(hsl) {
   return `rgb(${r} ${g} ${b})`;
 }
 
+function morandiSat(baseSat) {
+  // Pull saturation down toward a dusty, muted Morandi range.
+  return clamp(baseSat * 0.4 + 6, 14, 28);
+}
+
 /**
- * Coordinated palette derived from the theme accent hue.
- * Analogous hue offsets (never the full rainbow) with lightness/saturation
- * variation so categories stay distinguishable — also for colour-vision
- * deficiency — while feeling like one family (e.g. blue -> teal -> violet).
+ * Coordinated, low-saturation (Morandi) palette derived from the theme accent
+ * hue. Analogous hue offsets keep it harmonious; lightness variation keeps
+ * categories distinguishable.
  */
 function buildAccentPalette(baseTriplet, count = 8) {
   const rgb = parseRgbTriplet(baseTriplet);
   if (!rgb) return null;
-  const { h, s } = rgbToHsl(rgb);
-  const baseL = clamp(rgbToHsl(rgb).l, 44, 56);
+  const { h, s, l } = rgbToHsl(rgb);
+  const sat = morandiSat(s);
+  const baseL = clamp(l, 50, 62);
   const specs = [
-    { dh: 0, ds: 0, dl: 0 },
-    { dh: -30, ds: 6, dl: 10 },
-    { dh: 26, ds: 2, dl: -8 },
-    { dh: 52, ds: -4, dl: 2 },
-    { dh: -54, ds: -2, dl: -2 },
-    { dh: 16, ds: 8, dl: -14 },
-    { dh: -16, ds: 0, dl: 16 },
-    { dh: 80, ds: -12, dl: 6 },
+    { dh: 0, dl: 0 },
+    { dh: -30, dl: 10 },
+    { dh: 26, dl: -6 },
+    { dh: 52, dl: 4 },
+    { dh: -54, dl: -2 },
+    { dh: 16, dl: -12 },
+    { dh: -16, dl: 14 },
+    { dh: 80, dl: 6 },
   ];
   const out = [];
   for (let i = 0; i < count; i += 1) {
     const sp = specs[i % specs.length];
-    out.push(
-      hslCss({
-        h: h + sp.dh,
-        s: clamp(s + sp.ds, 30, 80),
-        l: clamp(baseL + sp.dl, 36, 70),
-      }),
-    );
+    out.push(hslCss({ h: h + sp.dh, s: sat, l: clamp(baseL + sp.dl, 46, 74) }));
   }
   return out;
+}
+
+/** Single-hue muted ramp (light -> dark) for ordinal / urgency encodings. */
+function buildAccentRamp(baseTriplet, steps = 6) {
+  const rgb = parseRgbTriplet(baseTriplet);
+  if (!rgb) return null;
+  const { h, s } = rgbToHsl(rgb);
+  const sat = morandiSat(s);
+  const lightness = [72, 64, 56, 48, 42, 36];
+  return lightness.slice(0, steps).map((l) => hslCss({ h, s: sat, l }));
 }
 
 export function readChartTheme() {
@@ -145,15 +154,14 @@ export function readChartTheme() {
     // Coordinated (analogous) palette derived from the accent hue for
     // categorical series.
     palette,
-    // Theme-accent family (single hue, light -> dark). Use these for a
-    // coherent "same colour family" look instead of the rainbow palette.
-    accentRamp: [
-      rgbVar("--accent-300", "#93c5fd"),
-      rgbVar("--accent-400", "#60a5fa"),
-      rgbVar("--accent-500", "#3b82f6"),
-      rgbVar("--accent-600", "#2563eb"),
-      rgbVar("--accent-700", "#1d4ed8"),
-      rgbVar("--accent-800", "#1e40af"),
+    // Single-hue muted ramp (light -> dark) for ordinal / urgency encodings.
+    accentRamp: buildAccentRamp(baseTriplet, 6) || [
+      "rgb(191 205 220)",
+      "rgb(158 176 198)",
+      "rgb(126 147 173)",
+      "rgb(99 121 148)",
+      "rgb(78 98 122)",
+      "rgb(60 78 100)",
     ],
     accent: rgbVar("--accent", "#2563eb"),
     accentSoft: rgbVar("--accent-soft", "#dbeafe"),
