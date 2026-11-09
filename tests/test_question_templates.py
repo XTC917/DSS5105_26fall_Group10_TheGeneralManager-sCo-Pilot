@@ -150,6 +150,20 @@ def test_templates_are_injected_only_after_tool_result():
         before = _react_prompt({"messages": [HumanMessage(content=q)]})
         assert "Retrieved answer templates" not in before[0].content
 
+        holding = _react_prompt(
+            {
+                "messages": [
+                    HumanMessage(content=q),
+                    ToolMessage(
+                        content='{"ok": true, "tool": "get_orders_at_risk"}',
+                        tool_call_id="call-1",
+                    ),
+                ]
+            }
+        )
+        assert "Retrieved answer templates" not in holding[0].content
+        assert "MUST be exactly one tool call, draw or render_table, not prose." in holding[0].content
+
         after = _react_prompt(
             {
                 "messages": [
@@ -157,6 +171,10 @@ def test_templates_are_injected_only_after_tool_result():
                     ToolMessage(
                         content='{"ok": true, "tool": "get_orders_at_risk"}',
                         tool_call_id="call-1",
+                    ),
+                    ToolMessage(
+                        content='{"ok": true, "tool": "render_table"}',
+                        tool_call_id="call-2",
                     ),
                 ]
             }
