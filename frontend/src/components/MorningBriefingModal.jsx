@@ -41,12 +41,13 @@ const METRIC_CARDS = [
 ];
 
 function riskPalette(theme) {
+  const ramp = theme.accentRamp || theme.colors;
   return {
-    OVERDUE: theme.danger,
-    TODAY: theme.warning,
-    TWO_DAYS: theme.colors[3] || theme.warning,
-    WEEK: theme.colors[1] || theme.colors[0],
-    LATER: theme.success,
+    OVERDUE: ramp[5],
+    TODAY: ramp[4],
+    TWO_DAYS: ramp[3],
+    WEEK: ramp[2],
+    LATER: ramp[1],
     UNKNOWN: theme.axis,
   };
 }
@@ -158,9 +159,9 @@ export function LastWeekBriefing({ week }) {
                   yAxisId="count"
                   dataKey="completed"
                   name="Orders completed"
-                  stroke={theme.colors[3]}
+                  stroke={(theme.accentRamp || theme.colors)[4]}
                   strokeWidth={2}
-                  dot={{ r: 4, fill: theme.colors[3], stroke: theme.warning }}
+                  dot={{ r: 4, fill: (theme.accentRamp || theme.colors)[4], stroke: theme.tooltipBg || theme.foreground }}
                   isAnimationActive={false}
                 />
               </ComposedChart>
@@ -204,7 +205,7 @@ export function LastWeekBriefing({ week }) {
                     key={stageKey}
                     dataKey={stageKey}
                     name={stageKey}
-                    stroke={theme.colors[index % theme.colors.length]}
+                    stroke={(theme.accentRamp || theme.colors)[index % (theme.accentRamp || theme.colors).length]}
                     strokeWidth={2}
                     dot={{ r: 3 }}
                     isAnimationActive={false}
@@ -238,7 +239,7 @@ export function LastWeekBriefing({ week }) {
                     dataKey={customer}
                     name={customer}
                     stackId="pieces"
-                    fill={theme.colors[index % theme.colors.length]}
+                    fill={(theme.accentRamp || theme.colors)[index % (theme.accentRamp || theme.colors).length]}
                     isAnimationActive={false}
                   >
                     <LabelList
@@ -773,7 +774,7 @@ export default function MorningBriefingModal({
                     <Bar
                       name="Last working day"
                       dataKey="last_day_pieces"
-                      fill={theme.colors[0]}
+                      fill={(theme.accentRamp || theme.colors)[4]}
                       radius={[4, 4, 0, 0]}
                       onClick={(row) => {
                         chooseStage(row.stage || row.payload?.stage);
@@ -783,7 +784,7 @@ export default function MorningBriefingModal({
                     <Bar
                       name="30-working-day median"
                       dataKey="lookback_median"
-                      fill={theme.colors[1]}
+                      fill={(theme.accentRamp || theme.colors)[1]}
                       radius={[4, 4, 0, 0]}
                       onClick={(row) => {
                         chooseStage(row.stage || row.payload?.stage);

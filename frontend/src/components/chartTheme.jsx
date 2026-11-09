@@ -19,6 +19,19 @@ export function readChartTheme() {
       rgbVar("--chart-5", "#f43f5e"),
       rgbVar("--chart-6", "#8b5cf6"),
     ],
+    // Theme-accent family (single hue, light -> dark). Use these for a
+    // coherent "same colour family" look instead of the rainbow palette.
+    accentRamp: [
+      rgbVar("--accent-300", "#93c5fd"),
+      rgbVar("--accent-400", "#60a5fa"),
+      rgbVar("--accent-500", "#3b82f6"),
+      rgbVar("--accent-600", "#2563eb"),
+      rgbVar("--accent-700", "#1d4ed8"),
+      rgbVar("--accent-800", "#1e40af"),
+    ],
+    accent: rgbVar("--accent", "#2563eb"),
+    accentSoft: rgbVar("--accent-soft", "#dbeafe"),
+    accentText: rgbVar("--accent-text", "#1d4ed8"),
     grid: rgbVar("--line", "#e2e4e7"),
     axis: rgbVar("--muted", "#5a626c"),
     tooltipBg: rgbVar("--surface", "#ffffff"),
