@@ -375,7 +375,8 @@ export default function MessageBubble({
 
         {message.turnId && message.emailDrafts?.map((draft, index) => (
           <EmailDraft key={`${message.turnId}-${index}`} draft={draft}
-            turnId={message.turnId} index={index} locked={!clarificationOpen} />
+            turnId={message.turnId} index={index} locked={!clarificationOpen}
+            zh={/[\u4e00-\u9fff]/.test(content || "")} />
         ))}
         <MessageMeta message={message} />
 

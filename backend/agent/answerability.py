@@ -2,17 +2,20 @@
 
 Clarification only asks whether the question has more than one answer.
 It does not check stored columns and it does not intercept.
-If the question has one answer, stored-data then tool-coverage may still stop it.
+Ambiguity and term checks run together. Stored-data and tool-coverage then run together.
+If the question has one answer, those two gates may still stop it.
 """
 
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 from backend.config import factory_date
 from backend.agent.prompts import TOOL_LOOKUP_TABLE
@@ -28,7 +31,7 @@ Reply with one JSON object, no markdown:
 {"kind":"fact"|"action"|"follow_up","stored":true|false,"table":string|null,"column":string|null,"reason":string}
 
 kind=action: email, note, reminder, watch, or audit. Then stored=true, table=null, column=null.
-If History is included, it is not the question. This turn's question is the only request to judge. A short reply continues the last history turn. Decide kind and stored for that combined request, not for the reply words alone.
+History, when present, is the previous turns kept for this conversation. Decide whether this turn continues one of those turns or starts a new question. If it continues, judge kind and stored for that combined request, not for the reply words alone. If the reply's own words are not a stored column, name the stored column of the earlier request it continues. If it is a new question, judge this turn alone.
 kind=follow_up: the question asks how a figure already present in Previous tool JSON was calculated. Then stored=true, table=null, column=null. If there is no Previous tool JSON, do not use follow_up.
 If Previous tool JSON listed rows and the new question asks a further fact about those same rows, kind=fact and stored=true. Name the column for the new fact. Do not use follow_up.
 kind=fact: pick table and column from the semantic layer only.
@@ -89,7 +92,7 @@ When needs_tool is true, has_tool=true when one registered tool or a combination
 filter_rows may keep rows from a lookup by a condition on a column that lookup already returns. summarize_rows may count or sum a returned column. draw and render_table only display.
 A tool that merely mentions another table as a side effect does not count.
 If kind is action, needs_tool=true and pick the matching action tool.
-If History is included, it is not the question. This turn's question is the only request to judge. Choose the tool for that combined request, not for the reply words alone.
+History, when present, is the previous turns kept for this conversation. Decide whether this turn continues one of those turns or starts a new question. If it continues, choose the tool for that combined request, not for the reply words alone. If it is a new question, choose the tool for this turn alone.
 reason: one or two sentences.
 Do not invent numbers. Do not add names the manager did not write.
 The language rule in the user message overrides every other language. Do not translate into French or Spanish.
@@ -361,8 +364,8 @@ def _previous_turns(recent_turns: str) -> str:
     if not text:
         return ""
     return (
-        "\nHistory, oldest first. These earlier turns are not the question to answer now. "
-        "Use them only to understand This turn's question below.\n"
+        "\nHistory, oldest first. These are the previous turns kept for this conversation. "
+        "Decide from them whether this turn continues that conversation.\n"
         + text
         + "\n"
     )
@@ -664,9 +667,19 @@ _ACTION_TOOLS = {
 }
 
 
+def _in_parallel(first: Callable[[], Any], second: Callable[[], Any]) -> tuple[Any, Any]:
+    """Run two gate calls together. Each keeps the caller's context."""
+    left = contextvars.copy_context()
+    right = contextvars.copy_context()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        left_future = pool.submit(left.run, first)
+        right_future = pool.submit(right.run, second)
+        return left_future.result(), right_future.result()
+
+
 def _ask_tool_coverage(
     model: Any,
-    data: DataVerdict,
+    data: DataVerdict | None,
     question: str,
     *,
     chosen_reading: bool = False,
@@ -675,10 +688,15 @@ def _ask_tool_coverage(
     from backend.tools.registry import MVP_TOOLS
 
     tool_names = ", ".join(getattr(t, "name", str(t)) for t in MVP_TOOLS)
+    step = (
+        json.dumps(data.__dict__, ensure_ascii=False)
+        if data is not None
+        else "Decided separately. Choose the tool from this question and the history."
+    )
     tool_user = (
         language_rule(question)
         + "\n\nStep 1 JSON:\n"
-        + json.dumps(data.__dict__, ensure_ascii=False)
+        + step
         + "\n\nRegistered tools:\n"
         + tool_names
         + "\n\nWhat each tool looks up:\n"
@@ -698,7 +716,7 @@ def _ask_tool_coverage(
     )
     system = _TOOL_SYSTEM + ("\n" + _CHOSEN_READING if chosen_reading else "")
     tools = _tools_from_payload(_ask_json(model, system, tool_user))
-    if not tools.has_tool and data.reason:
+    if data is not None and not tools.has_tool and data.reason:
         tools.reason = data.reason
     return tools
 
@@ -841,11 +859,11 @@ def assess_answerability(
             + "\nThis turn's question:\n"
             + (question or "")
         )
-        ambiguity = _tools_from_payload(
-            _ask_json(model, _AMBIGUITY_SYSTEM, ambiguity_user)
+        ambiguity, terms = _in_parallel(
+            lambda: _tools_from_payload(_ask_json(model, _AMBIGUITY_SYSTEM, ambiguity_user)),
+            lambda: _ask_term_questions(model, question, recent_turns),
         )
         method_card = interpretation_clarification(question, ambiguity.options, ambiguity.reason)
-        terms = _ask_term_questions(model, question, recent_turns)
         card = combine_clarification(method_card, terms, question)
         if card is not None:
             logger.info(
@@ -893,7 +911,16 @@ def assess_answerability(
         + "\nThis turn's question:\n"
         + (question or "")
     )
-    data = _data_from_payload(_ask_json(model, data_system, data_user))
+    data, tools = _in_parallel(
+        lambda: _data_from_payload(_ask_json(model, data_system, data_user)),
+        lambda: _ask_tool_coverage(
+            model,
+            None,
+            question,
+            chosen_reading=clarification_reply,
+            recent_turns=recent_turns,
+        ),
+    )
     if data.kind == "follow_up" and prior:
         traces = [
             _trace(
@@ -922,10 +949,10 @@ def assess_answerability(
         if data.kind == "follow_up":
             data.kind = "fact"
             data.stored = False
+        tools = _ask_tool_coverage(
+            model, data, question, chosen_reading=clarification_reply, recent_turns=recent_turns
+        )
 
-    tools = _ask_tool_coverage(
-        model, data, question, chosen_reading=clarification_reply, recent_turns=recent_turns
-    )
     if data.kind == "action" and (tools.tool or "") not in _ACTION_TOOLS:
         data = _data_from_payload(
             _ask_json(
@@ -954,30 +981,6 @@ def assess_answerability(
                 tools.has_tool = True
                 tools.tool = "get_order_status"
                 tools.reason = data.reason or tools.reason
-    if (
-        data.kind != "action"
-        and not data.stored
-        and not clarification_reply
-        and continues_prior_rows(question, prior)
-    ):
-        data = _data_from_payload(
-            _ask_json(
-                model,
-                data_system
-                + "\nPrevious tool JSON already listed the rows. This question asks a "
-                "further fact about those rows. If that fact is in the tables, "
-                "kind=fact and stored=true. Do not use follow_up. "
-                "stored=false only when the fact is not in any table.",
-                data_user,
-            )
-        )
-        if data.kind == "follow_up":
-            data.kind = "fact"
-            data.stored = True
-        tools = _ask_tool_coverage(
-            model, data, question, chosen_reading=clarification_reply, recent_turns=recent_turns
-        )
-        data, tools = apply_catalog(data, tools)
 
     if not tools.has_tool and peer_progress_requested(question):
         data.stored = True

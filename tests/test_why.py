@@ -93,6 +93,32 @@ def test_stage_issue_explanation_states_the_median_comparison():
     assert "30-working-day median" in why["sources"][0]["label"]
 
 
+def test_filter_rows_is_not_listed_as_a_source():
+    why = build_why("Which Harbor Knits orders are in progress?", {
+        "answer": "Two orders.",
+        "traces": [
+            {
+                "tool": "find_orders",
+                "source_file": "orders.csv",
+                "rows": [
+                    {"order_id": "ORD-1", "customer": "Harbor Knits"},
+                    {"order_id": "ORD-2", "customer": "Harbor Knits"},
+                    {"order_id": "ORD-3", "customer": "Harbor Knits"},
+                ],
+            },
+            {
+                "tool": "filter_rows",
+                "source_file": "find_orders",
+                "rows": [
+                    {"order_id": "ORD-1", "customer": "Harbor Knits"},
+                    {"order_id": "ORD-2", "customer": "Harbor Knits"},
+                ],
+            },
+        ],
+    })
+    assert [source["name"] for source in why["sources"]] == ["orders.csv"]
+
+
 def test_no_rows_or_calculations_does_not_claim_verification():
     why = build_why("Why?", {"answer": "Unknown", "traces": []})
     assert "did not include a record" in why["steps"][1]["items"][0]

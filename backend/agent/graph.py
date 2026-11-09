@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import uuid
 from contextvars import ContextVar
 from typing import Any
 
@@ -128,6 +129,58 @@ def build_model():
     return ChatOpenAI(**kwargs)
 
 
+_WRITE_THEN_DISPLAY = (
+    "When the result answers the question, write the reply now from this tool JSON. "
+    "Do not call draw or render_table in this message. "
+    "A later step still displays exactly one chart or table from these rows. "
+    "If the manager named a display, that choice wins: a table MUST be render_table; "
+    "a bar, pie, line, area, or combo chart MUST be draw with that chart_type. "
+    "Do not switch tools because the rows are a list. "
+    "When no display was named, prefer draw when the values compare, compose, or trend, "
+    "and prefer render_table when the result is a list of rows. "
+    "Copy only values already in that JSON. Do not calculate. "
+    "Do not write the chart or table in the reply."
+)
+
+_DISPLAY_SYSTEM = """You only display rows that a tool already returned.
+
+Call exactly one of draw or render_table. Do not write a reply.
+If the manager named a display, that choice wins: a table MUST be render_table; a bar, pie, line, area, or combo chart MUST be draw with that chart_type.
+Do not switch tools because the rows are a list.
+When no display was named, prefer draw when the values compare, compose, or trend, and prefer render_table when the result is a list of rows.
+Copy every returned row. Do not drop rows. Do not calculate. Do not invent values.
+For summarize_rows, copy data.rows. category_key is data.group_by. value_keys is data.value_key.
+For filter_rows, copy data.rows, not the rows the filter removed.
+"""
+
+_PREFETCH_BARE = frozenset({
+    "get_morning_briefing",
+    "get_today_priority",
+    "discover_factory_issues",
+    "get_orders_at_risk",
+    "get_stage_output",
+    "list_watches",
+    "get_recent_actions",
+})
+_PREFETCH_ORDER = frozenset({
+    "get_order_status",
+    "trace_order",
+    "compare_order_progress",
+})
+_ORDER_ID = re.compile(r"\bORD-\d+\b", re.I)
+
+
+def _with_templates(system: str, turn: list[Any]) -> str:
+    query = _TEMPLATE_QUERY.get()
+    hits = retrieve_answer_templates(query)
+    hits = supplement_templates_for_tools(query, hits, _tools_from_turn(turn))
+    hits = without_foreign_order_templates(query, hits)
+    extra = format_retrieved_templates(hits)
+    if extra:
+        return system + "\n\n" + extra
+    return system
+
+
 def _react_prompt(state: dict[str, Any]):
     """Add answer templates only after this turn has produced tool JSON."""
     system = build_system_prompt()
@@ -173,61 +226,56 @@ def _react_prompt(state: dict[str, Any]):
                 "Do not call draw or render_table. Say in prose that nothing matched."
             )
         elif hold_for_chart:
-            # REVERT-SUMMARIZE: allow summarize_rows before the one display call.
+            # REVERT-SUMMARIZE: allow summarize_rows before the reply and the later display.
             summarized = "summarize_rows" in called
             filtered = "filter_rows" in called
             if summarized:
                 system += (
                     "\n\nsummarize_rows already grouped the lookup rows. "
-                    "If the question still needs another lookup, call that lookup next and do not display yet. "
-                    "Otherwise your next message MUST be exactly one tool call, draw or render_table, not prose. "
-                    "Copy data.rows from summarize_rows. Do not copy the original order rows. "
+                    "If the question still needs another lookup, call that lookup next and do not write the reply yet. "
+                    "Otherwise write the reply now from summarize_rows data.rows. "
+                    "Do not copy the original order rows. "
                     "Do not call summarize_rows again on these same rows. "
                     "If a later lookup replaced them, call summarize_rows on that lookup. Do not calculate. "
-                    "If the manager named a display, that choice wins: a table MUST be render_table; "
-                    "a bar, pie, line, area, or combo chart MUST be draw with that chart_type. "
-                    "category_key is data.group_by. value_keys is data.value_key."
+                    "category_key for the later chart is data.group_by. value_keys is data.value_key. "
+                    + _WRITE_THEN_DISPLAY
                 )
             elif filtered:
                 system += (
                     "\n\nfilter_rows already kept the matching rows from the original lookup. "
-                    "If the question still needs another lookup, call that lookup next and do not display yet. "
+                    "If the question still needs another lookup, call that lookup next and do not write the reply yet. "
                     "Copy data.rows from filter_rows. Do not copy rows the filter removed. "
                     "If the manager wants a count or a sum of those kept rows, call summarize_rows. "
                     "Pass group_by and metric only. Do not pass rows. Do not calculate. "
-                    "Otherwise your next message MUST be exactly one tool call, draw or render_table, not prose. "
-                    "If the manager named a display, that choice wins: a table MUST be render_table; "
-                    "a bar, pie, line, area, or combo chart MUST be draw with that chart_type. "
                     "Do not call filter_rows again unless a condition was wrong. "
-                    "Do not answer in text on this step."
+                    + _WRITE_THEN_DISPLAY
                 )
             else:
                 system += (
                     "\n\nA retrieval tool already returned the data. "
                     "If this result does not yet cover the question, call the next tool that covers the rest. "
                     "Do not stop because one call cannot return the whole set. "
+                    "If the rows, the flag, or the numbers are the wrong ones for this question, "
+                    "call a different registered tool. Do not write the reply from that result. "
                     "If the manager, or a clarification reply, set a condition on a column already "
                     "in those rows, call filter_rows. Pass filters only. Do not pass rows. "
                     "Do not drop rows yourself. "
                     "If the manager wants a count or a sum grouped by a column, and that grouping "
                     "is not already in the lookup JSON, call summarize_rows. "
                     "Pass group_by and metric only. Do not pass rows. Do not calculate. "
-                    "Otherwise your next message MUST be exactly one tool call, draw or render_table, not prose. "
-                    "If the manager named a display, that choice wins: a table MUST be render_table; "
-                    "a bar, pie, line, area, or combo chart MUST be draw with that chart_type. "
-                    "Do not switch tools because the rows are a list. "
-                    "When no display was named, prefer draw when the values compare, compose, or trend, "
-                    "and prefer render_table when the result is a list of rows. "
-                    "Copy only values already in that JSON. Do not calculate. "
-                    "Do not answer in text on this step."
+                    + _WRITE_THEN_DISPLAY
                 )
+            system = _with_templates(system, turn)
         elif email_result:
             system += (
-                "\n\nAn email tool returned this turn. Present its subject and body as "
-                "an email with paragraphs, preserving the returned language and facts. "
-                "Show its draft-only disclaimer separately. Do not call draw or render_table "
-                "for the email, and do not replace it with a status table. If the tool "
-                "returned an error, explain the error instead of inventing a draft. "
+                "\n\nAn email tool returned this turn. Do not copy the subject or body. "
+                "Do not call draw or render_table. If the tool returned an error, explain "
+                "the error instead of inventing a draft. Otherwise the entire reply is one "
+                "of these sentences, matching the question language. English: "
+                "\"I will prepare an email draft for you. Please verify the recipient and "
+                "email address. **To send the email, open the email draft, save and preview, "
+                "then confirm and send.**\" Chinese: "
+                "\"我会为你准备一封邮件草稿。请核对收件人和邮箱。**要发送的话，请打开邮件草稿，保存并预览，然后确认发送。**\" "
                 "Drafting alone does not require a confirmation or a send_email call."
             )
         else:
@@ -248,7 +296,8 @@ def _react_prompt(state: dict[str, Any]):
             elif empty_lookup:
                 system += (
                     "\n\nThe lookup returned no rows. "
-                    "Write the reply now. Do not call draw or render_table."
+                    "If this was the wrong tool for the question, call the tool that covers it. "
+                    "Otherwise write the reply now. Do not call draw or render_table."
                 )
     return [SystemMessage(content=system), *messages]
 
@@ -438,10 +487,142 @@ def _model_turn(
         return message
     zh = reply_language(original_question or message) == "zh"
     note = "以下内容是对这个问题的澄清：" if zh else "The following is the clarification of that question:"
+    scope = (
+        "以澄清为准。原问题里的对象、订单和其他细节仍然要看。澄清给某个词下了定义，或选定了一种读法时，以这个定义为准。"
+        if zh
+        else (
+            "The clarification decides what this question means. "
+            "Still read the original question for the subject, the order, and the other details it contains. "
+            "When the clarification defines a term or chooses a reading, that definition wins."
+        )
+    )
     original = (original_question or "").strip()
     if original:
-        return f"{original}\n\n{note}\n{message}"
-    return f"{note}\n{message}"
+        return f"{original}\n\n{note}\n{message}\n\n{scope}"
+    return f"{note}\n{message}\n\n{scope}"
+
+
+def _prefetch_args(name: str, question: str) -> dict[str, Any] | None:
+    """Arguments for a tool the gate already named. None when they are not determined."""
+    if name in _PREFETCH_BARE:
+        return {}
+    if name in _PREFETCH_ORDER:
+        ids = list(dict.fromkeys(match.group(0).upper() for match in _ORDER_ID.finditer(question or "")))
+        if len(ids) == 1:
+            return {"order_id": ids[0]}
+    return None
+
+
+def _tool_by_name(name: str):
+    for tool in MVP_TOOLS:
+        if getattr(tool, "name", None) == name:
+            return tool
+    return None
+
+
+def _prefetch_tool_messages(tool_name: str | None, question: str, progress=None) -> list[Any]:
+    """Run the judged tool before the answering model. The model may still choose another."""
+    name = (tool_name or "").strip()
+    if not name or "+" in name:
+        return []
+    args = _prefetch_args(name, question)
+    tool = _tool_by_name(name)
+    if args is None or tool is None:
+        return []
+    if progress:
+        from backend.services.chat_stream import _LABELS
+
+        progress(_LABELS.get(name, "Checking factory records…"))
+    try:
+        raw = tool.invoke(args)
+    except Exception:
+        logger.exception("prefetch %s failed", name)
+        return []
+    if not isinstance(raw, str):
+        raw = json.dumps(raw, ensure_ascii=False)
+    call_id = f"prefetch-{uuid.uuid4().hex[:12]}"
+    logger.info("prefetched tool %s", name)
+    return [
+        AIMessage(
+            content="",
+            tool_calls=[{"name": name, "args": args, "id": call_id, "type": "tool_call"}],
+        ),
+        ToolMessage(content=raw, tool_call_id=call_id, name=name),
+    ]
+
+
+def _display_needed(turn: list[Any]) -> bool:
+    if _EXPLAIN_PRIOR.get() or _REUSE_PRIOR.get():
+        return False
+    if not any(isinstance(msg, ToolMessage) for msg in turn):
+        return False
+    called = set(_tools_from_turn(turn))
+    if called & {"draft_chase_email", "send_email", "draw", "render_table"}:
+        return False
+    if _turn_lookups_are_empty(turn) or _filter_matched_nothing(turn):
+        return False
+    if _ambiguous_tool_payload(turn):
+        return False
+    return True
+
+
+def _display_after_reply(result: dict[str, Any], progress=None) -> None:
+    """After the reply is written, ask the model for the one chart or table."""
+    messages = result.get("messages") if isinstance(result, dict) else None
+    if not isinstance(messages, list):
+        return
+    turn = _latest_turn(messages)
+    if not _display_needed(turn):
+        return
+    question = ""
+    blobs: list[str] = []
+    for msg in turn:
+        if _is_human(msg) and not question:
+            question = _content_to_text(getattr(msg, "content", ""))
+        if isinstance(msg, ToolMessage):
+            blobs.append(str(getattr(msg, "content", "") or ""))
+    if not blobs:
+        return
+    from backend.tools.draw import draw
+    from backend.tools.render_table import render_table
+
+    try:
+        model = build_model().bind_tools([draw, render_table], tool_choice="any")
+        response = model.invoke(
+            [
+                SystemMessage(content=_DISPLAY_SYSTEM),
+                HumanMessage(content="Question:\n" + question + "\n\nTool JSON:\n" + "\n\n".join(blobs)),
+            ]
+        )
+    except Exception:
+        logger.exception("display after reply failed")
+        return
+    calls = list(getattr(response, "tool_calls", None) or [])
+    call = next((item for item in calls if str(item.get("name") or "") in _DISPLAY_TOOLS), None)
+    if not call:
+        logger.info("display after reply produced no chart or table")
+        return
+    name = str(call.get("name") or "")
+    tool = draw if name == "draw" else render_table
+    if progress:
+        from backend.services.chat_stream import _LABELS
+
+        progress(_LABELS.get(name, "Preparing the chart…"))
+    try:
+        raw = tool.invoke(call.get("args") or {})
+    except Exception:
+        logger.exception("display tool %s failed", name)
+        return
+    if not isinstance(raw, str):
+        raw = json.dumps(raw, ensure_ascii=False)
+    call_id = str(call.get("id") or f"display-{uuid.uuid4().hex[:12]}")
+    messages.append(
+        AIMessage(
+            content="",
+            tool_calls=[{"name": name, "args": call.get("args") or {}, "id": call_id, "type": "tool_call"}],
+        )
+    )
+    messages.append(ToolMessage(content=raw, tool_call_id=call_id, name=name))
 
 
 def run_agent(
@@ -549,7 +730,10 @@ def run_agent(
     held_rows = bind_lookup_rows()
     try:
         agent = get_agent()
-        payload = {"messages": [{"role": "user", "content": remembered}]}
+        seed = []
+        if not explain_prior and not reuse_prior:
+            seed = _prefetch_tool_messages(gate.tools.tool, model_message, progress)
+        payload = {"messages": [{"role": "user", "content": remembered}, *seed]}
         config = {"configurable": {"thread_id": memory_thread}}
         if progress or on_token:
             from backend.services.chat_stream import ToolProgress
@@ -564,6 +748,7 @@ def run_agent(
             result = _stream_agent(agent, payload, config, on_token)
         else:
             result = agent.invoke(payload, config)
+        _display_after_reply(result, progress)
     finally:
         charts = take_frontend_charts(held_charts)
         tables = take_frontend_tables(held_tables)
@@ -604,11 +789,19 @@ def _stream_agent(agent, payload: dict[str, Any], config: dict[str, Any], on_tok
         if mode != "messages":
             continue
         message = data[0] if isinstance(data, tuple) else data
-        if isinstance(message, ToolMessage) or getattr(message, "tool_calls", None) or getattr(message, "tool_call_chunks", None):
-            if emitted:
+        has_tool = (
+            isinstance(message, ToolMessage)
+            or bool(getattr(message, "tool_calls", None))
+            or bool(getattr(message, "tool_call_chunks", None))
+        )
+        if has_tool:
+            # A tool call before the reply is planning text. Once a line of the
+            # reply has been shown, keep it on screen.
+            if emitted and "\n" not in emitted:
                 on_token({"reset": True})
                 emitted = ""
-            continue
+            if isinstance(message, ToolMessage) or not _content_to_text(getattr(message, "content", "")).strip():
+                continue
         if not isinstance(message, AIMessage):
             continue
         text = _content_to_text(getattr(message, "content", ""))
@@ -914,6 +1107,15 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
             "limitation": "needs_clarification",
             "routing_intent": "proceed",
         }
+
+    if email_drafts and "draft_chase_email" in tools_used:
+        from backend.agent.answerability import reply_language
+
+        answer = (
+            "我会为你准备一封邮件草稿。请核对收件人和邮箱。**要发送的话，请打开邮件草稿，保存并预览，然后确认发送。**"
+            if reply_language(question) == "zh"
+            else "I will prepare an email draft for you. Please verify the recipient and email address. **To send the email, open the email draft, save and preview, then confirm and send.**"
+        )
 
     logger.info(
         "agent done conversation=%s tools=%s",

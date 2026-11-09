@@ -1,27 +1,50 @@
-"""A clock two or more days past the data queries the day after the newest record."""
+"""The chosen factory date is the query date. A used CSV older than that date is named."""
 
 from datetime import date
 
-from backend.services.factory_clock import data_hold_note, query_date_for
+from backend.services.factory_clock import named_csvs, partial_update_note, query_date_for, stale_csv_updates
 
 
-def test_clock_inside_the_data_is_used_as_is():
+class _Updates:
+    def __init__(self, updates):
+        self.updates = updates
+
+    def csv_latest_updates(self):
+        return self.updates
+
+
+def test_any_clock_is_the_query_date():
     assert query_date_for(date(2026, 3, 30), date(2026, 4, 1)) == date(2026, 3, 30)
-
-
-def test_one_day_ahead_keeps_the_clock():
     assert query_date_for(date(2026, 4, 2), date(2026, 4, 1)) == date(2026, 4, 2)
-
-
-def test_two_or_more_days_ahead_queries_the_day_after_the_newest_record():
-    latest = date(2026, 4, 1)
-    assert query_date_for(date(2026, 4, 3), latest) == date(2026, 4, 2)
-    assert query_date_for(date(2026, 4, 6), latest) == date(2026, 4, 2)
-    assert data_hold_note(latest) == (
-        "**Data is current through 2026-04-01. Records after that date have not been updated.**"
-    )
-    assert data_hold_note(latest, "ORD-120 怎么样") == "**回答截止到 2026-04-01，之后的数据还未更新。**"
-
-
-def test_missing_records_keep_the_clock():
+    assert query_date_for(date(2026, 4, 6), date(2026, 4, 1)) == date(2026, 4, 6)
     assert query_date_for(date(2026, 4, 2), None) == date(2026, 4, 2)
+
+
+def test_note_names_only_a_used_csv_older_than_the_factory_date():
+    db = _Updates({
+        "orders.csv": date(2026, 4, 1),
+        "production_log.csv": date(2026, 3, 31),
+    })
+    day = date(2026, 4, 1)
+    assert named_csvs("production_log.csv + orders.csv + workshops.csv") == {
+        "orders.csv",
+        "production_log.csv",
+    }
+    assert stale_csv_updates(db, {"orders.csv"}, day) == []
+    stale = stale_csv_updates(db, {"production_log.csv"}, day)
+    assert stale == [("production_log.csv", date(2026, 3, 31))]
+    assert partial_update_note(stale) == (
+        "**Some of the data used here was last updated through 2026-03-31 (production_log).**"
+    )
+    assert partial_update_note(stale, "今天的产量") == "**部分数据的更新时间截止 2026-03-31（production_log）。**"
+
+
+def test_note_lists_each_csv_when_their_updates_differ():
+    db = _Updates({
+        "orders.csv": date(2026, 4, 1),
+        "production_log.csv": date(2026, 3, 31),
+    })
+    stale = stale_csv_updates(db, {"orders.csv", "production_log.csv"}, date(2026, 4, 2))
+    assert partial_update_note(stale, "订单和产量") == (
+        "**部分数据的更新时间截止 orders 2026-04-01、production_log 2026-03-31。**"
+    )

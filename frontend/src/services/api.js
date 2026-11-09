@@ -123,11 +123,11 @@ export async function fetchActionOffer({ question, answer, traces, toolsUsed, pr
   return body;
 }
 
-export async function fetchSuggestions({ query, asked, focus }) {
+export async function fetchSuggestions({ query, asked, focus, answer }) {
   const res = await fetch("/api/suggestions", {
     method: "POST",
     headers: authHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ query, asked, focus }),
+    body: JSON.stringify({ query, asked, focus, answer: answer || "" }),
   });
   if (res.status === 401) {
     notifyUnauthorized();

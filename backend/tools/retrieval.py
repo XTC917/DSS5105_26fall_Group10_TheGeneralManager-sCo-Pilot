@@ -20,7 +20,7 @@ from backend.services.pace import (
     likely_to_miss_due_dates,
     likely_to_miss_due_next_n_days,
     pace_fields,
-    stage_medians,
+    stage_pace_rates,
     would_miss_due_date,
 )
 from backend.tools.common import (
@@ -47,6 +47,14 @@ class GetOrderStatusInput(BaseModel):
         default=None,
         description="Product name as in orders.csv, e.g. Hoodie. Case-insensitive exact match.",
     )
+    lookback_working_days: Optional[int] = Field(
+        default=None,
+        description=(
+            "Recent working days that set the pace. Omit for the 30-day median. "
+            "If the manager names another window, such as the last 5 days, pass that "
+            "number. The pace then uses the average daily pieces over those working days."
+        ),
+    )
 
 
 class GetOrdersAtRiskInput(BaseModel):
@@ -68,9 +76,30 @@ class GetOrdersAtRiskInput(BaseModel):
         default=None,
         description=(
             "Fixed pieces per working day for stage, e.g. 455. "
-            "Replaces that stage's 30-day median only. Other stages stay on the median."
+            "Replaces that stage's pace rate only. Other stages stay on the 30-day median, "
+            "or on the named-window average when lookback_working_days is set."
         ),
     )
+    lookback_working_days: Optional[int] = Field(
+        default=None,
+        description=(
+            "Recent working days that set the pace. Omit for the 30-day median. "
+            "If the manager names another window, such as the last 5 days, pass that "
+            "number. The pace then uses the average daily pieces over those working days."
+        ),
+    )
+
+
+def _reject_lookback(tool_name: str, lookback_working_days: Optional[int]) -> str | None:
+    if lookback_working_days is None:
+        return None
+    if lookback_working_days < 1 or lookback_working_days > 60:
+        return tool_error(
+            tool_name,
+            "INVALID_INPUT",
+            "lookback_working_days must be from 1 to 60.",
+        )
+    return None
 
 
 @tool(args_schema=GetOrderStatusInput)
@@ -78,6 +107,7 @@ def get_order_status(
     order_id: Optional[str] = None,
     customer: Optional[str] = None,
     product: Optional[str] = None,
+    lookback_working_days: Optional[int] = None,
 ) -> str:
     """Look up one order from orders.csv.
 
@@ -138,10 +168,14 @@ def get_order_status(
                 }
             )
 
+        rejected = _reject_lookback(tool_name, lookback_working_days)
+        if rejected:
+            return rejected
         order = rows[0]
         computed = order_computed_fields(order)
         risk = assess_order_risk(order)
-        pace = pace_fields(order, stage_medians(db))
+        rates, pace_window = stage_pace_rates(db, lookback_working_days)
+        pace = pace_fields(order, rates, rate_label=pace_window["rate_label"])
         flags = flags_with_pace_tight(list(risk["flags"]), pace)
         computed = {
             **computed,
@@ -153,7 +187,12 @@ def get_order_status(
             {
                 "ok": True,
                 "tool": tool_name,
-                "data": {"order": order, "computed": computed, "flags": flags},
+                "data": {
+                    "order": order,
+                    "computed": computed,
+                    "flags": flags,
+                    "pace_window": pace_window,
+                },
                 "trace": {
                     "tool": tool_name,
                     "source_file": "orders.csv",
@@ -178,7 +217,7 @@ def get_order_status(
                         f"{computed['factory_today']} and skip Sundays. "
                         "TIGHT_DEADLINE: not overdue, due today through +3 calendar days, "
                         "and days_left exceeds working days until due. "
-                        "days_left = max(sum over remaining stages of pieces / 30-day stage median, "
+                        f"days_left = max(sum over remaining stages of pieces / {pace_window['rate_label']}, "
                         "remaining stage count)."
                     ),
                 },
@@ -194,6 +233,7 @@ def get_orders_at_risk(
     flag: Optional[str] = None,
     stage: Optional[str] = None,
     pieces_per_day: Optional[float] = None,
+    lookback_working_days: Optional[int] = None,
 ) -> str:
     """List orders likely to miss a due date, plus separate overdue and stalled flags.
 
@@ -222,6 +262,9 @@ def get_orders_at_risk(
             )
 
         db = get_db()
+        rejected = _reject_lookback(tool_name, lookback_working_days)
+        if rejected:
+            return rejected
         named_stage = (stage or "").strip()
         has_stage = bool(named_stage)
         has_rate = pieces_per_day is not None
@@ -231,7 +274,9 @@ def get_orders_at_risk(
                 "INVALID_INPUT",
                 "Pass stage and pieces_per_day together, or omit both.",
             )
-        medians = dict(stage_medians(db))
+        medians, pace_window = stage_pace_rates(db, lookback_working_days)
+        medians = dict(medians)
+        rate_label = pace_window["rate_label"]
         assumption = None
         if has_stage:
             stage_key = named_stage.upper()
@@ -251,13 +296,13 @@ def get_orders_at_risk(
             assumption = {
                 "stage": stage_key,
                 "pieces_per_day": float(pieces_per_day),
-                "replaces": "30-day median for this stage only",
+                "replaces": f"{rate_label} for this stage only",
             }
         in_progress = db.in_progress_orders()
         flagged: list[dict[str, Any]] = []
         for order in in_progress:
             risk = assess_order_risk(order)
-            pace = pace_fields(order, medians)
+            pace = pace_fields(order, medians, rate_label=rate_label)
             flags = flags_with_pace_tight(list(risk["flags"]), pace)
             if not flags:
                 continue
@@ -277,9 +322,9 @@ def get_orders_at_risk(
                 }
             )
 
-        miss_due = likely_to_miss_due_dates(db, medians)
-        miss_week = likely_to_miss_due_next_n_days(db, medians)
-        miss_any = would_miss_due_date(db, medians) if assumption else []
+        miss_due = likely_to_miss_due_dates(db, medians, rate_label=rate_label)
+        miss_week = likely_to_miss_due_next_n_days(db, medians, rate_label=rate_label)
+        miss_any = would_miss_due_date(db, medians, rate_label=rate_label) if assumption else []
         by_id = {row["order_id"]: row for row in flagged}
         if assumption and (flag_norm is None or flag_norm == "TIGHT_DEADLINE"):
             assessed = []
@@ -307,6 +352,11 @@ def get_orders_at_risk(
         else:
             assessed = [row for row in flagged if flag_norm in row["flags"]]
             assessed.sort(key=lambda r: r["rank_score"], reverse=True)
+        rate_words = (
+            f"the average daily pieces over the last {pace_window['lookback_working_days']} working days"
+            if pace_window["statistic"] == "average"
+            else "the 30-day median"
+        )
         logger.info("get_orders_at_risk returned %s rows (flag=%s)", len(assessed), flag_norm)
         return tool_json(
             {
@@ -316,6 +366,7 @@ def get_orders_at_risk(
                     "count": len(assessed),
                     "flag_filter": flag_norm,
                     "assumption": assumption,
+                    "pace_window": pace_window,
                     "stage_rates_pieces_per_day": medians,
                     "orders": assessed,
                     "likely_to_miss_due_dates": {
@@ -327,14 +378,14 @@ def get_orders_at_risk(
                                 "Not the same rows as data.orders while a stage rate is fixed. "
                                 "Not overdue. Due today through +3 calendar days. "
                                 f"{assumption['stage']} uses {assumption['pieces_per_day']} pieces per day; "
-                                "other stages use the 30-day median."
+                                f"other stages use {rate_words}."
                             )
                             if assumption
                             else (
                                 "Same rows as data.orders when flag is omitted. "
                                 "Not overdue. Due today through +3 calendar days. "
                                 "days_left = max(sum over remaining stages of pieces / "
-                                "30-day median pieces_completed, remaining stage count). "
+                                f"{rate_words}, remaining stage count). "
                                 "Included when days_left exceeds working days until due."
                             )
                         ),
@@ -351,8 +402,8 @@ def get_orders_at_risk(
                     "basis": (
                         (
                             f"data.orders uses {assumption['pieces_per_day']} pieces per working day "
-                            f"for {assumption['stage']} instead of that stage's 30-day median. "
-                            "Other stages still use their 30-day median. "
+                            f"for {assumption['stage']} instead of that stage's pace rate. "
+                            f"Other stages still use {rate_words}. "
                             "Included orders are not yet overdue and days_left exceeds "
                             "working days until due. There is no 3-day window on this list."
                         )
@@ -360,7 +411,7 @@ def get_orders_at_risk(
                         else (
                             "data.orders with no flag is the miss-due list: not overdue, "
                             "due today through +3 calendar days, and days_left "
-                            "(max of pieces / 30-day stage median over remaining stages "
+                            f"(max of pieces / {rate_words} over remaining stages "
                             "and remaining stage count) "
                             "exceeds working days until due. "
                             "flag=OVERDUE is due_date before the active factory date. "

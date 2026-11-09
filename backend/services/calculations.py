@@ -241,6 +241,12 @@ def median_or_none(values: list[float | int]) -> float | None:
     return float(median(values))
 
 
+def mean_or_none(values: list[float | int]) -> float | None:
+    if not values:
+        return None
+    return round(sum(values) / len(values), 1)
+
+
 def workshop_effective_capacity(
     workshop: dict[str, Any],
     working_days: int,

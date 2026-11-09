@@ -37,11 +37,11 @@ def test_stage_daily_chart_is_assembly_median_and_alert():
     chart = stage_daily_chart(log, today)
     assert chart["type"] == "stage_daily"
     assert len(chart["data"]) == 30
-    assert chart["data"][0]["date"] == "2026-02-25"
-    assert chart["data"][-1]["date"] == "2026-03-31"
+    assert chart["data"][0]["date"] == "2026-02-26"
+    assert chart["data"][-1]["date"] == "2026-04-01"
     assert "2026-03-08" not in {row["date"] for row in chart["data"]}
     assert all(date.fromisoformat(row["date"]).weekday() != 6 for row in chart["data"])
-    assert all(row["date"] != "2026-04-01" for row in chart["data"])
+    assert any(row["date"] == "2026-04-01" for row in chart["data"])
     assert chart["stages"] == [{"key": "ASSEMBLY", "color": "#4c78a8", "median": chart["stages"][0]["median"]}]
     assert "KNITTING" not in chart["data"][0]
     expected = round(float(median([row["ASSEMBLY"] for row in chart["data"]])), 1)

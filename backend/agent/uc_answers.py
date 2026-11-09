@@ -36,7 +36,7 @@ def stage_daily_chart(
     found: set[date] = set()
     for row in log:
         day = parse_iso_date(row.get("date"))
-        if day is not None and day < today and is_working_day(day):
+        if day is not None and day <= today and is_working_day(day):
             found.add(day)
     chosen = sorted(found)[-days:]
     totals = {day: 0 for day in chosen}

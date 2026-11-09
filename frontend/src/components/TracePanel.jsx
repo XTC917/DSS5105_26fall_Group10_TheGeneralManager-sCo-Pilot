@@ -1,5 +1,7 @@
 import katex from "katex";
 import "katex/dist/katex.min.css";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const PACE_LATEX = String.raw`\mathrm{days}_{\mathrm{left}}=\max\left(\sum_{\text{remaining stages}}\frac{\text{pieces}}{\mathrm{median}_{30\mathrm{d}}},\ \text{remaining stages}\right)`;
 
@@ -8,6 +10,49 @@ function isPaceFormula(item) {
     || item.startsWith("days_left = max")
     || item.startsWith("Estimated working days still needed is the larger")
     || item.startsWith("预计仍需工作日取两个数");
+}
+
+function Formula({ tex }) {
+  const html = katex.renderToString(tex, { throwOnError: false, displayMode: true });
+  return (
+    <div
+      className="pace-formula mt-1 overflow-x-auto text-foreground"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
+function readableMarkdown(text) {
+  return String(text || "").replace(/^(#{1,6})(?=\S)/gm, "$1 ");
+}
+
+function WhyProse({ text }) {
+  return (
+    <div className="mt-1 break-words type-caption leading-relaxed text-foreground/75 [&_a]:underline [&_a]:underline-offset-2 [&_h1]:mt-2 [&_h1]:text-[0.95rem] [&_h1]:font-semibold [&_h2]:mt-2 [&_h2]:text-[0.95rem] [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:text-[0.95rem] [&_h3]:font-semibold [&_li]:my-0.5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-0 [&_p+p]:mt-2 [&_strong]:font-semibold [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          img: () => null,
+          a: ({ href, children }) =>
+            String(href || "").startsWith("data:image") ? null : <a href={href}>{children}</a>,
+        }}
+      >
+        {readableMarkdown(text)}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+function WhyItem({ item }) {
+  if (isPaceFormula(item) && !item.includes(String.raw`\]`)) return <PaceFormula />;
+  const parts = item.split(/(\\\[[\s\S]*?\\\])/g);
+  if (parts.length === 1) return <WhyProse text={item} />;
+  return parts.map((part, index) => {
+    const formula = part.match(/^\\\[([\s\S]*)\\\]$/);
+    if (formula) return <Formula key={index} tex={formula[1].trim()} />;
+    if (!part.trim()) return null;
+    return <WhyProse key={index} text={part.trim()} />;
+  });
 }
 
 function PaceFormula() {
@@ -47,7 +92,7 @@ export default function TracePanel({ traces = [], why }) {
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent type-caption text-accentContrast">{i + 1}</span>
             <div className="min-w-0"><h3 className="type-sm font-semibold">{step.title}</h3>
               {step.items.map((item, j) => (
-                isPaceFormula(item) ? <PaceFormula key={j} /> : <p key={j} className="mt-1 whitespace-pre-wrap break-words type-caption leading-relaxed text-foreground/75">{item}</p>
+                <WhyItem key={j} item={item} />
               ))}
             </div>
           </li>

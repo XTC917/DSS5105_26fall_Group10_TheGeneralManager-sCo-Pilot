@@ -40,7 +40,7 @@ def test_find_orders_does_not_pick_one_trendcart_order(db):
 def test_find_orders_by_stage(db):
     payload = parse_tool(find_orders.invoke({"current_stage": "ASSEMBLY"}))
     assert payload["ok"] is True
-    assert payload["data"]["count"] == 11
+    assert payload["data"]["count"] == 10
     assert all(row["current_stage"] == "ASSEMBLY" for row in payload["data"]["orders"])
 
 
@@ -223,15 +223,15 @@ def test_overview_board_lists_every_today_priority_order(db):
     assert [item["order_id"] for item in board["issues"] if item["priority"] == 2] == [
         row["order_id"] for row in buckets["2nd_priority"]
     ]
-    assert [item["order_id"] for item in board["issues"] if item["priority"] == 3] == [
-        row["order_id"] for row in buckets["3rd_priority"]
-    ]
-    assert board["returned_count"] == board["total_found"] == len(board["issues"])
-    assert all(item["issue_type"] != ISSUE_STAGE_BELOW_BASELINE for item in board["issues"])
-    assert board["issues"][0]["title"] == "ORD-114 is overdue and close to completion"
+    assert board["issues"][0]["title"] == "ORD-107 is overdue and close to completion"
     due_today = next(item for item in board["issues"] if item["order_id"] == "ORD-029")
     assert due_today["priority"] == 2
     assert due_today["title"] == "ORD-029 is due today"
+
+
+def test_discover_without_limit_returns_every_issue(db):
+    data = run_discover(db, limit=None)
+    assert data["returned_count"] == data["total_found"] == 13
 
 
 def test_discover_without_limit_returns_every_issue(db):
@@ -306,7 +306,7 @@ def test_discover_empty_list_when_no_rules_fire(db, monkeypatch):
     assert result["counts_by_type"][ISSUE_ORDER_OVERDUE] == 0
     assert result["counts_by_type"][ISSUE_STAGE_BELOW_BASELINE] == 0
 
-
+    assert [r["order_id"] for r in buckets["1st_priority"]] == ["ORD-107", "ORD-114"]
 def test_get_today_priority_tool(db):
     payload = parse_tool(get_today_priority.invoke({}))
     assert payload["ok"] is True

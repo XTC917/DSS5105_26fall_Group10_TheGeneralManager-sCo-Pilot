@@ -132,7 +132,9 @@ def test_template_prompt_block_is_style_only():
     assert "Retrieved answer templates" in text
     assert "tool JSON" in text
     assert "sentence shape" in text
-    assert "2026-04-01" in text
+    assert "morning of 2026-04-01" in text
+    assert "production_log stops on 2026-03-31" in text
+    assert "April 1 order activity is not in the template data" in text
     assert "MUST redo the calculation" in text
     assert "field listing" in text
     assert "Q005" in text or "prioritize" in text.lower()
@@ -333,3 +335,29 @@ def test_compose_follows_the_latest_order_not_an_earlier_one(monkeypatch):
     )
     assert hits == ["Why is ORD-029 considered risky?"]
     assert all("ORD-005" not in hit for hit in hits)
+
+
+def test_compose_stops_when_the_reply_says_the_order_is_missing(monkeypatch):
+    monkeypatch.setattr(
+        qt,
+        "_ranked_followups",
+        lambda *args, **kwargs: [
+            {
+                "id": "T1",
+                "question": "Why is ORD-061 considered risky?",
+                "relevant_tool": "trace_order",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        qt,
+        "_draft_with_model",
+        lambda *args, **kwargs: [
+            {"source_id": "T1", "question": "Why is ORD-000 considered risky?"},
+        ],
+    )
+    hits = compose_deep_dive_questions(
+        "How is ORD-000 doing?",
+        answer="ORD-000 is not in orders.csv.",
+    )
+    assert hits == []

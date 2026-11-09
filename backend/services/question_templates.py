@@ -581,10 +581,33 @@ def _message_text(result: Any) -> str:
     return str(content or "").strip()
 
 
+_CLOSED_REPLY = re.compile(
+    r"not in orders\.csv|no order with that id|no order matches|"
+    r"isn.?t recorded|not recorded|does not exist|doesn't exist|cannot be found|"
+    r"不存在|没有这[一]?笔|没有该订单|没有记录|不在订单",
+    re.IGNORECASE,
+)
+
+
+def _reply_closes_latest_subject(query: str, answer: str) -> bool:
+    """True when the latest reply says this question's subject cannot be continued."""
+    text = answer or ""
+    if not _CLOSED_REPLY.search(text):
+        return False
+    asked_ids = {item.lower() for item in _order_ids(query)}
+    reply_ids = {item.lower() for item in _order_ids(text)}
+    if not asked_ids:
+        return True
+    if reply_ids & asked_ids:
+        return True
+    return not reply_ids
+
+
 def _draft_with_model(
     query: str,
     asked: list[str],
     candidates: list[dict[str, str]],
+    answer: str = "",
 ) -> list[dict[str, str]]:
     """Ask the model to rewrite the next disclosure step. Invalid output is discarded."""
     from langchain_core.messages import HumanMessage, SystemMessage
@@ -594,10 +617,15 @@ def _draft_with_model(
     if not candidates or not llm_is_configured():
         return []
     catalog = "\n".join(f"- {item['id']}: {item['question']}" for item in candidates)
-    history = "\n".join(f"- {text}" for text in asked[-6:])
+    history = "\n".join(f"- {text}" for text in asked[-6:-1])
     system = (
-        "You choose the next progressive-disclosure questions for a factory manager. "
-        "The subject is the latest question only. Earlier questions show what was already asked. "
+        "You choose the next question in the manager's line of thought. "
+        "It continues the latest question and is the closest next step, not a new topic. "
+        "Earlier questions show where that line is heading. Use them only to infer the next step. "
+        "Do not switch the subject to an earlier order. "
+        "Read the latest reply. If it says the subject does not exist, is not in the data, "
+        "or cannot be answered, return {\"questions\":[]}. "
+        "Do not propose anything about that subject. "
         "If the latest question names an order, every rewritten question uses that order. "
         "Do not keep or insert an order from an earlier question. "
         "If the latest question names no order, do not insert one. "
@@ -617,7 +645,12 @@ def _draft_with_model(
         'Return JSON only: {"questions":[{"source_id":"...","question":"..."}]}. '
         "Keep each template's language."
     )
-    user = f"Latest question:\n{query}\n\nRecent questions:\n{history}\n\nTemplates:\n{catalog}"
+    user = (
+        f"Latest question:\n{query}\n\n"
+        f"Earlier questions, oldest first:\n{history}\n\n"
+        f"Latest reply:\n{answer or '(none)'}\n\n"
+        f"Templates:\n{catalog}"
+    )
     try:
         result = build_model().invoke(
             [SystemMessage(content=system), HumanMessage(content=user)]
@@ -677,10 +710,14 @@ def compose_deep_dive_questions(
     query: str,
     asked: list[str] | None = None,
     k: int = 3,
+    answer: str = "",
 ) -> list[str]:
     """Model rewrites template keywords. A question that is unclear or ungrounded is dropped."""
     query = (query or "").strip()
     if not query:
+        return []
+    if _reply_closes_latest_subject(query, answer):
+        logger.info("deep-dive stopped query=%r", query[:120])
         return []
     asked_list = [text.strip() for text in (asked or []) if str(text or "").strip()][-12:]
     asked_list = [text for text in asked_list if text != query]
@@ -692,7 +729,7 @@ def compose_deep_dive_questions(
         return []
     by_id = {item["id"]: item["question"] for item in candidates}
     accepted: list[str] = []
-    for row in _draft_with_model(query, asked_list, candidates):
+    for row in _draft_with_model(query, asked_list, candidates, answer):
         template = by_id.get(row.get("source_id") or "")
         proposed = row.get("question") or ""
         if not template or not proposed or _norm(proposed) in asked_norm:

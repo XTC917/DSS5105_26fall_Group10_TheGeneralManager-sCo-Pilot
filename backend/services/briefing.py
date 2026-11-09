@@ -16,6 +16,7 @@ from backend.config import (
 from backend.services.calculations import assess_order_risk, is_working_day, parse_iso_date
 from backend.services.pace import flags_with_pace_tight, pace_fields, stage_medians
 from backend.services.database import FactoryDB
+from backend.services.factory_clock import partial_update_note, stale_csv_updates
 from backend.services.feasibility import stage_throughput_medians
 from backend.tools.retrieval import get_orders_at_risk
 
@@ -50,9 +51,13 @@ def build_morning_briefing(db: FactoryDB) -> dict[str, Any]:
     ]
 
     latest = db.latest_record_date()
+    stale = stale_csv_updates(
+        db, {"orders.csv", "production_log.csv"}, factory_date()
+    )
     return {
         "factory_today": factory_date().isoformat(),
         "latest_data_date": latest.isoformat() if latest else None,
+        "data_note": partial_update_note(stale, bold=False) or None,
         "dashboard": build_dashboard(db),
         "in_progress_order_count": len(in_progress),
         "in_progress_by_stage": by_stage,
@@ -79,7 +84,7 @@ def build_morning_briefing(db: FactoryDB) -> dict[str, Any]:
         },
         "yesterday_output": {
             "date": last_date,
-            "note": "Last working day in production_log.csv before factory today. Not per-order.",
+            "note": "Last working day in production_log.csv on or before factory today. Not per-order.",
             "by_stage": last_by_stage,
         },
         "unusual_stage_output": unusual,
@@ -238,7 +243,7 @@ def last_working_day_output(db: FactoryDB) -> tuple[str | None, dict[str, int]]:
         parsed = parse_iso_date(row["date"])
         if parsed is None:
             continue
-        if parsed < today and is_working_day(parsed):
+        if parsed <= today and is_working_day(parsed):
             working_dates.append(parsed)
     if not working_dates:
         return None, {}

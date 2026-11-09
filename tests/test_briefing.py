@@ -26,6 +26,9 @@ def test_briefing_reuses_at_risk_set(db):
         "PACKING",
     }
     assert data["yesterday_output"]["date"] == "2026-03-31"
+    assert data["data_note"] == (
+        "Some of the data used here was last updated through 2026-03-31 (production_log)."
+    )
 
 
 def test_briefing_includes_suspended_workshop_from_csv(db):

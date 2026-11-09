@@ -164,7 +164,10 @@ def build_why(question: str, response: dict[str, Any]) -> dict[str, Any]:
     zh = reply_language(question) == "zh"
     idx = int(zh)
     traces = [t for t in response.get("traces", []) if isinstance(t, dict)
-              and t.get("tool") not in {"draw", "render_table", "assess_stored_data", "assess_tool_coverage"}]
+              and t.get("tool") not in {
+                  "draw", "render_table", "filter_rows", "summarize_rows",
+                  "assess_stored_data", "assess_tool_coverage",
+              }]
     facts, comparisons, sources, reasons = [], [], [], []
     discovery_in_evidence = any(
         item.get("tool") == "discover_factory_issues" and isinstance((item.get("data") or {}).get("production"), dict)
@@ -279,6 +282,7 @@ Today's briefing covers overdue work, tight deadlines, stalled orders, and the A
 Eight orders are overdue, including ORD-107 and ORD-114 still in Packing. Assembly finished 455 pieces on 31 March, against a 758-piece 30-day median.
 
 3. Check the calculation or comparison
+\\[\\mathrm{days}_{\\mathrm{left}}=\\max\\left(\\sum_{\\text{remaining stages}}\\frac{\\text{pieces}}{\\mathrm{median}_{30\\mathrm{d}}},\\ \\text{remaining stages}\\right)\\]
 ORD-029 needs about 4.3 working days and is due today. ORD-108 and ORD-103 each need about 8.4 days, with only 3 and 4 working days left.
 
 4. Understand why the conclusion follows
@@ -294,14 +298,18 @@ _WHY_STEPS = (
     (
         "Read what the data says",
         "查看数据事实",
-        "Name the orders, dates, and quantities the answer uses.",
-        "写出回答用到的订单、日期和数量。",
+        "State every record the lookup tools returned: order, customer, product, pieces, status, current stage, due date, and last activity, plus the dates and quantities on any other lookup. Leave out only a field that is null. Do not say a record has no details when those fields are present. Do not replace those records with a sentence that only names the order. filter_rows, summarize_rows, draw, and render_table are intermediate tools: do not include their rows, counts, or sums.",
+        "写上查询工具返回的每一条记录：订单、客户、产品、件数、状态、当前工序、交期和最近活动，以及其他查询里的日期和数量。只有字段本身为空才省略。不要只写选中了哪张订单。filter_rows、summarize_rows、draw、render_table 是中间工具，不要写入它们的行、计数或合计。",
     ),
     (
         "Check the calculation or comparison",
         "检查计算或比较",
-        "State the comparison, with the numbers from the evidence.",
-        "写出比较，并带上证据里的数字。",
+        "Write every formula as display LaTeX inside \\[ and \\], in the same notation as "
+        r"\[\mathrm{days}_{\mathrm{left}}=\max\left(\sum_{\text{remaining stages}}\frac{\text{pieces}}{\mathrm{median}_{30\mathrm{d}}},\ \text{remaining stages}\right)\]"
+        ". Do not spell a formula out in words. After the formula, state the comparison and the final figures the answer uses.",
+        "每个公式都写成 \\[ 和 \\] 包住的 LaTeX，记法和 "
+        r"\[\mathrm{days}_{\mathrm{left}}=\max\left(\sum_{\text{remaining stages}}\frac{\text{pieces}}{\mathrm{median}_{30\mathrm{d}}},\ \text{remaining stages}\right)\]"
+        " 相同。不要把公式写成文字。公式后面再写比较方法和回答用到的最终数字。",
     ),
     (
         "Understand why the conclusion follows",
@@ -313,29 +321,123 @@ _WHY_STEPS = (
 
 
 def _compact_evidence(value: Any, depth: int = 0) -> Any:
-    if depth > 4:
-        return None
+    # Tool JSON is packet → trace → rows → order → fields. A depth of 4
+    # turned every order field into null, so the model reported empty records.
     if isinstance(value, dict):
+        if depth > 8:
+            return None
         return {
             key: _compact_evidence(item, depth + 1)
             for key, item in value.items()
             if key not in {"working_days", "lookback_dates"}
         }
     if isinstance(value, list):
-        return [_compact_evidence(item, depth + 1) for item in value[:6]]
-    if isinstance(value, str) and len(value) > 300:
-        return value[:300]
+        if depth > 8:
+            return None
+        return [_compact_evidence(item, depth + 1) for item in value[:40]]
+    if isinstance(value, str) and len(value) > 500:
+        return value[:500]
     return value
 
 
-def _two_lines(text: str) -> str:
-    cleaned = re.sub(r"\s+", " ", str(text or "")).strip()
-    cleaned = re.sub(r"^```(?:\w+)?\s*|\s*```$", "", cleaned).strip()
-    parts = [part.strip() for part in re.split(r"(?<=[.。！？])\s+", cleaned) if part.strip()]
-    kept = " ".join(parts[:2]) if parts else cleaned
-    if len(kept) > 220:
-        kept = kept[:217].rstrip() + "…"
-    return kept
+_INTERMEDIATE_TOOLS = frozenset({
+    "filter_rows", "summarize_rows", "draw", "render_table",
+    "assess_stored_data", "assess_tool_coverage",
+})
+_EMPTY_SOURCE = re.compile(
+    r"no populated|source row has no|unpopulated|selected for the source|source lookup"
+    r"|没有可引用|来源行为空|来源记录为空|选中了|被选为来源|来源查询",
+    re.I,
+)
+
+
+def _step_text(text: str, titles: tuple[str, ...] = ()) -> str:
+    """Keep the whole step. Code fences and a repeated step title are removed."""
+    cleaned = re.sub(r"^```(?:\w+)?\s*|\s*```$", "", str(text or "")).strip()
+    lines = cleaned.splitlines()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if not lines or not titles:
+        return cleaned
+    first = re.sub(r"^#{1,6}\s*", "", lines[0].strip())
+    first = re.sub(r"^\d+\.\s*", "", first).strip().rstrip("：:").strip()
+    known = {title.casefold() for title in titles}
+    if first.casefold() not in known:
+        return cleaned
+    lines.pop(0)
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    return "\n".join(lines).strip()
+
+
+def _lookup_rows(packet: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for trace in packet.get("traces") or []:
+        if not isinstance(trace, dict) or trace.get("tool") in _INTERMEDIATE_TOOLS:
+            continue
+        for row in trace.get("rows") or []:
+            if isinstance(row, dict) and row.get("order_id") and row.get("pieces") is not None:
+                key = str(row.get("order_id"))
+                if key not in seen:
+                    seen.add(key)
+                    rows.append(row)
+    for result in packet.get("evidence_results") or []:
+        if not isinstance(result, dict) or result.get("tool") in _INTERMEDIATE_TOOLS:
+            continue
+        data = result.get("data") if isinstance(result.get("data"), dict) else {}
+        candidates = [data.get("order")] if isinstance(data.get("order"), dict) else []
+        candidates.extend(item for item in data.get("orders") or [] if isinstance(item, dict))
+        for row in candidates:
+            if row.get("order_id") and row.get("pieces") is not None:
+                key = str(row.get("order_id"))
+                if key not in seen:
+                    seen.add(key)
+                    rows.append(row)
+    return rows
+
+
+def _source_fact(evidence: str, zh: bool) -> str:
+    """Records from the lookup tools, used when the draft omitted them."""
+    try:
+        packet = json.loads(evidence)
+    except ValueError:
+        return ""
+    rows = _lookup_rows(packet)
+    if not rows:
+        return ""
+    sentences = []
+    for row in rows:
+        oid = row.get("order_id")
+        if zh:
+            sentences.append(
+                f"{oid} 是 {row.get('customer')} 的 {row.get('pieces')} 件 {row.get('product')}，"
+                f"状态 {row.get('status')}，当前工序 {row.get('current_stage')}，"
+                f"交期 {row.get('due_date')}，最近活动 {row.get('last_activity_date')}。"
+            )
+        else:
+            sentences.append(
+                f"{oid} is {row.get('pieces')} {row.get('product')} for {row.get('customer')}, "
+                f"status {row.get('status')}, currently in {row.get('current_stage')}, "
+                f"due {row.get('due_date')}, last activity {row.get('last_activity_date')}."
+            )
+    return " ".join(sentences)
+
+
+def _omits_lookup(text: str, evidence: str) -> bool:
+    if _EMPTY_SOURCE.search(text or ""):
+        return True
+    try:
+        packet = json.loads(evidence)
+    except ValueError:
+        return False
+    rows = _lookup_rows(packet)
+    if not rows:
+        return False
+    markers = [str(rows[0].get("pieces"))]
+    if rows[0].get("due_date"):
+        markers.append(str(rows[0]["due_date"]))
+    return not any(marker in (text or "") for marker in markers)
 
 
 def _draft_step(question: str, answer: str, evidence: str, step: tuple[str, str, str, str], zh: bool) -> str:
@@ -353,7 +455,14 @@ def _draft_step(question: str, answer: str, evidence: str, step: tuple[str, str,
         "Use only names and numbers that appear in the question, the answer, or the evidence. "
         "If a number is absent, leave it out. "
         "Write in the same language as the question. "
-        "At most two short sentences, so the step stays within two lines. "
+        + (
+            "For this step, include every lookup record. Do not compress them into one sentence that only names the order. "
+            if step[0] == "Read what the data says"
+            else ""
+        )
+        + "Write the full step. Do not stop early or leave a sentence unfinished. "
+        + "A display formula inside \\[ \\] must be copied intact. "
+        "Do not repeat the step title and do not start with a heading. "
         "Return only the step text."
     )
     user = (
@@ -368,7 +477,7 @@ def _draft_step(question: str, answer: str, evidence: str, step: tuple[str, str,
             str(block.get("text") or "") if isinstance(block, dict) else str(block)
             for block in content
         )
-    return _two_lines(str(content or ""))
+    return _step_text(str(content or ""), (step[0], step[1]))
 
 
 def explain_why(question: str, response: dict[str, Any]) -> dict[str, Any]:
@@ -382,8 +491,14 @@ def explain_why(question: str, response: dict[str, Any]) -> dict[str, Any]:
         return base
     zh = base.get("language") == "zh"
     packet = _compact_evidence({
-        "traces": response.get("traces") or [],
-        "evidence_results": response.get("evidence_results") or [],
+        "traces": [
+            trace for trace in response.get("traces") or []
+            if not isinstance(trace, dict) or trace.get("tool") not in _INTERMEDIATE_TOOLS
+        ],
+        "evidence_results": [
+            result for result in response.get("evidence_results") or []
+            if not isinstance(result, dict) or result.get("tool") not in _INTERMEDIATE_TOOLS
+        ],
     })
     evidence = json.dumps(packet, ensure_ascii=False, default=str)[:6000]
     answer = str(response.get("answer") or "")
@@ -398,6 +513,10 @@ def explain_why(question: str, response: dict[str, Any]) -> dict[str, Any]:
         return base
     if not any(drafted):
         return base
+    if _omits_lookup(drafted[1] or "", evidence):
+        fact = _source_fact(evidence, zh)
+        if fact:
+            drafted[1] = fact
     idx = int(zh)
     base["steps"] = [
         {"title": step[idx], "items": [text] if text else base["steps"][index]["items"][:1]}

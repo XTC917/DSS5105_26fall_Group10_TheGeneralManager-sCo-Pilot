@@ -13,7 +13,7 @@ import time
 import asyncio
 import json
 from contextlib import asynccontextmanager
-from datetime import date, timedelta
+from datetime import date
 
 import psycopg
 from fastapi import Depends, FastAPI, HTTPException
@@ -52,7 +52,14 @@ from backend.services.conversation_history import (
     validate_turn_action,
 )
 from backend.services.database import get_db, init_db
-from backend.services.factory_clock import data_hold_note, load_factory_date, query_factory_date, set_factory_date
+from backend.services.factory_clock import (
+    load_factory_date,
+    named_csvs,
+    partial_update_note,
+    query_factory_date,
+    set_factory_date,
+    stale_csv_updates,
+)
 from backend.services.request_context import set_current_user
 from backend.services.action_offers import compose_action_offer
 from backend.services.discovery import (
@@ -141,11 +148,13 @@ def health(user: CurrentUser | None = Depends(get_optional_current_user)) -> dic
 
 
 def _append_data_note(response: ChatResponse, question: str) -> ChatResponse:
-    """Tell the manager when the clock is past the newest stored factory day."""
-    clock, query_day = query_factory_date()
-    if query_day >= clock:
+    """Name a used CSV when its newest record is before the factory date."""
+    used: set[str] = set()
+    for trace in response.traces or []:
+        used |= named_csvs(str((trace or {}).get("source_file") or ""))
+    note = partial_update_note(stale_csv_updates(get_db(), used, load_factory_date()), question)
+    if not note:
         return response
-    note = data_hold_note(query_day - timedelta(days=1), question)
     answer = (response.answer or "").rstrip()
     if note in answer:
         return response
@@ -397,6 +406,7 @@ def suggestions(
         suggestions=compose_deep_dive_questions(
             request.query.strip()[:400],
             asked=asked,
+            answer=request.answer.strip()[:800],
         )
     )
 
@@ -535,14 +545,14 @@ def confirm_action(request: ConfirmActionRequest, user: CurrentUser = Depends(ge
             validate_turn_action(user.id, turn_id, action=request.action)
         with using_factory_date(load_factory_date()):
             result = confirm_proposed_action(request.action, current_user=user)
-        if isinstance(turn_id, int) and turn_id >= 1 and result.get("ok"):
-            record_turn_action_decision(
-                user.id,
-                turn_id,
-                action=request.action,
-                status="confirmed",
-                summary=result.get("summary") or "Action confirmed.",
-            )
+            if isinstance(turn_id, int) and turn_id >= 1 and result.get("ok"):
+                record_turn_action_decision(
+                    user.id,
+                    turn_id,
+                    action=request.action,
+                    status="confirmed",
+                    summary=result.get("summary") or "Action confirmed.",
+                )
     except ConversationNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Chat turn not found") from exc
     except ActionDecisionError as exc:
@@ -569,14 +579,14 @@ def decline_action(request: ConfirmActionRequest, user: CurrentUser = Depends(ge
             validate_turn_action(user.id, turn_id, action=request.action)
         with using_factory_date(load_factory_date()):
             result = decline_proposed_action(request.action, current_user=user)
-        if isinstance(turn_id, int) and turn_id >= 1:
-            record_turn_action_decision(
-                user.id,
-                turn_id,
-                action=request.action,
-                status="dismissed",
-                summary=summary,
-            )
+            if isinstance(turn_id, int) and turn_id >= 1:
+                record_turn_action_decision(
+                    user.id,
+                    turn_id,
+                    action=request.action,
+                    status="dismissed",
+                    summary=summary,
+                )
     except ConversationNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Chat turn not found") from exc
     except ActionDecisionError as exc:
