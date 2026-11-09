@@ -564,12 +564,6 @@ export default function Home() {
     }
   }
 
-  function handleAskAiNav() {
-    setActiveView("copilot");
-    if (!bootstrappedRef.current || conversationLoading) return;
-    handleNewConversation({ fromAskAi: true });
-  }
-
   function beginWatchSave() {
     watchSaveHolds.current += 1;
     setWatchesLoading(true);
@@ -718,10 +712,6 @@ export default function Home() {
   }
 
   function handleNav(key) {
-    if (key === "copilot") {
-      handleAskAiNav();
-      return;
-    }
     setAskAiNotice("");
     setActiveView(key);
   }

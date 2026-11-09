@@ -446,16 +446,21 @@ export default function MorningBriefingModal({
       {!loading && panel === "week" && data?.last_week && <LastWeekBriefing week={data.last_week} />}
       {!loading && panel === "today" && board && (
         <>
-          <div className="mb-3 rounded-card bg-foreground px-5 py-4 text-canvas">
-            <p className="text-lg font-medium">
-              {board.metrics.attention
-                ? `${board.metrics.attention} orders need your attention.`
-                : "No active orders are flagged."}
-            </p>
-            <p className="mt-1 type-sm text-canvas/70">
-              {board.metrics.overdue} overdue · {board.metrics.due_soon} due today or in the next two days ·{" "}
-              {board.completed_orders.length} completed on {board.completion_date}.
-            </p>
+          <div className="mb-3 overflow-hidden rounded-card border border-line bg-surface shadow-xs">
+            <div className="flex items-stretch">
+              <span className="w-1.5 shrink-0 bg-accent" aria-hidden="true" />
+              <div className="flex-1 px-5 py-4">
+                <p className="text-lg font-medium text-foreground">
+                  {board.metrics.attention
+                    ? `${board.metrics.attention} orders need your attention.`
+                    : "No active orders are flagged."}
+                </p>
+                <p className="mt-1 type-sm text-muted">
+                  {board.metrics.overdue} overdue · {board.metrics.due_soon} due today or in the next two days ·{" "}
+                  {board.completed_orders.length} completed on {board.completion_date}.
+                </p>
+              </div>
+            </div>
           </div>
 
           {output
