@@ -37,13 +37,18 @@ export default function DataSourceList() {
   const [cardPage, setCardPage] = useState(1);
   const [expandedId, setExpandedId] = useState(null);
   const isMobile = useIsMobile();
+  // Defensive: never trust the API payload shape; a non-array here used to
+  // crash the render (white screen). Keep a safe list for all consumers.
+  const rows = Array.isArray(dataSources) ? dataSources : [];
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const res = await getDataSources();
-      setDataSources(res.data);
+      const raw = res?.data;
+      setDataSources(Array.isArray(raw) ? raw : []);
     } catch (error) {
+      setDataSources([]);
       message.error("Failed to load data sources");
     } finally {
       setLoading(false);
@@ -204,11 +209,11 @@ export default function DataSourceList() {
     if (loading) {
       return <div className="py-10 text-center text-sm text-ink/50">Loading…</div>;
     }
-    if (!dataSources.length) {
+    if (!rows.length) {
       return <div className="py-10 text-center text-sm text-ink/50">No data sources.</div>;
     }
     const start = (cardPage - 1) * CARD_PAGE_SIZE;
-    const pageRows = dataSources.slice(start, start + CARD_PAGE_SIZE);
+    const pageRows = rows.slice(start, start + CARD_PAGE_SIZE);
     return (
       <div className="space-y-3">
         {pageRows.map((record) => {
@@ -280,13 +285,13 @@ export default function DataSourceList() {
             </article>
           );
         })}
-        {dataSources.length > CARD_PAGE_SIZE && (
+        {rows.length > CARD_PAGE_SIZE && (
           <div className="flex justify-center pt-2">
             <Pagination
               size="small"
               current={cardPage}
               pageSize={CARD_PAGE_SIZE}
-              total={dataSources.length}
+              total={rows.length}
               showSizeChanger={false}
               onChange={(page) => setCardPage(page)}
             />
@@ -309,7 +314,7 @@ export default function DataSourceList() {
         <div className="min-w-0 overflow-hidden">
           <Table
             columns={columns}
-            dataSource={dataSources}
+            dataSource={rows}
             loading={loading}
             rowKey="id"
             scroll={{ x: 1000 }}

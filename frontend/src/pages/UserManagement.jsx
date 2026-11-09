@@ -21,16 +21,28 @@ export default function UserManagement() {
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
+    const problems = [];
+
+    // Load all users (drives Active / Other lists) and pending approvals
+    // independently: if one request fails, the other still renders instead of
+    // blanking the whole page.
     try {
-      const [p, all] = await Promise.all([listPendingUsers(), listAllUsers()]);
-      setPending(p.items || []);
-      const items = all.items || [];
+      const all = await listAllUsers();
+      const items = Array.isArray(all?.items) ? all.items : [];
       setUsers(items.filter((u) => u.status !== "PENDING"));
     } catch (err) {
-      setError(friendlyAuthError(err, "Failed to load users."));
-    } finally {
-      setLoading(false);
+      problems.push(friendlyAuthError(err, "Failed to load users."));
     }
+
+    try {
+      const p = await listPendingUsers();
+      setPending(Array.isArray(p?.items) ? p.items : []);
+    } catch (err) {
+      problems.push(friendlyAuthError(err, "Failed to load pending registrations."));
+    }
+
+    if (problems.length) setError(problems.join(" "));
+    setLoading(false);
   }, []);
 
   useEffect(() => {

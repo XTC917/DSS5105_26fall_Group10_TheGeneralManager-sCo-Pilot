@@ -3,6 +3,7 @@ import Sidebar from "../components/Sidebar.jsx";
 import ChatPanel from "../components/ChatPanel.jsx";
 import ConversationList from "../components/ConversationList.jsx";
 import AlertsRail from "../components/AlertsRail.jsx";
+import { ErrorBoundary } from "../components/ui/ErrorBoundary.jsx";
 import DataManagement from "./DataManagement.jsx";
 import UserManagement from "./UserManagement.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
@@ -740,7 +741,6 @@ export default function Home() {
           <div className="dp-rail-group">
             <RailButton icon="chat" label="Ask AI" active={activeView === "copilot"} onClick={() => handleNav("copilot")} />
             <RailButton icon="grid" label="Overview" active={activeView === "overview"} onClick={() => handleNav("overview")} />
-            <RailButton icon="bell" label="Alerts" active={activeView === "alerts"} badge={alertCount} onClick={() => handleNav("alerts")} />
           </div>
 
           {isAdmin && (
@@ -878,17 +878,12 @@ export default function Home() {
                 />
                 {healthError ? "API offline" : health ? `API ${health.ok ? "ready" : "down"}` : "Checking API…"}
               </span>
-              {alertCount > 0 && activeView !== "alerts" && (
-                <button
-                  type="button"
-                  onClick={() => handleNav("alerts")}
-                  className="dp-pill focus-ring hidden sm:inline-flex"
-                  title={`${alertCount} alerts`}
-                >
-                  <Icon name="bell" size={12} />
-                  {alertCount}
-                </button>
-              )}
+              <AlertsRail
+                variant="bell"
+                watches={watches}
+                loading={watchesLoading}
+                onWatchChanged={handleWatchChanged}
+              />
             </div>
           </div>
 
@@ -965,13 +960,17 @@ export default function Home() {
 
           {activeView === "data" && isAdmin && (
             <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 md:p-6">
-              <DataManagement />
+              <ErrorBoundary>
+                <DataManagement />
+              </ErrorBoundary>
             </div>
           )}
 
           {activeView === "users" && isAdmin && (
             <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
-              <UserManagement />
+              <ErrorBoundary>
+                <UserManagement />
+              </ErrorBoundary>
             </div>
           )}
 
@@ -1213,6 +1212,7 @@ export default function Home() {
                 watches={watches}
                 loading={watchesLoading}
                 compact
+                defaultExpanded
                 persistHistory
                 onWatchChanged={handleWatchChanged}
               />

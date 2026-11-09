@@ -31,6 +31,15 @@ function MoreIcon() {
   );
 }
 
+function BellIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  );
+}
+
 function WatchActions({ item, disabled, menuOpen, onToggleMenu, onRequestCancel }) {
   const menuId = useId();
   return (
@@ -82,10 +91,12 @@ export default function AlertsRail({
   watches = { fired: [], active: [], cancelled: [] },
   loading = false,
   compact = false,
+  variant = "inline",
+  defaultExpanded = false,
   onWatchChanged,
 }) {
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [menuWatchId, setMenuWatchId] = useState(null);
   const [pendingCancel, setPendingCancel] = useState(null);
   const [cancellingId, setCancellingId] = useState(null);
@@ -95,6 +106,7 @@ export default function AlertsRail({
 
   const { triggered: fired, watching: active, done, cancelled } = partitionWatches(watches);
   const hasAlerts = fired.length > 0 || active.length > 0;
+  const total = fired.length + active.length;
 
   useEffect(() => {
     if (!expanded && menuWatchId == null) return undefined;
@@ -190,6 +202,149 @@ export default function AlertsRail({
     );
   }
 
+  function renderSections() {
+    return (
+      <div className="space-y-3">
+        <div>
+          <div className="mb-1 flex items-center gap-2">
+            <span className="type-overline text-danger">Triggered</span>
+            <span className="type-caption text-subtle">{fired.length}</span>
+          </div>
+          {fired.length === 0 ? (
+            <p className="mt-1 type-caption text-subtle">No triggered alerts.</p>
+          ) : (
+            <div className="space-y-1">{fired.map((item) => renderWatchRow(item, { triggered: true }))}</div>
+          )}
+        </div>
+        <div>
+          <div className="mb-1 flex items-center gap-2">
+            <span className="type-overline text-warning">Watching</span>
+            <span className="type-caption text-subtle">{active.length}</span>
+          </div>
+          {active.length === 0 ? (
+            <p className="mt-1 type-caption text-subtle">No active watches.</p>
+          ) : (
+            <div className="space-y-1">{active.map((item) => renderWatchRow(item))}</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const bellBadge = total > 0 ? (
+    <span className="absolute right-0 top-0 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-danger px-0.5 text-[8px] font-bold text-white">{total}</span>
+  ) : null;
+
+  if (variant === "bell") {
+    return (
+      <div ref={rootRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          aria-controls={panelId}
+          aria-label={`Alerts${total ? ` · ${total}` : ""}`}
+          title="Alerts & watches"
+          className="focus-ring relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-control border border-line bg-surface text-muted transition-colors hover:bg-surfaceMuted hover:text-accentText"
+        >
+          <BellIcon />
+          {bellBadge}
+        </button>
+        {expanded && (
+          <div
+            id={panelId}
+            className="absolute right-0 top-[calc(100%+0.6rem)] z-40 w-[22rem] max-w-[calc(100vw-1.5rem)] rounded-card border border-line bg-surface p-3 shadow-float"
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="type-overline text-foreground">Alerts & watches</p>
+                {total > 0 && (
+                  <p className="mt-0.5 type-caption text-muted">
+                    {total} active {total === 1 ? "watch" : "watches"}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(true)}
+                className="focus-ring rounded-control border border-line px-2 py-1 type-caption font-medium text-muted transition-colors hover:bg-surfaceMuted"
+                title="Watch history"
+              >
+                <HistoryIcon className="mr-1" />
+                History
+              </button>
+            </div>
+            {loading ? (
+              <p className="mt-2 type-caption text-muted">Loading…</p>
+            ) : total === 0 ? (
+              <p className="mt-2 type-caption text-subtle">No alerts or active watches.</p>
+            ) : (
+              <div className="mt-2 max-h-[56vh] overflow-y-auto pr-1">{renderSections()}</div>
+            )}
+          </div>
+        )}
+        <Modal
+          open={historyOpen}
+          onClose={() => setHistoryOpen(false)}
+          title="Watch history"
+          description="Done and cancelled watches stay here. They are not in Active Watches."
+          size="md"
+        >
+          {done.length === 0 && cancelled.length === 0 ? (
+            <p className="type-sm text-muted">No watch history yet.</p>
+          ) : (
+            <ul className="max-h-72 space-y-2 overflow-y-auto">
+              {done.map((item) => (
+                <li key={`done-${item.watch_id}`} className="rounded-control border border-line bg-surfaceMuted/50 px-3 py-2 type-sm">
+                  <p className="font-medium text-foreground">{item.order_id}</p>
+                  <p className="type-caption text-muted">Not moved by {formatFactoryDate(item.check_date)} · done</p>
+                </li>
+              ))}
+              {cancelled.map((item) => (
+                <li key={item.watch_id} className="rounded-control border border-line bg-surfaceMuted/50 px-3 py-2 type-sm">
+                  <p className="font-medium text-foreground">{item.order_id}</p>
+                  <p className="type-caption text-muted">Inactive by {formatFactoryDate(item.check_date)} · cancelled</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Modal>
+        <Modal
+          open={Boolean(pendingCancel)}
+          onClose={() => {
+            if (cancellingId) return;
+            setPendingCancel(null);
+            setCancelError("");
+          }}
+          title="Cancel watch"
+          description="The watch stays in history as CANCELLED. It will not evaluate again."
+          size="sm"
+          footer={
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button size="sm" variant="ghost" disabled={Boolean(cancellingId)} onClick={() => { setPendingCancel(null); setCancelError(""); }}>
+                Keep watching
+              </Button>
+              <Button size="sm" variant="danger" disabled={Boolean(cancellingId)} onClick={confirmCancelWatch}>
+                {cancellingId ? "Cancelling…" : "Cancel watch"}
+              </Button>
+            </div>
+          }
+        >
+          <p className="type-sm text-foreground">
+            Cancel the watch on{" "}
+            <span className="font-semibold">{pendingCancel?.order_id}</span>
+            {pendingCancel?.check_date ? ` (inactive by ${formatFactoryDate(pendingCancel.check_date)})` : ""}
+            ?
+          </p>
+          <p className="mt-2 type-caption text-subtle">Watch id {pendingCancel?.watch_id}</p>
+          {cancelError && (
+            <p className="mt-3 type-caption text-danger" role="alert">{cancelError}</p>
+          )}
+        </Modal>
+      </div>
+    );
+  }
+
   return (
     <div ref={rootRef} className={`relative ${compact ? "" : "border-b border-line"}`}>
       <div className={`flex items-start gap-2 ${compact ? "px-0 py-1" : "px-3 py-2"}`}>
@@ -251,10 +406,9 @@ export default function AlertsRail({
       {expanded && hasAlerts && !loading && (
         <div
           id={panelId}
-          className={`space-y-2 border-t border-line/70 bg-surfaceMuted/40 ${compact ? "px-0 py-2" : "px-3 py-2"}`}
+          className={`space-y-3 border-t border-line/70 bg-surfaceMuted/40 ${compact ? "px-0 py-2" : "px-3 py-2"}`}
         >
-          {fired.map((item) => renderWatchRow(item, { triggered: true }))}
-          {active.map((item) => renderWatchRow(item))}
+          {renderSections()}
         </div>
       )}
 
