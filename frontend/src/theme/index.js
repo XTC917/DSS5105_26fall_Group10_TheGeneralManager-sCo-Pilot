@@ -1,11 +1,11 @@
 export { ThemeProvider } from "./ThemeProvider.jsx";
 export { useTheme } from "./useTheme.js";
 export {
-  ACCENTS,
-  ACCENT_IDS,
-  DEFAULT_ACCENT,
-  DEFAULT_MODE,
-  MODE_IDS,
-  THEME_MODES,
+  THEMES,
+  THEME_IDS,
+  THEME_ACCENT_HEX,
+  DEFAULT_THEME,
   THEME_STORAGE_KEYS,
+  isTheme,
+  isDarkTheme,
 } from "./themeConfig.js";

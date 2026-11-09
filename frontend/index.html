@@ -3,22 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light dark" />
     <title>SweaterCo — GM Co-Pilot</title>
     <script>
-      // Apply the persisted theme before first paint to avoid a flash (FOUC).
+      // Apply the persisted colour theme before first paint to avoid a flash (FOUC).
+      // Seven independent themes (Ocean / Lavender / Sage / Rose / Amber / Slate /
+      // Black). No Light / Dark / System. Migrates the old accent-only choice.
       (function () {
         try {
+          var ids = ["ocean", "lavender", "sage", "rose", "amber", "slate", "black"];
           var root = document.documentElement;
-          var mode = localStorage.getItem("sweaterco.theme.mode") || "system";
-          var accent = localStorage.getItem("sweaterco.theme.accent") || "ocean";
-          var prefersDark =
-            window.matchMedia &&
-            window.matchMedia("(prefers-color-scheme: dark)").matches;
-          var resolved =
-            mode === "dark" || (mode === "system" && prefersDark) ? "dark" : "light";
-          root.dataset.theme = resolved;
-          root.dataset.accent = accent;
+          var stored = localStorage.getItem("sweaterco.theme");
+          var legacy = localStorage.getItem("sweaterco.theme.accent");
+          var theme = ids.indexOf(stored) >= 0 ? stored : ids.indexOf(legacy) >= 0 ? legacy : "ocean";
+          root.dataset.theme = theme;
+          root.dataset.accent = theme;
+          root.dataset.appearance = theme === "black" ? "dark" : "light";
         } catch (e) {
           /* ignore — defaults from tokens.css apply */
         }
@@ -31,7 +30,7 @@
       rel="stylesheet"
     />
   </head>
-  <body class="bg-paper text-ink">
+  <body class="bg-canvas text-foreground">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

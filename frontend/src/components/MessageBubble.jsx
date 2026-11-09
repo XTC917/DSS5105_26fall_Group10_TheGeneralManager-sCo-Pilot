@@ -351,6 +351,9 @@ export default function MessageBubble({
         {message.streaming && (
           <span className="working-step type-caption text-subtle">writing…</span>
         )}
+        {message.stopped && (
+          <span className="type-caption text-warning">stopped</span>
+        )}
       </div>
 
       <div className="w-full min-w-0 space-y-3">

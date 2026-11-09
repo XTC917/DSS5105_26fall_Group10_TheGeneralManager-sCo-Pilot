@@ -2,11 +2,9 @@ import { createContext } from "react";
 
 /**
  * @typedef {Object} ThemeContextValue
- * @property {("light"|"dark"|"system")} mode         User-selected mode.
- * @property {("light"|"dark")} resolvedMode          Effective mode after resolving "system".
- * @property {string} accent                          Selected accent id.
- * @property {(mode: string) => void} setMode
- * @property {(accent: string) => void} setAccent
+ * @property {string} theme          Active colour theme id (one of THEME_IDS).
+ * @property {boolean} isDark        True for the Black theme only.
+ * @property {(theme: string) => void} setTheme
  */
 
 export const ThemeContext = createContext(null);

@@ -1,18 +1,15 @@
 import { ConfigProvider, theme as antdTheme } from "antd";
-import { ACCENTS } from "./themeConfig.js";
+import { THEME_ACCENT_HEX } from "./themeConfig.js";
 import { useTheme } from "./useTheme.js";
-
-const ACCENT_HEX = Object.fromEntries(ACCENTS.map((item) => [item.id, item.swatch]));
 
 /**
  * Bridges the SweaterCo theme system to Ant Design (used by the admin pages
- * and @ant-design/icons). Ant Design components are not widely used today, but
- * this keeps them consistent with Light/Dark and the active accent.
+ * and @ant-design/icons). The Black theme maps to Ant Design's dark algorithm;
+ * every other colour theme is a light palette.
  */
 export function AntdBridge({ children }) {
-  const { resolvedMode, accent } = useTheme();
-  const isDark = resolvedMode === "dark";
-  const colorPrimary = ACCENT_HEX[accent] || "#1d4ed8";
+  const { theme, isDark } = useTheme();
+  const colorPrimary = THEME_ACCENT_HEX[theme] || THEME_ACCENT_HEX.ocean;
 
   return (
     <ConfigProvider

@@ -4,6 +4,16 @@
 
 body {
   margin: 0;
+  color: rgb(var(--foreground));
+  background: rgb(var(--bg));
+  background-image: var(--app-bg-image);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+#root {
+  min-height: 100dvh;
 }
 
 .trace-pre {

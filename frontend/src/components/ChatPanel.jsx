@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { confirmAction, declineAction, fetchActionOffer, fetchSuggestions, saveActionOffer, sendChatStream } from "../services/api.js";
 import MessageBubble from "./MessageBubble.jsx";
+import { AiOrb, Icon } from "../pages/design-preview/bits.jsx";
 
 const CHAR_MS = 14;
 
@@ -27,9 +28,9 @@ function stepLabel(progress) {
 
 function greeting() {
   const hour = new Date().getHours();
-  if (hour < 12) return "Good morning. What can I help you with?";
-  if (hour < 18) return "Good afternoon. What can I help you with?";
-  return "Good evening. What can I help you with?";
+  if (hour < 12) return "Good morning.";
+  if (hour < 18) return "Good afternoon.";
+  return "Good evening.";
 }
 
 function releasedEnd(chars, official) {
@@ -44,58 +45,6 @@ function hasUnclosedMark(text) {
   const bold = text.split("**").length - 1;
   const code = text.split("`").length - 1;
   return bold % 2 === 1 || code % 2 === 1;
-}
-
-function SparkIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 3l1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function ArrowUpIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 19V5M6 11l6-6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function HistoryIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6M4 4v4.6h4.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M12 8v4.4l3 1.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SuggestIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M12 3l1.2 3.6L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.4L12 3z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M18.5 13.5l.7 2.1 2.1.7-2.1.7-.7 2.1-.7-2.1-2.1-.7 2.1-.7.7-2.1zM6.2 14.8l.55 1.65 1.65.55-1.65.55-.55 1.65-.55-1.65-1.65-.55 1.65-.55.55-1.65z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
 }
 
 export default function ChatPanel({
@@ -131,6 +80,7 @@ export default function ChatPanel({
   const textareaRef = useRef(null);
   const suggestionsRef = useRef(null);
   const suggestionsPopoverRef = useRef(null);
+  const abortRef = useRef(null);
   const stickToBottomRef = useRef(true);
   const typer = useRef({
     chars: [],
@@ -382,8 +332,11 @@ export default function ChatPanel({
     setMessages((prev) => [...prev, userMsg]);
     setBusy(true);
     onQuestionSubmitted?.(conversationId, content);
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    abortRef.current = controller;
     try {
       const result = await sendChatStream(content, conversationId, clarificationReply, originalQuestion, {
+        signal: controller?.signal,
         onProgress: setProgress,
         onToken: (token) => {
           if (token?.reset) {
@@ -425,11 +378,28 @@ export default function ChatPanel({
         }
       }
     } catch (err) {
-      resetTyper();
-      setMessages((prev) => (prev[prev.length - 1]?.streaming ? prev.slice(0, -1) : prev));
-      onQuestionFailed?.(conversationId);
-      setError(err.message);
+      if (err?.name === "AbortError") {
+        // The user stopped receiving. We honestly mark the partial answer as
+        // stopped rather than claiming the backend tool run was cancelled.
+        resetTyper();
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.streaming) {
+            const next = [...prev];
+            next[next.length - 1] = { ...last, streaming: false, stopped: true };
+            return next;
+          }
+          return prev;
+        });
+        setError("Stopped receiving the answer. The server may still finish and save this turn — reload the conversation to see the final answer if it completes.");
+      } else {
+        resetTyper();
+        setMessages((prev) => (prev[prev.length - 1]?.streaming ? prev.slice(0, -1) : prev));
+        onQuestionFailed?.(conversationId);
+        setError(err.message);
+      }
     } finally {
+      abortRef.current = null;
       setBusy(false);
       setProgress("");
       requestAnimationFrame(() => {
@@ -437,6 +407,10 @@ export default function ChatPanel({
         if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
       });
     }
+  }
+
+  function stopGenerating() {
+    abortRef.current?.abort();
   }
 
   function rememberOfferDecision(turnId, decision) {
@@ -556,7 +530,7 @@ export default function ChatPanel({
         ref={suggestionsPopoverRef}
         role="dialog"
         aria-label="Suggested prompts"
-        className="fixed z-[80] overflow-y-auto overscroll-contain rounded-card border border-line bg-surface p-2 shadow-float"
+        className="dp-suggest-pop"
         style={{
           left: suggestionsPos.left,
           bottom: suggestionsPos.bottom,
@@ -564,19 +538,23 @@ export default function ChatPanel({
           maxHeight: suggestionsPos.maxHeight,
         }}
       >
-        <p className="px-2 pb-1.5 type-overline text-muted">Suggested prompts</p>
-        <div className="space-y-1">
+        <p className="dp-eyebrow px-2 pb-1.5">Suggested prompts</p>
+        <div className="space-y-0.5">
           {prompts.map((question) => (
             <button
               key={question}
               type="button"
               onClick={() => chooseSuggestion(question)}
-              className="focus-ring block w-full rounded-control px-2.5 py-2 text-left type-caption text-foreground transition-colors hover:bg-accentSoft/50"
+              className="dp-suggest-row focus-ring"
             >
-              {question}
+              <Icon name="spark" size={11} className="mt-0.5 shrink-0 text-subtle" />
+              <span className="min-w-0 flex-1">{question}</span>
             </button>
           ))}
         </div>
+        <p className="mt-1 border-t border-line/60 px-2 pt-1.5 text-[8.5px] text-subtle">
+          Fills the composer · never sends automatically
+        </p>
       </div>,
       document.body,
     );
@@ -585,159 +563,149 @@ export default function ChatPanel({
   function renderComposer({ welcome = false } = {}) {
     return (
       <form
-        className={welcome ? "w-full" : "shrink-0 px-2 pb-2 pt-1 md:px-6 md:pb-4 md:pt-2"}
+        className={welcome ? "w-full" : "shrink-0"}
         onSubmit={(e) => {
           e.preventDefault();
           submit();
         }}
       >
-        <div
-          className={`composer-shell relative mx-auto flex w-full items-end gap-1.5 rounded-[22px] border border-line bg-surface p-1.5 shadow-soft transition-[border-color,box-shadow] duration-[var(--dur)] focus-within:border-accentText focus-within:shadow-card md:gap-2 md:p-2 ${
-            welcome ? "max-w-2xl" : "max-w-4xl"
-          }`}
-        >
-          {welcome && <div ref={suggestionsRef} className="relative shrink-0 self-end">
-            <button
-              type="button"
-              aria-label="Suggestions — click for recommended questions"
-              title="Suggestions — recommended questions"
-              aria-expanded={suggestionsOpen}
-              aria-haspopup="dialog"
-              onClick={() => setSuggestionsOpen((value) => !value)}
-              onMouseEnter={() => {
-                if (typeof window !== "undefined" && window.matchMedia("(hover: hover)").matches) {
-                  setSuggestionsOpen(true);
+        <div className={`dp-composer relative mx-auto w-full p-2.5 ${welcome ? "max-w-[720px]" : "max-w-[760px]"}`}>
+          <div className="flex items-end gap-1.5">
+            {welcome && (
+              <div ref={suggestionsRef} className="relative shrink-0 self-end">
+                <button
+                  type="button"
+                  aria-label="Suggestions — recommended questions"
+                  title="Suggestions — recommended questions"
+                  aria-expanded={suggestionsOpen}
+                  aria-haspopup="dialog"
+                  onClick={() => setSuggestionsOpen((value) => !value)}
+                  onMouseEnter={() => {
+                    if (typeof window !== "undefined" && window.matchMedia("(hover: hover)").matches) {
+                      setSuggestionsOpen(true);
+                    }
+                  }}
+                  className={`dp-suggest-btn focus-ring ${suggestionsOpen ? "is-active" : ""}`}
+                >
+                  <Icon name="spark" size={13} />
+                  <span className="hidden sm:inline">Suggestions</span>
+                </button>
+                {renderSuggestionsPopover()}
+              </div>
+            )}
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                const desktop = typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
+                if (desktop && e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  submit();
                 }
               }}
-              className={`focus-ring inline-flex h-10 items-center justify-center gap-1.5 rounded-full border px-2.5 transition-colors md:h-11 md:px-3 ${
-                suggestionsOpen
-                  ? "border-accentText bg-accentSoft text-accentText"
-                  : "border-line bg-surfaceMuted text-muted hover:border-accentText hover:text-accentText"
-              }`}
-            >
-              <SuggestIcon />
-              <span className="hidden type-caption font-semibold sm:inline">Suggestions</span>
-            </button>
-            {renderSuggestionsPopover()}
-          </div>}
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              const desktop = typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
-              if (desktop && e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                submit();
-              }
-            }}
-            rows={1}
-            placeholder="Ask about orders, risk, or feasibility…"
-            className="max-h-[120px] min-h-[40px] flex-1 resize-none bg-transparent px-2.5 py-2 type-sm text-foreground outline-none placeholder:text-subtle md:min-h-[44px] md:type-body"
-          />
-          <button
-            type="submit"
-            disabled={busy || !input.trim()}
-            aria-label={busy ? "Sending" : "Send message"}
-            className="focus-ring inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accentContrast shadow-xs transition-all duration-[var(--dur-fast)] hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 md:h-11 md:w-11"
-          >
+              rows={1}
+              placeholder={welcome ? "Ask about orders, risk, or feasibility…" : "Ask a follow-up about these orders…"}
+              className="dp-composer-input max-h-[120px] min-h-[40px] py-2 text-[13px]"
+            />
             {busy ? (
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-accentContrast/40 border-t-accentContrast" />
+              <button
+                type="button"
+                onClick={stopGenerating}
+                aria-label="Stop generating"
+                title="Stop generating — stops receiving. The server may still finish this turn."
+                className="dp-send dp-stop focus-ring"
+              >
+                <Icon name="stop" size={13} />
+              </button>
             ) : (
-              <ArrowUpIcon />
+              <button
+                type="submit"
+                disabled={!input.trim()}
+                aria-label="Send message"
+                className={`dp-send focus-ring ${!input.trim() ? "is-disabled" : ""}`}
+              >
+                <Icon name="arrowUp" size={16} strokeWidth={2} />
+              </button>
             )}
-          </button>
+          </div>
+          <div className="mt-1.5 flex items-center justify-between gap-3 px-1 text-[9px] text-subtle">
+            <span className="inline-flex items-center gap-1.5">
+              <Icon name="shield" size={10} />
+              Grounded in factory data
+            </span>
+            <span className="hidden items-center gap-1.5 sm:inline-flex">
+              <span className="dp-kbd">Enter</span> to send
+            </span>
+          </div>
         </div>
-        <p className="mx-auto mt-1.5 hidden max-w-4xl text-center type-caption text-subtle sm:block">
-          Grounded in factory data · Enter to send · Shift+Enter for a new line
-        </p>
       </form>
-    );
-  }
-
-  function renderTopbar() {
-    return (
-      <div className="shrink-0 border-b border-line/60">
-        <div className="flex items-center justify-between gap-2 px-3 py-1.5 md:px-6 md:py-2">
-          <div className="min-w-0">
-            <p className="truncate type-sm font-semibold text-foreground">Ask AI</p>
-            <p className="hidden truncate type-caption text-subtle sm:block">
-              {busy ? "Working…" : "Grounded factory answers"}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {onOpenConversations && (
-              <button
-                type="button"
-                onClick={onOpenConversations}
-                className="focus-ring inline-flex h-9 items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 type-caption font-medium text-foreground transition-colors hover:bg-surfaceMuted md:hidden"
-                aria-label="Open conversation history"
-              >
-                <HistoryIcon />
-                <span>History</span>
-              </button>
-            )}
-            {onNewConversation && (
-              <button
-                type="button"
-                onClick={onNewConversation}
-                className="focus-ring inline-flex h-9 items-center gap-1.5 rounded-full bg-accent px-2.5 type-caption font-medium text-accentContrast shadow-xs transition-all hover:brightness-110 md:hidden"
-                aria-label="New conversation"
-              >
-                <PlusIcon />
-                <span>New</span>
-              </button>
-            )}
-          </div>
-        </div>
-        {notice ? (
-          <div
-            role="status"
-            className="flex items-start justify-between gap-3 border-t border-warning/25 bg-warningSoft px-3 py-2 md:px-6"
-          >
-            <p className="type-caption text-warning">{notice}</p>
-            {onDismissNotice && (
-              <button
-                type="button"
-                onClick={onDismissNotice}
-                className="focus-ring shrink-0 rounded-control px-1.5 type-caption font-medium text-warning"
-              >
-                Dismiss
-              </button>
-            )}
-          </div>
-        ) : null}
-      </div>
     );
   }
 
   if (messages.length === 0) {
     return (
       <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-transparent">
-        {renderTopbar()}
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-3 py-4 md:px-8 md:py-8">
-          <div className="w-full max-w-2xl space-y-5 md:space-y-8">
-            <div className="space-y-3 text-center md:space-y-4">
-              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-accentSoft text-accentText shadow-xs md:h-12 md:w-12">
-                <SparkIcon />
-              </div>
-              <div className="space-y-2">
-                <p className="hidden type-overline text-accentText sm:block">SweaterCo GM Co-Pilot</p>
-                <h1 className="type-h2 text-foreground sm:type-display">{greeting()}</h1>
-                <p className="mx-auto max-w-xl type-sm text-muted sm:type-body">
-                  Ask about orders, production risk, feasibility and today&apos;s priorities. Answers are grounded in factory tools, not the model.
+        <div className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div className="dp-welcome min-h-full">
+            <div className="dp-hero-grid" aria-hidden="true" />
+            <div className="dp-welcome-inner">
+              <div className="dp-rise text-center">
+                <div className="relative mx-auto mb-7 flex h-[138px] w-[138px] items-center justify-center">
+                  <span className="dp-orb-halo" aria-hidden="true" />
+                  <AiOrb size={112} />
+                  <span className="dp-chip-float left-[-62px] top-4 hidden sm:inline-flex">
+                    <Icon name="shield" size={11} />
+                    Grounded
+                  </span>
+                  <span
+                    className="dp-chip-float bottom-3 right-[-58px] hidden sm:inline-flex"
+                    style={{ animationDelay: "-3s" }}
+                  >
+                    <Icon name="spark" size={11} />
+                    Live tools
+                  </span>
+                </div>
+                <p className="dp-eyebrow text-accentText">SweaterCo · Soft Intelligence</p>
+                <h1 className="mt-3 text-[26px] font-semibold leading-[1.08] tracking-[-0.035em] text-foreground sm:text-[34px]">
+                  {greeting()}
+                  <span className="dp-gradient-ink mt-1 block">What needs your attention?</span>
+                </h1>
+                <p className="mx-auto mt-4 max-w-[520px] text-[12.5px] leading-6 text-muted sm:text-[13.5px]">
+                  Ask about orders, production risk, or feasibility. Every answer is grounded in the
+                  factory&apos;s live tools — not the model&apos;s memory.
                 </p>
               </div>
+
+              <div className="dp-rise dp-rise-1 mt-8">{renderComposer({ welcome: true })}</div>
+
+              <div className="dp-rise dp-rise-2 mt-4 grid gap-2.5 sm:grid-cols-2">
+                {FEATURED_STARTERS.map((question, i) => (
+                  <button
+                    key={question}
+                    type="button"
+                    onClick={() => chooseSuggestion(question)}
+                    className="dp-suggestion focus-ring"
+                    title="Fill the composer — does not send"
+                  >
+                    <span className={`dp-icon-tile dp-tone-${["accent", "warning", "success", "danger"][i % 4]}`}>
+                      <Icon name="spark" size={17} />
+                    </span>
+                    <span className="min-w-0 flex-1 text-left">
+                      <span className="block text-[11.5px] font-semibold leading-snug text-foreground">{question}</span>
+                      <span className="mt-0.5 block text-[9.5px] text-muted">Tap to fill the composer</span>
+                    </span>
+                    <Icon name="arrowRight" size={13} className="text-subtle" />
+                  </button>
+                ))}
+              </div>
+
+              {!llmReady && (
+                <p className="mx-auto mt-5 max-w-[520px] rounded-2xl border border-warning/30 bg-warningSoft px-4 py-2 text-center type-caption text-warning">
+                  Chat needs OPENAI_API_KEY in the project .env. pytest still works without it.
+                </p>
+              )}
             </div>
-
-            {renderComposer({ welcome: true })}
-
-            {!llmReady && (
-              <p className="mx-auto max-w-2xl rounded-2xl border border-warning/30 bg-warningSoft px-4 py-2 text-center type-caption text-warning">
-                Chat needs OPENAI_API_KEY in the project .env. pytest still works without it.
-              </p>
-            )}
-
           </div>
         </div>
       </section>
@@ -745,77 +713,88 @@ export default function ChatPanel({
   }
 
   return (
-    <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-transparent">
-      {renderTopbar()}
-      <div className="relative min-h-0 flex-1">
+    <section className="dp-chat relative h-full min-h-0">
+      {notice ? (
         <div
-          ref={listRef}
-          onScroll={handleScroll}
-          className="h-full min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-3 md:px-6 md:py-5"
+          role="status"
+          className="flex shrink-0 items-start justify-between gap-3 border-b border-warning/25 bg-warningSoft px-4 py-2"
         >
-          <div className="mx-auto w-full max-w-4xl space-y-5 md:space-y-7">
-            {messages.map((msg, idx) => (
-              <MessageBubble
-                key={`${msg.role}-${idx}`}
-                message={msg}
-                busy={busy}
-                onConfirm={(action) => confirm(idx, action)}
-                onDismiss={(action) => dismiss(idx, action)}
-                onClarify={(text) => {
-                  const original = [...messages].reverse().find((item) => item.role === "user")?.content || "";
-                  setMessages((prev) =>
-                    prev.map((item, i) =>
-                      i === idx ? { ...item, clarificationChoice: text } : item,
-                    ),
-                  );
-                  submit(text, true, original);
-                }}
-                clarificationOpen={idx === messages.length - 1}
-                actionOffer={msg.clarification ? null : msg.actionOffer}
-                actionOfferDecision={msg.actionOfferDecision}
-                onAcceptOffer={() => acceptOffer(msg.actionOffer)}
-                onDeclineOffer={() => declineOffer(msg.actionOffer)}
-              />
-            ))}
-            {busy && !(messages.at(-1)?.streaming && messages.at(-1)?.content) && (
-              <div className="flex items-center gap-2 type-caption text-muted" role="status" aria-live="polite">
-                <span className="stream-dot h-1.5 w-1.5 rounded-full bg-accent" />
-                <span className="working-step">{stepLabel(progress)}…</span>
-              </div>
-            )}
-          </div>
+          <p className="type-caption text-warning">{notice}</p>
+          {onDismissNotice && (
+            <button
+              type="button"
+              onClick={onDismissNotice}
+              className="focus-ring shrink-0 rounded-control px-1.5 type-caption font-medium text-warning"
+            >
+              Dismiss
+            </button>
+          )}
         </div>
+      ) : null}
 
-        {!isAtBottom && messages.length > 0 && (
-          <button
-            type="button"
-            onClick={scrollToBottom}
-            className="focus-ring absolute bottom-4 right-4 rounded-full border border-line bg-surface px-3 py-1.5 type-caption font-medium text-foreground shadow-soft transition-colors hover:bg-surfaceMuted"
-          >
-            ↓ Latest
-          </button>
-        )}
+      <div ref={listRef} onScroll={handleScroll} className="dp-chat-scroll">
+        <div className="mx-auto w-full max-w-4xl space-y-5 md:space-y-7">
+          {messages.map((msg, idx) => (
+            <MessageBubble
+              key={`${msg.role}-${idx}`}
+              message={msg}
+              busy={busy}
+              onConfirm={(action) => confirm(idx, action)}
+              onDismiss={(action) => dismiss(idx, action)}
+              onClarify={(text) => {
+                const original = [...messages].reverse().find((item) => item.role === "user")?.content || "";
+                setMessages((prev) =>
+                  prev.map((item, i) =>
+                    i === idx ? { ...item, clarificationChoice: text } : item,
+                  ),
+                );
+                submit(text, true, original);
+              }}
+              clarificationOpen={idx === messages.length - 1}
+              actionOffer={msg.clarification ? null : msg.actionOffer}
+              actionOfferDecision={msg.actionOfferDecision}
+              onAcceptOffer={() => acceptOffer(msg.actionOffer)}
+              onDeclineOffer={() => declineOffer(msg.actionOffer)}
+            />
+          ))}
+          {busy && !(messages.at(-1)?.streaming && messages.at(-1)?.content) && (
+            <div className="dp-stream-note" role="status" aria-live="polite">
+              <span className="dp-pulse-dot" />
+              <span className="working-step">{stepLabel(progress)}…</span>
+            </div>
+          )}
+
+          {!busy && followups.length > 0 && (
+            <div className="dp-go-deeper">
+              <div className="dp-go-deeper-head">
+                <Icon name="spark" size={11} />
+                Go deeper
+              </div>
+              <div className="dp-go-chips">
+                {followups.map((question) => (
+                  <button
+                    key={question}
+                    type="button"
+                    onClick={() => chooseSuggestion(question)}
+                    title="Fill the composer with this follow-up"
+                    className="dp-go-chip focus-ring"
+                  >
+                    <span className="dp-go-plus">
+                      <Icon name="plus" size={11} />
+                    </span>
+                    {question}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {followups.length > 0 && (
-        <div className="shrink-0 px-3 pt-2 md:px-6">
-          <div className="mx-auto w-full max-w-4xl space-y-2">
-            <p className="type-overline text-muted">Go deeper</p>
-            <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto">
-              {followups.map((question) => (
-                <button
-                  key={question}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => submit(question)}
-                  className="rounded-full border border-line bg-surfaceMuted px-3 py-1 text-left type-caption text-foreground transition-colors hover:border-accentText hover:bg-accentSoft/40 disabled:cursor-default disabled:opacity-70"
-                >
-                  {question}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+      {!isAtBottom && messages.length > 0 && (
+        <button type="button" onClick={scrollToBottom} className="dp-pill focus-ring absolute bottom-24 right-5 z-10">
+          ↓ Latest
+        </button>
       )}
 
       {error && (
@@ -836,7 +815,7 @@ export default function ChatPanel({
         </p>
       )}
 
-      {renderComposer()}
+      <div className="dp-chat-composer">{renderComposer()}</div>
     </section>
   );
 }

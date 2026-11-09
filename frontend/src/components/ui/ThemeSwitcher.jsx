@@ -1,132 +1,116 @@
-import { ACCENTS, THEME_MODES } from "../../theme/themeConfig.js";
+import { THEMES } from "../../theme/themeConfig.js";
 import { useTheme } from "../../theme/useTheme.js";
 import { cx } from "./cx.js";
 
-function ModeIcon({ id }) {
-  const common = { width: 15, height: 15, viewBox: "0 0 24 24", fill: "none", "aria-hidden": true };
-  if (id === "dark") {
-    return (
-      <svg {...common}>
-        <path
-          d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8z"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
-  }
-  if (id === "system") {
-    return (
-      <svg {...common}>
-        <rect x="3" y="4" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" />
-        <path d="M8 20h8M12 16v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      </svg>
-    );
-  }
+function Swatch({ item, active, onSelect, size = "md" }) {
   return (
-    <svg {...common}>
-      <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8" />
-      <path
-        d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-/** Appearance mode segmented control (Light / Dark / System). */
-export function ModeToggle({ className }) {
-  const { mode, setMode } = useTheme();
-  return (
-    <div
+    <button
+      key={item.id}
+      type="button"
+      onClick={() => onSelect(item.id)}
+      aria-pressed={active}
+      aria-label={item.name}
+      title={`${item.name} — ${item.caption}`}
       className={cx(
-        "inline-flex items-center gap-0.5 rounded-full border border-line bg-surfaceMuted p-0.5",
-        className,
+        "focus-ring relative inline-flex items-center justify-center rounded-full transition-transform duration-[var(--dur-fast)] hover:scale-105",
+        size === "lg" ? "h-9 w-9" : "h-8 w-8",
+        active ? "ring-2 ring-offset-2" : "ring-1 ring-line",
       )}
-      role="group"
-      aria-label="Appearance mode"
+      style={{
+        background: item.swatch,
+        "--tw-ring-offset-color": "rgb(var(--surface))",
+        "--tw-ring-color": "rgb(var(--accent))",
+      }}
     >
-      {THEME_MODES.map((item) => {
-        const active = mode === item.id;
-        return (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setMode(item.id)}
-            aria-pressed={active}
-            className={cx(
-              "focus-ring inline-flex h-8 items-center gap-1.5 rounded-full px-3 type-caption font-medium transition-colors duration-[var(--dur-fast)]",
-              active
-                ? "bg-surface text-foreground shadow-xs"
-                : "text-muted hover:text-foreground",
-            )}
-          >
-            <ModeIcon id={item.id} />
-            <span className="hidden sm:inline">{item.label}</span>
-            <span className="sr-only sm:hidden">{item.label}</span>
-          </button>
-        );
-      })}
-    </div>
+      {active && (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M5 12.5l4.5 4.5L19 7.5"
+            stroke="#fff"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.45))" }}
+          />
+        </svg>
+      )}
+    </button>
   );
 }
 
-/** Accent colour swatch picker. */
-export function AccentPicker({ className }) {
-  const { accent, setAccent } = useTheme();
+/** Full colour-theme swatch row (no Light / Dark / System). */
+export function AccentPicker({ className, variant = "grid", size = "md" }) {
+  const { theme, setTheme } = useTheme();
+
+  if (variant === "list") {
+    return (
+      <div className={cx("grid gap-1.5", className)} role="group" aria-label="Colour theme">
+        {THEMES.map((item) => {
+          const active = theme === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTheme(item.id)}
+              aria-pressed={active}
+              className={cx(
+                "focus-ring flex items-center gap-2.5 rounded-control border px-2.5 py-1.5 text-left transition-colors",
+                active
+                  ? "border-accentText/60 bg-accentSoft/50"
+                  : "border-line hover:border-lineStrong hover:bg-surfaceMuted",
+              )}
+            >
+              <span
+                className="h-5 w-5 shrink-0 rounded-full ring-1 ring-line"
+                style={{ background: item.swatch }}
+                aria-hidden="true"
+              />
+              <span className="min-w-0">
+                <span className="block type-caption font-semibold leading-tight text-foreground">
+                  {item.name}
+                </span>
+                <span className="block text-[10px] leading-tight text-subtle">{item.caption}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div
       className={cx("flex flex-wrap items-center gap-2", className)}
       role="group"
-      aria-label="Accent colour"
+      aria-label="Colour theme"
     >
-      {ACCENTS.map((item) => {
-        const active = accent === item.id;
-        return (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setAccent(item.id)}
-            aria-pressed={active}
-            aria-label={item.name}
-            title={item.name}
-            className={cx(
-              "focus-ring relative inline-flex h-8 w-8 items-center justify-center rounded-full transition-transform duration-[var(--dur-fast)] hover:scale-105",
-              active ? "ring-2 ring-offset-2" : "ring-1 ring-line",
-            )}
-            style={{
-              backgroundColor: item.swatch,
-              "--tw-ring-offset-color": "rgb(var(--surface))",
-              ...(active ? { "--tw-ring-color": item.swatch } : {}),
-            }}
-          >
-            {active && (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M5 12.5l4.5 4.5L19 7.5"
-                  stroke="#fff"
-                  strokeWidth="2.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            )}
-          </button>
-        );
-      })}
+      {THEMES.map((item) => (
+        <Swatch
+          key={item.id}
+          item={item}
+          active={theme === item.id}
+          onSelect={setTheme}
+          size={size}
+        />
+      ))}
     </div>
   );
 }
 
-/** Convenience composite used in the preview header. */
-export default function ThemeSwitcher({ className }) {
+/** Deprecated: the Light / Dark / System toggle no longer exists. */
+export function ModeToggle() {
+  return null;
+}
+
+/** Convenience composite used in Settings. */
+export default function ThemeSwitcher({ className, variant = "list" }) {
   return (
-    <div className={cx("flex flex-wrap items-center gap-3", className)}>
-      <ModeToggle />
-      <AccentPicker />
+    <div className={cx("space-y-3", className)}>
+      <AccentPicker variant={variant} />
+      <p className="type-caption text-subtle">
+        Seven complete colour themes, including Black. There is no separate Light / Dark / System
+        switch — each theme is its own full palette and persists across reloads.
+      </p>
     </div>
   );
 }

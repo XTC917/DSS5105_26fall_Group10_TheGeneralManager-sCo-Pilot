@@ -6,7 +6,7 @@ export default function DataManagement() {
   const [tab, setTab] = useState("upload");
 
   return (
-    <section className="rounded-lg border border-ink/10 bg-white p-5 shadow-sm">
+    <section className="min-w-0 overflow-hidden rounded-lg border border-ink/10 bg-white p-5 shadow-sm">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">Data Management</h2>

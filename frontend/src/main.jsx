@@ -4,6 +4,7 @@ import App from "./App.jsx";
 import { AntdBridge } from "./theme/AntdBridge.jsx";
 import { ThemeProvider } from "./theme/ThemeProvider.jsx";
 import "./theme/tokens.css";
+import "./pages/design-preview/preview.css";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(

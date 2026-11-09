@@ -15,17 +15,16 @@ import {
   fetchConversationHistory,
   fetchConversations,
 } from "../services/conversationsApi.js";
-import { partitionWatches } from "../services/watchDisplay.js";
 import { invalidateOverviewCache, loadOverviewData, peekOverviewCache } from "../services/overviewCache.js";
 import { friendlyAuthError } from "../services/authErrors.js";
 import {
-  Badge,
   Button,
   Card,
   LoadingState,
   Modal,
   ThemeSwitcher,
 } from "../components/ui/index.js";
+import { Avatar, BrandMark, Icon } from "../pages/design-preview/bits.jsx";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -74,75 +73,23 @@ function messagesFromTurns(turns) {
   });
 }
 
-function IconChat() {
+function RailButton({ icon, label, active, badge = 0, onClick }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H11l-4 3.5V15H7.5A2.5 2.5 0 0 1 5 12.5v-6z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function IconOverview() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect x="3" y="3" width="8" height="8" rx="2" stroke="currentColor" strokeWidth="1.8" />
-      <rect x="13" y="3" width="8" height="5" rx="2" stroke="currentColor" strokeWidth="1.8" />
-      <rect x="13" y="10" width="8" height="11" rx="2" stroke="currentColor" strokeWidth="1.8" />
-      <rect x="3" y="13" width="8" height="8" rx="2" stroke="currentColor" strokeWidth="1.8" />
-    </svg>
-  );
-}
-
-function IconDatabase() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <ellipse cx="12" cy="6" rx="7" ry="3" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" stroke="currentColor" strokeWidth="1.8" />
-    </svg>
-  );
-}
-
-function IconUsers() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="9" cy="8" r="3" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M3 19c0-3 2.7-5 6-5s6 2 6 5M16 5a3 3 0 1 1 0 6M21 19c0-2.5-2-4.5-5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function IconSettings() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function IconAlerts() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 3a6 6 0 0 0-6 6v2.2c0 .7-.2 1.4-.6 2L4.2 15.4A1 1 0 0 0 5 17h14a1 1 0 0 0 .8-1.6L18.6 13.2c-.4-.6-.6-1.3-.6-2V9a6 6 0 0 0-6-6z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M10 17a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function IconTheme() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function IconLogout() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 16l4-4-4-4M19 12H9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-current={active ? "page" : undefined}
+      className={`dp-rail-btn focus-ring ${active ? "is-active" : ""}`}
+    >
+      <Icon name={icon} size={18} />
+      {badge > 0 && (
+        <span className="absolute right-1 top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-danger px-0.5 text-[8px] font-bold text-white">
+          {badge}
+        </span>
+      )}
+      <span className="dp-rail-tip">{label}</span>
+    </button>
   );
 }
 
@@ -158,13 +105,18 @@ function formatFactoryDateLabel(iso) {
 const VIEW_META = {
   copilot: {
     eyebrow: "AI Workspace",
-    title: "GM Co-Pilot",
-    subtitle: "Ask grounded questions about orders, risk and new-order feasibility.",
+    title: "Ask AI",
+    subtitle: "Grounded factory answers",
   },
   overview: {
     eyebrow: "Insights",
     title: "Overview",
     subtitle: "Top issues with morning and weekly factory briefing.",
+  },
+  alerts: {
+    eyebrow: "Alerts",
+    title: "Alerts & watches",
+    subtitle: "Triggered alerts, active watches and watch history.",
   },
   data: {
     eyebrow: "Administration",
@@ -219,6 +171,13 @@ export default function Home() {
   const [watchesLoading, setWatchesLoading] = useState(false);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const [alertsDrawerOpen, setAlertsDrawerOpen] = useState(false);
+  const [contextCollapsed, setContextCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("sweaterco:context-collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [deleteError, setDeleteError] = useState("");
@@ -730,14 +689,6 @@ export default function Home() {
     setActiveView(key);
   }
 
-  const navItems = [
-    { key: "copilot", label: "Ask AI", icon: <IconChat /> },
-    { key: "overview", label: "Overview / Insights", icon: <IconOverview /> },
-    ...(isAdmin ? [{ key: "data", label: "Data Management", icon: <IconDatabase /> }] : []),
-    ...(isAdmin ? [{ key: "users", label: "User Management", icon: <IconUsers /> }] : []),
-    { key: "settings", label: "Settings", icon: <IconSettings /> },
-  ];
-
   const alertCount = (watches.fired?.length || 0) + (watches.active?.length || 0);
   const liveConversationIds = [];
   if (activeConversationId) liveConversationIds.push(activeConversationId);
@@ -745,152 +696,245 @@ export default function Home() {
     if (!liveConversationIds.includes(conversationId)) liveConversationIds.push(conversationId);
   });
 
-  const navButton = (item) => {
-    const active = activeView === item.key;
-    return (
-      <button
-        key={item.key}
-        type="button"
-        onClick={() => handleNav(item.key)}
-        className={`focus-ring flex w-full items-center gap-3 rounded-control px-3 py-2.5 text-left type-sm font-medium transition-colors duration-[var(--dur-fast)] ${
-          active
-            ? "bg-accent text-accentContrast shadow-xs"
-            : "text-muted hover:bg-accentSoft/50 hover:text-foreground"
-        }`}
-      >
-        <span className={active ? "text-accentContrast" : "text-muted"}>{item.icon}</span>
-        <span>{item.label}</span>
-      </button>
-    );
-  };
-
   const viewMeta = VIEW_META[activeView] || VIEW_META.copilot;
 
+  function toggleContextPanel() {
+    setContextCollapsed((current) => {
+      const next = !current;
+      try {
+        localStorage.setItem("sweaterco:context-collapsed", String(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
+
+  const hasContext = activeView === "copilot";
+  const isLive = liveConversationIds.length > 0;
+
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-canvas text-foreground">
-      <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-line bg-canvas/85 px-3 backdrop-blur-md md:h-14 md:px-6">
-        <div className="flex min-w-0 items-center gap-2.5 md:gap-3">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-accent text-accentContrast shadow-xs md:h-9 md:w-9">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M4 7.5A3.5 3.5 0 0 1 7.5 4h9A3.5 3.5 0 0 1 20 7.5v5A3.5 3.5 0 0 1 16.5 16H11l-4.5 4v-4H7.5A3.5 3.5 0 0 1 4 12.5v-5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-            </svg>
-          </span>
-          <div className="min-w-0">
-            <p className="hidden type-overline text-accentText sm:block">SweaterCo · Track 1</p>
-            <h1 className="truncate text-[15px] font-semibold leading-tight text-foreground md:type-h3">General Manager&apos;s Co-Pilot</h1>
+    <div
+      className="flex h-dvh flex-col overflow-hidden bg-transparent text-foreground"
+      style={{ background: "rgb(var(--surface) / 0.96)" }}
+    >
+      <div className="dp-shell">
+        <aside className="dp-rail hidden md:flex" aria-label="Primary navigation">
+          <div className="dp-rail-brand">
+            <BrandMark size={34} />
           </div>
-        </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          {factoryDate ? (
-            <Badge variant="accent" size="sm" className="max-w-[11rem] truncate sm:max-w-none" title={`Factory date ${factoryDate}`}>
-              Factory · {formatFactoryDateLabel(factoryDate)}
-            </Badge>
-          ) : (
-            <Badge variant="neutral" size="sm" className="hidden sm:inline-flex">
-              Factory date…
-            </Badge>
+          <div className="dp-rail-group">
+            <RailButton icon="chat" label="Ask AI" active={activeView === "copilot"} onClick={() => handleNav("copilot")} />
+            <RailButton icon="grid" label="Overview" active={activeView === "overview"} onClick={() => handleNav("overview")} />
+            <RailButton icon="bell" label="Alerts" active={activeView === "alerts"} badge={alertCount} onClick={() => handleNav("alerts")} />
+          </div>
+
+          {isAdmin && (
+            <>
+              <div className="dp-rail-divider" role="presentation" />
+              <div className="dp-rail-group">
+                <RailButton icon="database" label="Data Management" active={activeView === "data"} onClick={() => handleNav("data")} />
+                <RailButton icon="users" label="User Management" active={activeView === "users"} onClick={() => handleNav("users")} />
+              </div>
+            </>
           )}
-          {alertCount > 0 && (
+
+          <div className="dp-rail-spacer" />
+
+          <div className="dp-rail-group">
+            <RailButton icon="settings" label="Settings" active={activeView === "settings"} onClick={() => handleNav("settings")} />
             <button
               type="button"
-              onClick={() => setAlertsDrawerOpen(true)}
-              className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-danger/30 bg-dangerSoft px-2.5 py-1 type-caption font-medium text-danger md:hidden"
-              aria-label={`${alertCount} alerts`}
+              onClick={logout}
+              aria-label="Log out"
+              className="dp-rail-btn focus-ring"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-danger" />
-              {alertCount}
+              <Icon name="logout" size={18} />
+              <span className="dp-rail-tip">Log out</span>
             </button>
-          )}
-          <div className="hidden items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 md:flex">
-            <span
-              className={`h-2 w-2 rounded-full ${
-                healthError ? "bg-danger" : health?.ok ? "bg-success" : "bg-muted"
-              }`}
-            />
-            <span className="type-caption text-muted">
-              {healthError ? "API offline" : health ? `API ${health.ok ? "ready" : "down"}` : "Checking API…"}
-            </span>
-          </div>
-        </div>
-      </header>
-
-      <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-72 shrink-0 flex-col border-r border-line bg-surface/60 md:flex">
-          <nav className="shrink-0 space-y-1 p-3">
-            {navItems.map(navButton)}
-          </nav>
-
-          <AlertsRail watches={watches} loading={watchesLoading} onWatchChanged={handleWatchChanged} />
-
-          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-line px-3 py-2">
-            <p className="type-overline text-muted">Conversations</p>
-            <button
-              type="button"
-              disabled={conversationLoading}
-              onClick={() => handleNewConversation()}
-              className="focus-ring rounded-control border border-line px-2 py-1 type-caption font-medium text-foreground transition-colors hover:border-accentText hover:text-accentText disabled:opacity-50"
-            >
-              New
-            </button>
-          </div>
-
-          <div id="conversation-history" className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
-            <ConversationList {...conversationListProps} scrollable={false} />
-            {conversationError && (
-              <p className="mt-2 rounded-card border border-danger/30 bg-dangerSoft px-3 py-2 type-sm text-danger">
-                {conversationError}
-              </p>
-            )}
+            <div className="dp-rail-avatar">
+              <Avatar initials={(user?.username || "U").slice(0, 2).toUpperCase()} size={32} />
+            </div>
           </div>
         </aside>
 
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          {activeView === "copilot" && (
-            <>
-              {liveConversationIds.length > 0 ? (
-                <div className="relative min-h-0 flex-1 overflow-hidden">
-                  {liveConversationIds.map((conversationId) => (
-                    <div
-                      key={conversationId}
-                      className={conversationId === activeConversationId ? "absolute inset-0" : "hidden"}
-                    >
-                      <ChatPanel
-                        conversationId={conversationId}
-                        initialMessages={messageSeeds[conversationId] || []}
-                        active={conversationId === activeConversationId}
-                        llmReady={Boolean(health?.llm_configured)}
-                        onBusyChange={setConversationBusy}
-                        onConversationUpdated={handleConversationUpdated}
-                        onQuestionSubmitted={noteQuestionSubmitted}
-                        onQuestionFailed={noteQuestionFailed}
-                        onBoardPending={beginWatchSave}
-                        onBoardFailed={abandonWatchSave}
-                        onBoardSaved={finishWatchSave}
-                        onBoardChanged={handleWatchChanged}
-                        onOpenConversations={() => setHistoryDrawerOpen(true)}
-                        onNewConversation={handleNewConversation}
-                        onDraftChange={setComposerDraft}
-                        notice={conversationId === activeConversationId ? askAiNotice : ""}
-                        onDismissNotice={() => setAskAiNotice("")}
-                      />
-                    </div>
-                  ))}
+        {hasContext && (
+          <aside
+            className={`dp-context hidden md:flex ${contextCollapsed ? "is-collapsed" : ""}`}
+            aria-hidden={contextCollapsed}
+            aria-label="Context panel"
+          >
+            <div className="dp-context-inner">
+              <div className="dp-context-head">
+                <div className="min-w-0">
+                  <p className="dp-context-title truncate">Conversations</p>
+                  <p className="dp-context-sub truncate">{conversations.length} saved</p>
                 </div>
-              ) : (
-                <div className="flex min-h-0 flex-1 items-center justify-center p-4">
-                  <Card>
-                    <LoadingState
-                      label={
-                        conversationLoading
-                          ? "Loading conversation history…"
-                          : "Conversation history is unavailable."
-                      }
-                    />
-                  </Card>
+                <button
+                  type="button"
+                  onClick={toggleContextPanel}
+                  className="dp-icon-btn h-8 w-8 focus-ring"
+                  aria-label="Collapse context panel"
+                  title="Collapse panel"
+                >
+                  <Icon name="panelLeft" size={14} />
+                </button>
+              </div>
+              <div className="dp-context-scroll">
+                <button
+                  type="button"
+                  disabled={conversationLoading}
+                  onClick={() => handleNewConversation()}
+                  className="dp-btn dp-btn-primary focus-ring h-9 w-full disabled:opacity-50"
+                >
+                  <Icon name="plus" size={13} />
+                  New conversation
+                </button>
+
+                <div id="conversation-history" className="dp-context-section mt-3">
+                  <ConversationList {...conversationListProps} scrollable={false} />
+                  {conversationError && (
+                    <p className="dp-empty mt-2">{conversationError}</p>
+                  )}
                 </div>
+              </div>
+            </div>
+          </aside>
+        )}
+
+        <main className="dp-main min-h-0 min-w-0 flex-1">
+          <header className="dp-mobile-top md:hidden">
+            <button
+              type="button"
+              onClick={() => setHistoryDrawerOpen(true)}
+              className="dp-icon-btn h-9 w-9 focus-ring justify-self-start"
+              aria-label="Open conversation history"
+            >
+              <Icon name="history" size={16} />
+            </button>
+            <div className="dp-mobile-brand">
+              <BrandMark size={24} />
+              <span className="dp-mobile-brand-name">SweaterCo</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAlertsDrawerOpen(true)}
+              className="dp-icon-btn relative h-9 w-9 focus-ring justify-self-end"
+              aria-label={`Alerts${alertCount ? ` · ${alertCount}` : ""}`}
+            >
+              <Icon name="bell" size={16} />
+              {alertCount > 0 && (
+                <span className="absolute right-0.5 top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-danger px-0.5 text-[8px] font-bold text-white">
+                  {alertCount}
+                </span>
               )}
-            </>
+            </button>
+          </header>
+
+          <div className="dp-main-topbar hidden md:flex">
+            <div className="dp-crumb">
+              {hasContext && contextCollapsed && (
+                <button
+                  type="button"
+                  onClick={toggleContextPanel}
+                  className="dp-icon-btn h-8 w-8 focus-ring"
+                  aria-label="Expand context panel"
+                  title="Expand panel"
+                >
+                  <Icon name="panelRight" size={14} />
+                </button>
+              )}
+              <div className="min-w-0">
+                <p className="dp-crumb-title truncate">{viewMeta.title}</p>
+                <p className="dp-crumb-sub truncate">{viewMeta.subtitle}</p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {factoryDate && (
+                <span className="dp-chip hidden lg:inline-flex" title={`Factory date ${factoryDate}`}>
+                  <Icon name="clock" size={11} />
+                  {formatFactoryDateLabel(factoryDate)}
+                </span>
+              )}
+              <span className="dp-status">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    healthError ? "bg-danger" : health?.ok ? "bg-success" : "bg-muted"
+                  }`}
+                />
+                {healthError ? "API offline" : health ? `API ${health.ok ? "ready" : "down"}` : "Checking API…"}
+              </span>
+              {alertCount > 0 && activeView !== "alerts" && (
+                <button
+                  type="button"
+                  onClick={() => handleNav("alerts")}
+                  className="dp-pill focus-ring hidden sm:inline-flex"
+                  title={`${alertCount} alerts`}
+                >
+                  <Icon name="bell" size={12} />
+                  {alertCount}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {activeView === "copilot" && (
+            isLive ? (
+              <div className="relative min-h-0 flex-1 overflow-hidden">
+                {liveConversationIds.map((conversationId) => (
+                  <div
+                    key={conversationId}
+                    className={conversationId === activeConversationId ? "absolute inset-0" : "hidden"}
+                  >
+                    <ChatPanel
+                      conversationId={conversationId}
+                      initialMessages={messageSeeds[conversationId] || []}
+                      active={conversationId === activeConversationId}
+                      llmReady={Boolean(health?.llm_configured)}
+                      onBusyChange={setConversationBusy}
+                      onConversationUpdated={handleConversationUpdated}
+                      onQuestionSubmitted={noteQuestionSubmitted}
+                      onQuestionFailed={noteQuestionFailed}
+                      onBoardPending={beginWatchSave}
+                      onBoardFailed={abandonWatchSave}
+                      onBoardSaved={finishWatchSave}
+                      onBoardChanged={handleWatchChanged}
+                      onOpenConversations={() => setHistoryDrawerOpen(true)}
+                      onNewConversation={handleNewConversation}
+                      onDraftChange={setComposerDraft}
+                      notice={conversationId === activeConversationId ? askAiNotice : ""}
+                      onDismissNotice={() => setAskAiNotice("")}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex min-h-0 flex-1 items-center justify-center p-4">
+                <Card>
+                  <LoadingState
+                    label={
+                      conversationLoading
+                        ? "Loading conversation history…"
+                        : "Conversation history is unavailable."
+                    }
+                  />
+                </Card>
+              </div>
+            )
+          )}
+
+          {activeView === "alerts" && (
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+              <div className="mx-auto max-w-4xl">
+                <AlertsRail
+                  watches={watches}
+                  loading={watchesLoading}
+                  persistHistory
+                  onWatchChanged={handleWatchChanged}
+                />
+              </div>
+            </div>
           )}
 
           {activeView === "overview" && (
@@ -907,7 +951,7 @@ export default function Home() {
           )}
 
           {activeView === "data" && isAdmin && (
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 md:p-6">
               <DataManagement />
             </div>
           )}
@@ -953,7 +997,7 @@ export default function Home() {
 
                 <section className="rounded-card border border-line bg-surface p-5 shadow-xs">
                   <h3 className="type-h3 text-foreground">Appearance</h3>
-                  <p className="mt-1 type-sm text-muted">Choose light, dark or system, and an accent colour. Settings persist across reloads.</p>
+                  <p className="mt-1 type-sm text-muted">Pick one of seven complete colour themes — Ocean, Lavender, Sage, Rose, Amber, Slate or Black. Settings persist across reloads.</p>
                   <div className="mt-4">
                     <ThemeSwitcher />
                   </div>
@@ -993,7 +1037,7 @@ export default function Home() {
                     onClick={logout}
                     className="focus-ring mt-4 inline-flex items-center gap-2 rounded-control border border-line bg-surface px-4 py-2 type-sm font-medium text-foreground transition-colors hover:bg-surfaceMuted"
                   >
-                    <IconLogout />
+                    <Icon name="logout" size={16} />
                     Log out
                   </button>
                 </section>
@@ -1043,61 +1087,42 @@ export default function Home() {
               </div>
             </div>
           )}
+
+          <nav className="dp-mobile-nav md:hidden" aria-label="Primary navigation">
+            <button
+              type="button"
+              onClick={() => handleNav("overview")}
+              className={`dp-mobile-nav-item ${activeView === "overview" ? "is-active" : ""}`}
+            >
+              <span className="dp-mobile-nav-icon">
+                <Icon name="grid" size={18} />
+              </span>
+              Overview
+            </button>
+            <div className="dp-mobile-nav-center">
+              <button
+                type="button"
+                onClick={() => handleNav("copilot")}
+                className="dp-mobile-fab-btn focus-ring"
+                aria-label="Ask AI"
+              >
+                <Icon name="spark" size={22} />
+              </button>
+              <span className="dp-mobile-fab-label">Ask AI</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleNav("settings")}
+              className={`dp-mobile-nav-item ${activeView === "settings" ? "is-active" : ""}`}
+            >
+              <span className="dp-mobile-nav-icon">
+                <Icon name="settings" size={18} />
+              </span>
+              Settings
+            </button>
+          </nav>
         </main>
       </div>
-
-      <nav
-        className="flex shrink-0 items-center justify-around border-t border-line bg-surface/95 px-2 pt-1 backdrop-blur-md md:hidden"
-        style={{ paddingBottom: "max(0.25rem, env(safe-area-inset-bottom))" }}
-      >
-        <button
-          type="button"
-          onClick={() => handleNav("overview")}
-          className={`focus-ring flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-control px-1 py-1 type-caption font-medium transition-colors ${
-            activeView === "overview" ? "text-accent" : "text-muted"
-          }`}
-        >
-          <IconOverview />
-          <span className="truncate">Overview</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => handleNav("copilot")}
-          className={`focus-ring flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-control px-1 py-1 type-caption font-medium transition-colors ${
-            activeView === "copilot" ? "text-accent" : "text-muted"
-          }`}
-          aria-label="Ask AI"
-        >
-          <IconChat />
-          <span className="truncate">Ask AI</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setAlertsDrawerOpen(true)}
-          className={`focus-ring relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-control px-1 py-1 type-caption font-medium transition-colors ${
-            alertsDrawerOpen ? "text-accent" : "text-muted"
-          }`}
-          aria-label={alertCount > 0 ? `Alerts, ${alertCount}` : "Alerts"}
-        >
-          <IconAlerts />
-          <span className="truncate">Alerts</span>
-          {alertCount > 0 && (
-            <span className="absolute right-3 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-accentContrast">
-              {alertCount}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => handleNav("settings")}
-          className={`focus-ring flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-control px-1 py-1 type-caption font-medium transition-colors ${
-            activeView === "settings" ? "text-accent" : "text-muted"
-          }`}
-        >
-          <IconSettings />
-          <span className="truncate">Settings</span>
-        </button>
-      </nav>
 
       {historyDrawerOpen && (
         <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Conversation history">
@@ -1124,14 +1149,15 @@ export default function Home() {
                 Close
               </button>
             </div>
-            <div className="mb-2 shrink-0 border-b border-line pb-2">
-              <AlertsRail
-                watches={watches}
-                loading={watchesLoading}
-                compact
-                onWatchChanged={handleWatchChanged}
-              />
-            </div>
+            <button
+              type="button"
+              disabled={conversationLoading}
+              onClick={() => handleNewConversation()}
+              className="dp-btn dp-btn-primary focus-ring mb-2 h-9 w-full shrink-0 disabled:opacity-50"
+            >
+              <Icon name="plus" size={13} />
+              New conversation
+            </button>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-1">
               <ConversationList {...conversationListProps} scrollable={false} />
               {conversationError && (

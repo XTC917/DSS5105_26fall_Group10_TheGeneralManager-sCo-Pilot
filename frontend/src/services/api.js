@@ -178,6 +178,7 @@ export async function sendChatStream(
       clarification_reply: clarificationReply,
       original_question: originalQuestion,
     }),
+    signal: handlers.signal,
   });
   if (res.status === 401) {
     notifyUnauthorized();
