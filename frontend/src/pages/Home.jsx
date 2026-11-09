@@ -878,12 +878,23 @@ export default function Home() {
                 />
                 {healthError ? "API offline" : health ? `API ${health.ok ? "ready" : "down"}` : "Checking API…"}
               </span>
-              <AlertsRail
-                variant="bell"
-                watches={watches}
-                loading={watchesLoading}
-                onWatchChanged={handleWatchChanged}
-              />
+              <button
+                type="button"
+                onClick={() => handleNav("alerts")}
+                aria-label={`Alerts${alertCount ? ` · ${alertCount}` : ""}`}
+                title="Alerts & watches"
+                aria-current={activeView === "alerts" ? "page" : undefined}
+                className={`focus-ring relative inline-flex h-9 w-9 items-center justify-center rounded-control border border-line bg-surface transition-colors hover:bg-surfaceMuted hover:text-accentText ${
+                  activeView === "alerts" ? "text-accentText" : "text-muted"
+                }`}
+              >
+                <Icon name="bell" size={16} />
+                {alertCount > 0 && (
+                  <span className="absolute right-0 top-0 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-danger px-0.5 text-[8px] font-bold text-white">
+                    {alertCount}
+                  </span>
+                )}
+              </button>
             </div>
           </div>
 
@@ -934,13 +945,21 @@ export default function Home() {
 
           {activeView === "alerts" && (
             <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
-              <div className="mx-auto max-w-4xl">
-                <AlertsRail
-                  watches={watches}
-                  loading={watchesLoading}
-                  persistHistory
-                  onWatchChanged={handleWatchChanged}
-                />
+              <div className="mx-auto max-w-3xl space-y-4">
+                <div>
+                  <p className="type-overline text-accentText">{viewMeta.eyebrow}</p>
+                  <h2 className="type-h2 text-foreground">{viewMeta.title}</h2>
+                  <p className="type-sm text-muted">{viewMeta.subtitle}</p>
+                </div>
+                <div className="rounded-card border border-line bg-surface p-3 shadow-xs">
+                  <AlertsRail
+                    watches={watches}
+                    loading={watchesLoading}
+                    defaultExpanded
+                    persistHistory
+                    onWatchChanged={handleWatchChanged}
+                  />
+                </div>
               </div>
             </div>
           )}

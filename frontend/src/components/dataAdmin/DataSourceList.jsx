@@ -29,6 +29,7 @@ function useIsMobile(query = "(max-width: 767px)") {
 export default function DataSourceList() {
   const [dataSources, setDataSources] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [currentDataSource, setCurrentDataSource] = useState(null);
   const [dataPreview, setDataPreview] = useState(null);
@@ -43,12 +44,17 @@ export default function DataSourceList() {
 
   const fetchData = async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const res = await getDataSources();
       const raw = res?.data;
       setDataSources(Array.isArray(raw) ? raw : []);
     } catch (error) {
       setDataSources([]);
+      const status = error?.response?.status;
+      const detail = error?.response?.data?.detail || error?.message || "Failed to load data sources";
+      const text = typeof detail === "string" ? detail : JSON.stringify(detail);
+      setLoadError(status ? `HTTP ${status}: ${text}` : text);
       message.error("Failed to load data sources");
     } finally {
       setLoading(false);
@@ -307,6 +313,13 @@ export default function DataSourceList() {
         <h2 className="text-base font-semibold text-ink">Data Source Management</h2>
         <Button icon={<ReloadOutlined />} onClick={fetchData}>Refresh</Button>
       </div>
+
+      {loadError && (
+        <div className="mb-3 rounded-card border border-danger/30 bg-dangerSoft px-3 py-2 text-sm text-danger" role="alert">
+          Failed to load data sources — {loadError}
+          <Button size="small" className="ml-2" onClick={fetchData}>Retry</Button>
+        </div>
+      )}
 
       {isMobile ? (
         renderMobileCards()
