@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { partitionWatches } from "../services/watchDisplay.js";
 
 const SEEN_PENDING_KEY = "sweaterco:seen-pending-users";
@@ -34,11 +35,15 @@ function BellIcon() {
  * Top-right notification bell.
  *
  * A single bell opens a small menu with two destinations:
- *   - User requests  -> User Management (pending approvals)
+ *   - User requests   -> User Management (pending approvals)
  *   - Alerts & watches -> Alerts page
  *
  * The red badge counts *unseen* items and shrinks as soon as the user opens a
  * category (the currently-visible ids are remembered in localStorage).
+ *
+ * The menu is rendered in a portal to document.body with position:fixed so it
+ * always paints above page content, regardless of any parent stacking context
+ * or overflow clipping.
  */
 export default function NotificationBell({
   pendingUsers = [],
@@ -50,7 +55,9 @@ export default function NotificationBell({
   const [open, setOpen] = useState(false);
   const [seenPending, setSeenPending] = useState(() => readIds(SEEN_PENDING_KEY));
   const [seenAlerts, setSeenAlerts] = useState(() => readIds(SEEN_ALERTS_KEY));
-  const rootRef = useRef(null);
+  const [pos, setPos] = useState({ top: 0, right: 12 });
+  const buttonRef = useRef(null);
+  const panelRef = useRef(null);
   const panelId = useId();
 
   const { triggered } = partitionWatches(watches);
@@ -60,19 +67,39 @@ export default function NotificationBell({
   const alertUnread = alertIds.filter((id) => !seenAlerts.has(id)).length;
   const totalUnread = pendingUnread + alertUnread;
 
+  function updatePosition() {
+    const el = buttonRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setPos({
+      top: Math.round(rect.bottom + 8),
+      right: Math.round(Math.max(12, window.innerWidth - rect.right)),
+    });
+  }
+
   useEffect(() => {
     if (!open) return undefined;
+    updatePosition();
     function onDown(event) {
-      if (!rootRef.current?.contains(event.target)) setOpen(false);
+      if (buttonRef.current?.contains(event.target)) return;
+      if (panelRef.current?.contains(event.target)) return;
+      setOpen(false);
     }
     function onKey(event) {
       if (event.key === "Escape") setOpen(false);
     }
+    function onReflow() {
+      updatePosition();
+    }
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onReflow);
+    window.addEventListener("scroll", onReflow, true);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onReflow);
+      window.removeEventListener("scroll", onReflow, true);
     };
   }, [open]);
 
@@ -102,34 +129,20 @@ export default function NotificationBell({
     onOpenAlerts?.();
   }
 
-  return (
-    <div ref={rootRef} className={`relative ${className}`}>
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-controls={panelId}
-        aria-label={`Notifications${totalUnread ? ` · ${totalUnread} new` : ""}`}
-        title="Notifications"
-        className="focus-ring relative inline-flex h-9 w-9 items-center justify-center rounded-control border border-line bg-surface text-muted transition-colors hover:bg-surfaceMuted hover:text-accentText"
-      >
-        <BellIcon />
-        {totalUnread > 0 && (
-          <span className="absolute right-0 top-0 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-danger px-0.5 text-[8px] font-bold text-white">
-            {totalUnread > 99 ? "99+" : totalUnread}
-          </span>
-        )}
-      </button>
-
-      {open && (
+  const panel = open
+    ? createPortal(
         <div
+          ref={panelRef}
           id={panelId}
-          className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-72 max-w-[calc(100vw-1.5rem)] rounded-card border border-line bg-surface p-2 shadow-float"
+          role="menu"
+          style={{ position: "fixed", top: pos.top, right: pos.right, zIndex: 9999 }}
+          className="w-72 max-w-[calc(100vw-1.5rem)] rounded-card border border-line bg-surface p-2 shadow-float"
         >
           <p className="px-2 py-1 type-overline text-subtle">Notifications</p>
 
           <button
             type="button"
+            role="menuitem"
             onClick={openPending}
             className="focus-ring flex w-full items-start gap-2 rounded-control px-2 py-2 text-left transition-colors hover:bg-surfaceMuted"
           >
@@ -151,6 +164,7 @@ export default function NotificationBell({
 
           <button
             type="button"
+            role="menuitem"
             onClick={openAlerts}
             className="focus-ring mt-1 flex w-full items-start gap-2 rounded-control px-2 py-2 text-left transition-colors hover:bg-surfaceMuted"
           >
@@ -169,8 +183,31 @@ export default function NotificationBell({
               </span>
             </span>
           </button>
-        </div>
-      )}
+        </div>,
+        document.body,
+      )
+    : null;
+
+  return (
+    <div className={`relative ${className}`}>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-label={`Notifications${totalUnread ? ` · ${totalUnread} new` : ""}`}
+        title="Notifications"
+        className="focus-ring relative inline-flex h-9 w-9 items-center justify-center rounded-control border border-line bg-surface text-muted transition-colors hover:bg-surfaceMuted hover:text-accentText"
+      >
+        <BellIcon />
+        {totalUnread > 0 && (
+          <span className="absolute right-0 top-0 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-danger px-0.5 text-[8px] font-bold text-white">
+            {totalUnread > 99 ? "99+" : totalUnread}
+          </span>
+        )}
+      </button>
+      {panel}
     </div>
   );
 }
