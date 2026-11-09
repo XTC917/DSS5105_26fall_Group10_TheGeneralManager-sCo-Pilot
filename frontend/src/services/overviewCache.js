@@ -7,7 +7,7 @@ import { fetchBriefing, fetchDiscovery, fetchWatches } from "./api.js";
 let cache = {
   briefing: null,
   discovery: null,
-  watches: { fired: [], active: [], cancelled: [] },
+  watches: { fired: [], active: [], cancelled: [], finished: [] },
   fetchedAt: 0,
   error: "",
 };
@@ -46,6 +46,7 @@ async function fetchAll(gen) {
       fired: board.fired || [],
       active: board.active || [],
       cancelled: board.cancelled || [],
+      finished: board.finished || [],
     },
     fetchedAt: Date.now(),
     error: "",

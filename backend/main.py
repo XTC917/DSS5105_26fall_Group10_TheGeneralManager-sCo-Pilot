@@ -74,7 +74,7 @@ from backend.routers.data_admin import (
     query_router,
     upload_router,
 )
-from backend.services.watches import evaluate_and_list
+from backend.services.watches import WatchError, evaluate_and_list, finish_watch_row, watch_summary
 from backend.services.why import explain_why
 from backend.tools.registry import MVP_TOOLS
 from backend.routers.auth import router as auth_router, users_router
@@ -508,6 +508,24 @@ def watches(as_of: str | None = None, user: CurrentUser = Depends(get_current_us
             return evaluate_and_list(day)
     finally:
         set_current_user(None)
+
+
+@app.post("/api/watches/{watch_id}/finish")
+def finish_watch(watch_id: int, user: CurrentUser = Depends(get_current_user)) -> dict:
+    """Mark a triggered (FIRED) watch as DONE (finished by the manager).
+
+    Pure status change: no LLM, no email, no deletion. Scoped to the caller's
+    own watches via the request context used by get_watch/finish_watch_row.
+    """
+    get_db()
+    set_current_user(user)
+    try:
+        updated = finish_watch_row(watch_id)
+    except WatchError as exc:
+        raise HTTPException(status_code=400, detail=exc.message) from exc
+    finally:
+        set_current_user(None)
+    return {"ok": True, "watch": watch_summary(updated)}
 
 
 class StoredActionOffer(BaseModel):

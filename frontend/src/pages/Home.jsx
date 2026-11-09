@@ -3,6 +3,8 @@ import Sidebar from "../components/Sidebar.jsx";
 import ChatPanel from "../components/ChatPanel.jsx";
 import ConversationList from "../components/ConversationList.jsx";
 import AlertsRail from "../components/AlertsRail.jsx";
+import AlertsPage from "../components/AlertsPage.jsx";
+import NotificationBell from "../components/NotificationBell.jsx";
 import { ErrorBoundary } from "../components/ui/ErrorBoundary.jsx";
 import DataManagement from "./DataManagement.jsx";
 import UserManagement from "./UserManagement.jsx";
@@ -18,6 +20,7 @@ import {
 } from "../services/conversationsApi.js";
 import { invalidateOverviewCache, loadOverviewData, peekOverviewCache } from "../services/overviewCache.js";
 import { friendlyAuthError } from "../services/authErrors.js";
+import { listPendingUsers } from "../services/usersApi.js";
 import {
   Button,
   Card,
@@ -170,6 +173,8 @@ export default function Home() {
   const [dateNotice, setDateNotice] = useState("");
   const [watches, setWatches] = useState(() => peekOverviewCache()?.watches || { fired: [], active: [], cancelled: [] });
   const [watchesLoading, setWatchesLoading] = useState(false);
+  const [pendingUsers, setPendingUsers] = useState([]);
+  const [usersReopenNonce, setUsersReopenNonce] = useState(0);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const [alertsDrawerOpen, setAlertsDrawerOpen] = useState(false);
   const [contextCollapsed, setContextCollapsed] = useState(() => {
@@ -241,6 +246,24 @@ export default function Home() {
       cancelled = true;
     };
   }, [boardTick]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setPendingUsers([]);
+      return undefined;
+    }
+    let cancelled = false;
+    listPendingUsers()
+      .then((res) => {
+        if (!cancelled) setPendingUsers(Array.isArray(res?.items) ? res.items : []);
+      })
+      .catch(() => {
+        if (!cancelled) setPendingUsers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, boardTick]);
 
   useEffect(() => {
     let cancelled = false;
@@ -703,7 +726,6 @@ export default function Home() {
     setActiveView(key);
   }
 
-  const alertCount = (watches.fired?.length || 0) + (watches.active?.length || 0);
   const liveConversationIds = [];
   if (activeConversationId) liveConversationIds.push(activeConversationId);
   busyIds.forEach((conversationId) => {
@@ -830,19 +852,17 @@ export default function Home() {
               <BrandMark size={24} />
               <span className="dp-mobile-brand-name">SweaterCo</span>
             </div>
-            <button
-              type="button"
-              onClick={() => setAlertsDrawerOpen(true)}
-              className="dp-icon-btn relative h-9 w-9 focus-ring justify-self-end"
-              aria-label={`Alerts${alertCount ? ` · ${alertCount}` : ""}`}
-            >
-              <Icon name="bell" size={16} />
-              {alertCount > 0 && (
-                <span className="absolute right-0.5 top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-danger px-0.5 text-[8px] font-bold text-white">
-                  {alertCount}
-                </span>
-              )}
-            </button>
+            <div className="justify-self-end">
+              <NotificationBell
+                pendingUsers={pendingUsers}
+                watches={watches}
+                onOpenPending={() => {
+                  setUsersReopenNonce((n) => n + 1);
+                  handleNav("users");
+                }}
+                onOpenAlerts={() => handleNav("alerts")}
+              />
+            </div>
           </header>
 
           <div className="dp-main-topbar hidden md:flex">
@@ -878,23 +898,12 @@ export default function Home() {
                 />
                 {healthError ? "API offline" : health ? `API ${health.ok ? "ready" : "down"}` : "Checking API…"}
               </span>
-              <button
-                type="button"
-                onClick={() => handleNav("alerts")}
-                aria-label={`Alerts${alertCount ? ` · ${alertCount}` : ""}`}
-                title="Alerts & watches"
-                aria-current={activeView === "alerts" ? "page" : undefined}
-                className={`focus-ring relative inline-flex h-9 w-9 items-center justify-center rounded-control border border-line bg-surface transition-colors hover:bg-surfaceMuted hover:text-accentText ${
-                  activeView === "alerts" ? "text-accentText" : "text-muted"
-                }`}
-              >
-                <Icon name="bell" size={16} />
-                {alertCount > 0 && (
-                  <span className="absolute right-0 top-0 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-danger px-0.5 text-[8px] font-bold text-white">
-                    {alertCount}
-                  </span>
-                )}
-              </button>
+              <NotificationBell
+                pendingUsers={pendingUsers}
+                watches={watches}
+                onOpenPending={() => handleNav("users")}
+                onOpenAlerts={() => handleNav("alerts")}
+              />
             </div>
           </div>
 
@@ -952,13 +961,13 @@ export default function Home() {
                   <p className="type-sm text-muted">{viewMeta.subtitle}</p>
                 </div>
                 <div className="rounded-card border border-line bg-surface p-3 shadow-xs">
-                  <AlertsRail
-                    watches={watches}
-                    loading={watchesLoading}
-                    defaultExpanded
-                    persistHistory
-                    onWatchChanged={handleWatchChanged}
-                  />
+                  <ErrorBoundary>
+                    <AlertsPage
+                      watches={watches}
+                      loading={watchesLoading}
+                      onWatchChanged={handleWatchChanged}
+                    />
+                  </ErrorBoundary>
                 </div>
               </div>
             </div>
@@ -988,7 +997,7 @@ export default function Home() {
           {activeView === "users" && isAdmin && (
             <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
               <ErrorBoundary>
-                <UserManagement />
+                <UserManagement key={`users-${usersReopenNonce}`} />
               </ErrorBoundary>
             </div>
           )}

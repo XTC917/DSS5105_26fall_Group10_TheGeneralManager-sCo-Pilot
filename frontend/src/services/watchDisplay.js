@@ -19,5 +19,6 @@ export function partitionWatches(watches = {}) {
     watching,
     done,
     cancelled: watches.cancelled || [],
+    finished: watches.finished || [],
   };
 }

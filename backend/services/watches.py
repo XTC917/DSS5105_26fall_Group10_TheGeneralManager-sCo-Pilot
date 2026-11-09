@@ -31,6 +31,7 @@ CONDITION_INACTIVE = "ORDER_INACTIVE_BY_DATE"
 STATUS_ACTIVE = "ACTIVE"
 STATUS_FIRED = "FIRED"
 STATUS_CANCELLED = "CANCELLED"
+STATUS_DONE = "DONE"  # FINISHED: a triggered watch the manager marked handled
 NOTIFY_LOCAL = "local"
 EVENT_FIRED = "fired"
 DELIVERY_LOCAL = "local_recorded"
@@ -393,6 +394,37 @@ def cancel_watch_row(watch_id: int) -> dict[str, Any]:
     return updated
 
 
+def finish_watch_row(watch_id: int) -> dict[str, Any]:
+    """Mark a FIRED watch as DONE (finished/handled). Keeps it in history; never deletes.
+
+    Only triggered (FIRED) watches can be finished. ACTIVE watches should be
+    cancelled instead; CANCELLED/DONE are already closed.
+    """
+    watch = get_watch(int(watch_id))
+    if watch is None:
+        raise WatchError("NOT_FOUND", "No standing watch with that id.")
+    if watch["status"] == STATUS_DONE:
+        raise WatchError("INVALID_INPUT", "That watch is already finished.")
+    if watch["status"] != STATUS_FIRED:
+        raise WatchError(
+            "INVALID_INPUT",
+            f"Only triggered watches can be finished; this one is {watch['status']}.",
+        )
+    with connect(admin=True) as conn:
+        cur = conn.execute(
+            f"""
+            UPDATE {COPILOT_SCHEMA}.watches SET status = %s
+            WHERE id = %s AND status = %s
+            """,
+            (STATUS_DONE, int(watch_id), STATUS_FIRED),
+        )
+        if cur.rowcount != 1:
+            raise WatchError("INVALID_INPUT", "Watch status changed; refresh and try again.")
+    updated = get_watch(int(watch_id))
+    assert updated is not None
+    return updated
+
+
 def _serialize_active(watch: dict[str, Any]) -> dict[str, Any]:
     params = watch.get("params") or {}
     return {
@@ -584,9 +616,13 @@ def evaluate_and_list(
     cancelled = [
         watch_summary(watch) for watch in watches if watch['status'] == STATUS_CANCELLED
     ]
+    finished = [
+        watch_summary(watch) for watch in watches if watch['status'] == STATUS_DONE
+    ]
     return {
         "as_of": as_of.isoformat(),
         "fired": fired,
         "active": active,
         "cancelled": cancelled,
+        "finished": finished,
     }

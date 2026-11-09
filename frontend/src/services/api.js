@@ -82,6 +82,23 @@ export async function confirmAction(action) {
   return body;
 }
 
+export async function finishWatch(watchId) {
+  const res = await fetch(`/api/watches/${encodeURIComponent(watchId)}/finish`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (res.status === 401) {
+    notifyUnauthorized();
+    throw new Error("Session expired. Please log in again.");
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = body.detail || res.statusText;
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  return body;
+}
+
 export async function declineAction(action) {
   const res = await fetch("/api/actions/decline", {
     method: "POST",

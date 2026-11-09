@@ -8,7 +8,7 @@ function fmtTime(value) {
   return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString();
 }
 
-export default function UserManagement() {
+export default function UserManagement({ initialTab = "new" }) {
   const [pending, setPending] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,15 +17,15 @@ export default function UserManagement() {
   const [confirmReject, setConfirmReject] = useState(null);
   const [confirmDisable, setConfirmDisable] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const [tab, setTab] = useState(initialTab);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     const problems = [];
 
-    // Load all users (drives Active / Other lists) and pending approvals
-    // independently: if one request fails, the other still renders instead of
-    // blanking the whole page.
+    // Load all users (Active / Other) and pending approvals independently so a
+    // single failed request never blanks the whole page.
     try {
       const all = await listAllUsers();
       const items = Array.isArray(all?.items) ? all.items : [];
@@ -106,85 +106,108 @@ export default function UserManagement() {
         <h2 className="text-sm font-semibold text-ink">User Management</h2>
         <p className="text-xs text-ink/55">Approve employee registrations and manage account access.</p>
       </div>
+
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={() => setTab("new")}
+          className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+            tab === "new" ? "border-ink bg-ink text-paper" : "border-ink/15 text-ink/70 hover:border-brass"
+          }`}
+        >
+          New requests{pending.length > 0 ? ` (${pending.length})` : ""}
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("manage")}
+          className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+            tab === "manage" ? "border-ink bg-ink text-paper" : "border-ink/15 text-ink/70 hover:border-brass"
+          }`}
+        >
+          Existing users{active.length > 0 ? ` (${active.length})` : ""}
+        </button>
+      </div>
+
       {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
       {notice && <p className="mt-3 text-xs text-green-700">{notice}</p>}
+
       {loading ? (
         <p className="mt-4 text-sm text-ink/60">Loading users…</p>
+      ) : tab === "new" ? (
+        <div className="mt-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink/60">
+            Pending Approvals ({pending.length})
+          </h3>
+          {pending.length === 0 ? (
+            <p className="mt-2 text-sm text-ink/55">No pending registrations.</p>
+          ) : (
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full min-w-[640px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-ink/10 text-xs text-ink/55">
+                    <th className="py-2 pr-3 font-medium">Username</th>
+                    <th className="py-2 pr-3 font-medium">Email</th>
+                    <th className="py-2 pr-3 font-medium">Requested</th>
+                    <th className="py-2 pr-3 font-medium">Status</th>
+                    <th className="py-2 font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pending.map((u) => (
+                    <tr key={u.id} className="border-b border-ink/5">
+                      <td className="py-2 pr-3 font-medium text-ink">{u.username}</td>
+                      <td className="py-2 pr-3 text-ink/70">{u.email || "—"}</td>
+                      <td className="py-2 pr-3 text-ink/70">{fmtTime(u.created_at)}</td>
+                      <td className="py-2 pr-3 text-ink/70">{u.status}</td>
+                      <td className="py-2">
+                        {confirmReject === u.id ? (
+                          <span className="inline-flex items-center gap-2 text-xs">
+                            <span className="text-ink/70">Reject {u.username}?</span>
+                            <button
+                              type="button"
+                              disabled={busyId === u.id}
+                              onClick={() => handleReject(u)}
+                              className="rounded-md bg-red-600 px-2.5 py-1 font-medium text-white disabled:opacity-60"
+                            >
+                              Confirm reject
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmReject(null)}
+                              className="rounded-md border border-ink/15 px-2.5 py-1 text-ink/70"
+                            >
+                              Cancel
+                            </button>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={busyId === u.id}
+                              onClick={() => handleApprove(u)}
+                              className="rounded-md bg-ink px-2.5 py-1 text-xs font-medium text-paper disabled:opacity-60"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmReject(u.id)}
+                              className="rounded-md border border-ink/15 px-2.5 py-1 text-xs text-ink/70"
+                            >
+                              Reject
+                            </button>
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="mt-4 space-y-6">
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-ink/60">
-              Pending Approvals ({pending.length})
-            </h3>
-            {pending.length === 0 ? (
-              <p className="mt-2 text-sm text-ink/55">No pending registrations.</p>
-            ) : (
-              <div className="mt-2 overflow-x-auto">
-                <table className="w-full min-w-[640px] text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-ink/10 text-xs text-ink/55">
-                      <th className="py-2 pr-3 font-medium">Username</th>
-                      <th className="py-2 pr-3 font-medium">Email</th>
-                      <th className="py-2 pr-3 font-medium">Requested</th>
-                      <th className="py-2 pr-3 font-medium">Status</th>
-                      <th className="py-2 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pending.map((u) => (
-                      <tr key={u.id} className="border-b border-ink/5">
-                        <td className="py-2 pr-3 font-medium text-ink">{u.username}</td>
-                        <td className="py-2 pr-3 text-ink/70">{u.email || "—"}</td>
-                        <td className="py-2 pr-3 text-ink/70">{fmtTime(u.created_at)}</td>
-                        <td className="py-2 pr-3 text-ink/70">{u.status}</td>
-                        <td className="py-2">
-                          {confirmReject === u.id ? (
-                            <span className="inline-flex items-center gap-2 text-xs">
-                              <span className="text-ink/70">Reject {u.username}?</span>
-                              <button
-                                type="button"
-                                disabled={busyId === u.id}
-                                onClick={() => handleReject(u)}
-                                className="rounded-md bg-red-600 px-2.5 py-1 font-medium text-white disabled:opacity-60"
-                              >
-                                Confirm reject
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmReject(null)}
-                                className="rounded-md border border-ink/15 px-2.5 py-1 text-ink/70"
-                              >
-                                Cancel
-                              </button>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-2">
-                              <button
-                                type="button"
-                                disabled={busyId === u.id}
-                                onClick={() => handleApprove(u)}
-                                className="rounded-md bg-ink px-2.5 py-1 text-xs font-medium text-paper disabled:opacity-60"
-                              >
-                                Approve
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmReject(u.id)}
-                                className="rounded-md border border-ink/15 px-2.5 py-1 text-xs text-ink/70"
-                              >
-                                Reject
-                              </button>
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-ink/60">
               Active Users ({active.length})
