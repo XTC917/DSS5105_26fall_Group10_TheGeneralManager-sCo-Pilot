@@ -77,6 +77,10 @@ function ChartFrame({ children, className = "h-80" }) {
 export function LastWeekBriefing({ week }) {
   const theme = useChartTheme();
   const tick = { fill: theme.axis, fontSize: 11 };
+  const pal = theme.palette || theme.accentRamp || theme.colors;
+  const onTimeColor = pal[0];
+  const overdueColor = pal[3] || pal[2];
+  const countLineColor = pal[6] || pal[4];
   const weeks = (week.weeks || []).map((row) => {
     const onTime = Number(row.on_time) || 0;
     const late = Number(row.overdue) || 0;
@@ -104,7 +108,7 @@ export function LastWeekBriefing({ week }) {
       <section className="rounded-card border border-line bg-surface p-4 shadow-xs sm:p-5">
         <h3 className="text-center type-h3 text-foreground">Number of orders completed weekly</h3>
         <p className="mb-2 text-center type-caption text-muted">
-          Each column fills the chart. Green is the share finished on time, red is the share finished after the due date. The line is the weekly count.
+          Each column is a week: the lower block finished on time, the upper block finished after the due date. The line is the number of orders completed that week.
         </p>
         {weeks.length ? (
           <ChartFrame>
@@ -149,19 +153,19 @@ export function LastWeekBriefing({ week }) {
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: 11, color: theme.legend }} />
-                <Bar yAxisId="share" dataKey="on_time_share" name="Done on time" stackId="done" fill={theme.success} fillOpacity={0.45} isAnimationActive={false}>
-                  <LabelList dataKey="on_time_percent" position="center" formatter={percentLabel} style={{ fontSize: 10, fill: theme.foreground }} />
+                <Bar yAxisId="share" dataKey="on_time_share" name="Done on time" stackId="done" fill={onTimeColor} fillOpacity={0.9} isAnimationActive={false}>
+                  <LabelList dataKey="on_time_percent" position="center" formatter={percentLabel} style={{ fontSize: 10, fontWeight: 600, fill: theme.tooltipBg }} />
                 </Bar>
-                <Bar yAxisId="share" dataKey="overdue_share" name="Done overdue" stackId="done" fill={theme.danger} fillOpacity={0.45} isAnimationActive={false}>
-                  <LabelList dataKey="overdue_percent" position="center" formatter={percentLabel} style={{ fontSize: 10, fill: theme.foreground }} />
+                <Bar yAxisId="share" dataKey="overdue_share" name="Done overdue" stackId="done" fill={overdueColor} fillOpacity={0.9} isAnimationActive={false}>
+                  <LabelList dataKey="overdue_percent" position="center" formatter={percentLabel} style={{ fontSize: 10, fontWeight: 600, fill: theme.tooltipBg }} />
                 </Bar>
                 <Line
                   yAxisId="count"
                   dataKey="completed"
                   name="Orders completed"
-                  stroke={(theme.accentRamp || theme.colors)[4]}
-                  strokeWidth={2}
-                  dot={{ r: 4, fill: (theme.accentRamp || theme.colors)[4], stroke: theme.tooltipBg || theme.foreground }}
+                  stroke={countLineColor}
+                  strokeWidth={2.5}
+                  dot={{ r: 4, fill: countLineColor, stroke: theme.tooltipBg || theme.foreground }}
                   isAnimationActive={false}
                 />
               </ComposedChart>
@@ -205,7 +209,7 @@ export function LastWeekBriefing({ week }) {
                     key={stageKey}
                     dataKey={stageKey}
                     name={stageKey}
-                    stroke={(theme.accentRamp || theme.colors)[index % (theme.accentRamp || theme.colors).length]}
+                    stroke={(theme.palette || theme.accentRamp || theme.colors)[index % (theme.palette || theme.accentRamp || theme.colors).length]}
                     strokeWidth={2}
                     dot={{ r: 3 }}
                     isAnimationActive={false}
@@ -239,7 +243,7 @@ export function LastWeekBriefing({ week }) {
                     dataKey={customer}
                     name={customer}
                     stackId="pieces"
-                    fill={(theme.accentRamp || theme.colors)[index % (theme.accentRamp || theme.colors).length]}
+                    fill={(theme.palette || theme.accentRamp || theme.colors)[index % (theme.palette || theme.accentRamp || theme.colors).length]}
                     isAnimationActive={false}
                   >
                     <LabelList
@@ -774,7 +778,7 @@ export default function MorningBriefingModal({
                     <Bar
                       name="Last working day"
                       dataKey="last_day_pieces"
-                      fill={(theme.accentRamp || theme.colors)[4]}
+                      fill={(theme.palette || theme.accentRamp || theme.colors)[1]}
                       radius={[4, 4, 0, 0]}
                       onClick={(row) => {
                         chooseStage(row.stage || row.payload?.stage);
@@ -784,7 +788,7 @@ export default function MorningBriefingModal({
                     <Bar
                       name="30-working-day median"
                       dataKey="lookback_median"
-                      fill={(theme.accentRamp || theme.colors)[1]}
+                      fill={(theme.palette || theme.accentRamp || theme.colors)[3]}
                       radius={[4, 4, 0, 0]}
                       onClick={(row) => {
                         chooseStage(row.stage || row.payload?.stage);
