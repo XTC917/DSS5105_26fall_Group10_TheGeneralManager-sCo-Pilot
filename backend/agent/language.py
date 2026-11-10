@@ -14,6 +14,16 @@ from backend.agent.answerability import reply_language
 
 logger = logging.getLogger(__name__)
 
+_PROBLEM_ANSWER = {
+    "en": "I couldn't finish that answer. Please try again.",
+    "zh": "这次没能完成回答。请再试一次。",
+}
+
+
+def problem_answer(question: str) -> str:
+    """The failure sentence follows the question: Chinese if it contains Han characters."""
+    return _PROBLEM_ANSWER[reply_language(question)]
+
 _WORD = re.compile(r"[A-Za-zÀ-ÿ]+")
 _HAN = re.compile(r"[\u4e00-\u9fff]")
 

@@ -428,15 +428,19 @@ def combine_clarification(
 
 
 def email_audience_clarification(question: str) -> AnswerabilityGate | None:
-    """An email with no stated recipient role is not drafted as internal follow-up."""
+    """An email with no stated recipient role is not drafted as internal follow-up.
+
+    Any request that mentions an email counts. The wording does not have to be
+    send, draft, or write. A question that only mentions an email address does not.
+    """
     text = question or ""
-    asks_email = re.search(
-        r"\b(send|draft|write|chase)\b.{0,48}\be-?mails?\b"
-        r"|\be-?mails?\b.{0,24}\b(to|for)\b"
-        r"|发.{0,8}邮件|写.{0,6}邮件|起草.{0,8}邮件",
+    without_addresses = re.sub(
+        r"\be-?mail\s+address(?:es)?\b|邮箱",
+        " ",
         text,
-        re.IGNORECASE,
+        flags=re.IGNORECASE,
     )
+    asks_email = re.search(r"\be-?mails?\b|邮件", without_addresses, re.IGNORECASE)
     named = re.search(
         r"\b(customers?|clients?|internal(?:ly)?)\b|客户|内部",
         text,

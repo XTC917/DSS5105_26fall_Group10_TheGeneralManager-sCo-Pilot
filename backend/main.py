@@ -23,6 +23,7 @@ from pydantic import BaseModel, ValidationError
 
 from backend.config import PROJECT_ROOT, SEMANTIC_LAYER_PATH, using_factory_date
 from backend.agent.graph import llm_is_configured, run_agent, set_checkpointer
+from backend.agent.language import problem_answer
 from backend.logging_setup import setup_logging
 from backend.models.schemas import (
     ChatRequest,
@@ -130,7 +131,8 @@ app.include_router(users_router)
 app.include_router(conversations_router)
 app.include_router(email_router)
 
-_PROBLEM_ANSWER = "I couldn't finish that answer. Please try again."
+def _asked_text(request: ChatRequest) -> str:
+    return f"{request.original_question or ''}\n{request.message or ''}"
 
 
 @app.get("/api/health")
@@ -162,11 +164,11 @@ def _append_data_note(response: ChatResponse, question: str) -> ChatResponse:
     return response
 
 
-def _answer_text(response: ChatResponse) -> str:
+def _answer_text(response: ChatResponse, question: str) -> str:
     answer = (response.answer or "").strip()
     if response.clarification and not answer:
         answer = str((response.clarification or {}).get("prompt") or "Which of these did you mean?").strip()
-    return answer or _PROBLEM_ANSWER
+    return answer or problem_answer(question)
 
 
 def _store_chat_turn(
@@ -188,7 +190,7 @@ def _store_chat_turn(
         user.id,
         request.conversation_id,
         question=request.message,
-        answer=_answer_text(response),
+        answer=_answer_text(response, question),
         response_json=response_json,
         attempt_id=attempt_id,
         duration_ms=duration_ms,
@@ -319,16 +321,17 @@ def _complete_chat(
         raise
     except Exception as exc:  # noqa: BLE001
         logger.exception("chat failed")
+        notice = problem_answer(_asked_text(request))
         if attempt_id is not None:
             return _problem_response(
                 request,
                 user,
                 attempt_id=attempt_id,
                 duration_ms=duration_ms(),
-                answer=_PROBLEM_ANSWER,
+                answer=notice,
             )
-        record_failure("CHAT_SERVICE_UNAVAILABLE", _PROBLEM_ANSWER)
-        raise HTTPException(status_code=503, detail=_PROBLEM_ANSWER) from exc
+        record_failure("CHAT_SERVICE_UNAVAILABLE", notice)
+        raise HTTPException(status_code=503, detail=notice) from exc
 
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -364,11 +367,11 @@ async def chat_stream(request: ChatRequest, user: CurrentUser = Depends(get_curr
                 )
                 await queue.put(("done", response.model_dump(mode="json")))
             except HTTPException as exc:
-                detail = exc.detail if isinstance(exc.detail, str) else "Chat failed. Please try again."
+                detail = exc.detail if isinstance(exc.detail, str) else problem_answer(_asked_text(request))
                 await queue.put(("error", {"message": detail}))
             except Exception:
                 logger.exception("chat stream failed")
-                await queue.put(("error", {"message": "Chat failed. Please try again."}))
+                await queue.put(("error", {"message": problem_answer(_asked_text(request))}))
 
         worker = asyncio.create_task(produce())
         _CHAT_WORKERS.add(worker)

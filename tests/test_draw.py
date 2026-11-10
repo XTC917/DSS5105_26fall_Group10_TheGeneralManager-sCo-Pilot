@@ -6,6 +6,7 @@ import json
 
 import pytest
 
+from backend.tools.common import reset_manager_text, set_manager_text
 from backend.tools.draw import bind_frontend_charts, draw, take_frontend_charts
 
 
@@ -68,6 +69,48 @@ def test_draw_supports_stacked_bars():
 
     assert result["ok"] is True
     assert charts[0]["stacked"] is True
+
+
+def test_named_stacked_bar_stays_stacked_when_the_flag_is_left_off():
+    token = set_manager_text("给我堆积柱状图")
+    try:
+        result, charts = _drawn(
+            {
+                "chart_type": "bar",
+                "title": "外协有效产能",
+                "data": [{"name": "QuickStitch", "effective_pieces": 741, "reserved_pieces": 80}],
+                "category_key": "name",
+                "value_keys": ["effective_pieces", "reserved_pieces"],
+            }
+        )
+    finally:
+        reset_manager_text(token)
+
+    assert result["ok"] is True
+    assert charts[0]["type"] == "bar"
+    assert charts[0]["stacked"] is True
+    assert charts[0]["percentage"] is False
+
+
+def test_named_percentage_stack_sets_both_flags():
+    token = set_manager_text("请出一张百分比堆积柱状图")
+    try:
+        result, charts = _drawn(
+            {
+                "chart_type": "line",
+                "title": "阶段占比",
+                "data": [{"stage": "KNITTING", "knitting": 60, "assembly": 40}],
+                "category_key": "stage",
+                "value_keys": ["knitting", "assembly"],
+            }
+        )
+    finally:
+        reset_manager_text(token)
+
+    assert result["ok"] is True
+    assert charts[0]["type"] == "bar"
+    assert charts[0]["stacked"] is True
+    assert charts[0]["percentage"] is True
 
 
 def test_draw_rejects_stacked_non_bar_chart():

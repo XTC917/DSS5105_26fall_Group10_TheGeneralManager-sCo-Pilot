@@ -3,18 +3,35 @@
 from __future__ import annotations
 
 import math
+import re
 from contextvars import ContextVar, Token
 from typing import Any, Literal
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from backend.tools.common import tool_error, tool_json
+from backend.tools.common import manager_text, tool_error, tool_json
+
+_STACKED_REQUEST = re.compile(r"堆积|堆叠|stacked", re.IGNORECASE)
+_PERCENT_STACK = re.compile(r"百分比|百分百|100\s*%|percentage", re.IGNORECASE)
 
 _FRONTEND_CHARTS: ContextVar[list[dict[str, Any]] | None] = ContextVar(
     "frontend_charts", default=None
 )
 _FRONTEND_CHART_MESSAGE = "The chart has already been generated in the frontend."
+
+
+def _named_stack(
+    chart_type: str,
+    stacked: bool,
+    percentage: bool,
+) -> tuple[str, bool, bool]:
+    """A named stacked bar stays a stacked bar even if the call left the flag off."""
+    text = manager_text()
+    if not _STACKED_REQUEST.search(text):
+        return chart_type, stacked, percentage
+    percentage = percentage or bool(_PERCENT_STACK.search(text))
+    return "bar", True, percentage
 
 
 def bind_frontend_charts() -> Token[list[dict[str, Any]] | None]:
@@ -33,7 +50,7 @@ class DrawInput(BaseModel):
     )
     stacked: bool = Field(
         default=False,
-        description="Set true only for a stacked bar chart; otherwise leave false.",
+        description="True for a stacked bar, including 堆积柱状图. Leave false for an ordinary bar.",
     )
     percentage: bool = Field(
         default=False,
@@ -75,6 +92,7 @@ def draw(
     rows with category_key and value_keys.
     """
     tool_name = "draw"
+    chart_type, stacked, percentage = _named_stack(chart_type, stacked, percentage)
     if stacked and chart_type != "bar":
         return tool_error(tool_name, "INVALID_CHART", "Only bar charts can be stacked.")
     if percentage and (chart_type != "bar" or not stacked):

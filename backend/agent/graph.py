@@ -203,7 +203,7 @@ def _react_prompt(state: dict[str, Any]):
                     "Do not call summarize_rows again on these same rows. "
                     "If a later lookup replaced them, call summarize_rows on that lookup. Do not calculate. "
                     "If the manager named a display, that choice wins: a table MUST be render_table; "
-                    "a bar, pie, line, area, or combo chart MUST be draw with that chart_type. "
+                    "a bar, pie, line, area, or combo chart MUST be draw with that chart_type. A stacked bar, including 堆积柱状图, MUST set stacked=true. A 100% or 百分比堆积柱状图 MUST also set percentage=true. "
                     "category_key is data.group_by. value_keys is data.value_key."
                 )
             elif filtered:
@@ -215,7 +215,7 @@ def _react_prompt(state: dict[str, Any]):
                     "Pass group_by and metric only. Do not pass rows. Do not calculate. "
                     "Otherwise your next message MUST be exactly one tool call, draw or render_table, not prose. "
                     "If the manager named a display, that choice wins: a table MUST be render_table; "
-                    "a bar, pie, line, area, or combo chart MUST be draw with that chart_type. "
+                    "a bar, pie, line, area, or combo chart MUST be draw with that chart_type. A stacked bar, including 堆积柱状图, MUST set stacked=true. A 100% or 百分比堆积柱状图 MUST also set percentage=true. "
                     "Do not call filter_rows again unless a condition was wrong. "
                     "Do not answer in text on this step."
                 )
@@ -234,7 +234,7 @@ def _react_prompt(state: dict[str, Any]):
                     "Pass group_by and metric only. Do not pass rows. Do not calculate. "
                     "Otherwise your next message MUST be exactly one tool call, draw or render_table, not prose. "
                     "If the manager named a display, that choice wins: a table MUST be render_table; "
-                    "a bar, pie, line, area, or combo chart MUST be draw with that chart_type. "
+                    "a bar, pie, line, area, or combo chart MUST be draw with that chart_type. A stacked bar, including 堆积柱状图, MUST set stacked=true. A 100% or 百分比堆积柱状图 MUST also set percentage=true. "
                     "Do not switch tools because the rows are a list. "
                     "When no display was named, prefer draw when the values compare, compose, or trend, "
                     "and prefer render_table when the result is a list of rows. "

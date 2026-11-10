@@ -238,7 +238,15 @@ def test_email_without_a_recipient_role_asks_before_drafting():
     ]
     chinese = email_audience_clarification("给 ORD-120 发一封邮件")
     assert [row["label"] for row in chinese.clarification["options"]] == ["写给客户", "写给内部跟进"]
+    summary = email_audience_clarification(
+        "Email a short summary of the current status of ORD-029."
+    )
+    assert [row["label"] for row in summary.clarification["options"]] == [
+        "Write it to the customer",
+        "Write it for internal follow-up",
+    ]
     assert email_audience_clarification("Email the customer about ORD-120.") is None
+    assert email_audience_clarification("What is the email address for ORD-120?") is None
     assert email_audience_clarification("How is ORD-120 doing?") is None
 
 
@@ -353,4 +361,12 @@ def test_clarification_drops_readings_the_tools_cannot_do():
         ],
     )
     assert card is None
+
+
+def test_failed_answer_follows_the_question_language():
+    from backend.agent.language import problem_answer
+
+    chinese = "请用中文告诉我 ORD-029 的当前状态和截止日期。"
+    assert problem_answer(chinese) == "这次没能完成回答。请再试一次。"
+    assert problem_answer("How is ORD-029 doing?") == "I couldn't finish that answer. Please try again."
 
