@@ -73,4 +73,12 @@ export const getDataSourceData = (id, limit = 50, offset = 0) => {
   return dataAdminApi.get(`/datasources/${id}/data`, { params: { limit, offset } });
 };
 
+// Admin-only, atomic, bounded batch update. `updates` is an array of
+// { key: { <primary key columns> }, changes: { <column>: value } } items.
+// The backend validates table/column whitelists, primary-key protection,
+// types and rolling back the whole batch on any error.
+export const updateDataSourceRows = (id, updates) => {
+  return dataAdminApi.patch(`/datasources/${id}/rows`, { updates });
+};
+
 export default dataAdminApi;
