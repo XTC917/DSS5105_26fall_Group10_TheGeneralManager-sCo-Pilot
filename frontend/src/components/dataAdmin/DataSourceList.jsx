@@ -10,24 +10,20 @@ import {
 import {
   getDataSources, deleteDataSource, getDataSourceData, updateDataSourceRows,
 } from "../../services/dataAdminApi.js";
+import {
+  PRIMARY_KEYS, NULLABLE_COLUMNS, MAX_BATCH,
+  rowKeyObject, rowKeyText, buildChanges, summarizeChanges,
+} from "./rowEdit.js";
 
 const PAGE_SIZE = 50;
 const CARD_PAGE_SIZE = 10;
 
-// Must mirror backend/services/data_admin_updates.py. The backend is the source
-// of truth and will reject anything else; these maps only drive the UI so the
-// form disables protected columns and normalises empty strings to null.
-const PRIMARY_KEYS = {
-  orders: ["order_id"],
-  production_log: ["production_date", "stage"],
-  workshops: ["workshop_id", "makes"],
-};
-const NULLABLE_COLUMNS = {
-  orders: ["completed_date", "days_late"],
-  production_log: [],
-  workshops: ["max_batch_pieces"],
-};
-const MAX_BATCH = 50;
+// Overlay stacking (antd v5): top-level Drawer/Modal both default to
+// zIndexPopupBase(1000) + container offset(100) = 1100, so at equal z-index the
+// later-mounted portal wins. The Edit Modal must sit ABOVE the Data Preview
+// Drawer, so we give each an explicit, documented level: Drawer 1100, Modal 1200.
+const DRAWER_Z_INDEX = 1100;
+const EDIT_MODAL_Z_INDEX = 1200;
 
 /** Small responsive helper: true when viewport is below the md breakpoint (768px). */
 function useIsMobile(query = "(max-width: 767px)") {
@@ -44,20 +40,6 @@ function useIsMobile(query = "(max-width: 767px)") {
   return isMobile;
 }
 
-function rowKeyObject(primaryKeys, row) {
-  return Object.fromEntries(primaryKeys.map((column) => [column, row[column]]));
-}
-
-function rowKeyText(object) {
-  return JSON.stringify(object);
-}
-
-function summarizeChanges(pendingUpdates) {
-  const columns = new Set();
-  pendingUpdates.forEach((item) => Object.keys(item.changes).forEach((c) => columns.add(c)));
-  return { rows: pendingUpdates.length, columns: [...columns] };
-}
-
 export default function DataSourceList() {
   const [dataSources, setDataSources] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -71,6 +53,8 @@ export default function DataSourceList() {
   const [expandedId, setExpandedId] = useState(null);
   const [editRow, setEditRow] = useState(null);
   const [editVisible, setEditVisible] = useState(false);
+  const [editSeed, setEditSeed] = useState({});
+  const [stageHint, setStageHint] = useState("");
   const [pendingUpdates, setPendingUpdates] = useState([]);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
@@ -159,18 +143,38 @@ export default function DataSourceList() {
   }
 
   const openEditor = (row) => {
+    // Seed the form from real values (including primary keys) and layer any
+    // already-staged edits on top. Using Form initialValues + a fresh key avoids
+    // the old imperative setFieldsValue()-before-mount race that left inputs
+    // blank and made validateFields() compare against an empty form.
+    const columns = (dataPreview?.columns || []).filter(
+      (col) => col.name && col.name !== "created_at",
+    );
+    const initial = {};
+    columns.forEach((col) => { initial[col.name] = row[col.name]; });
     const staged = stagedFor(row);
+    Object.assign(initial, staged?.changes || {});
     setEditRow(row);
-    form.setFieldsValue({
-      ...row,
-      ...(staged?.changes || {}),
-    });
+    setEditSeed(initial);
+    setStageHint("");
     setEditVisible(true);
   };
+
+  // Populate the form after the modal content has mounted (fields exist), and
+  // reset any values left over from a previous open. Doing this in an effect is
+  // what makes the inputs actually reflect the row; the old setFieldsValue
+  // before mount (with destroyOnClose) left every input blank.
+  useEffect(() => {
+    if (!editVisible) return;
+    form.resetFields();
+    form.setFieldsValue(editSeed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editVisible, editSeed]);
 
   const closeEditor = () => {
     setEditVisible(false);
     setEditRow(null);
+    setStageHint("");
   };
 
   const stageUpdate = async () => {
@@ -182,19 +186,25 @@ export default function DataSourceList() {
       return; // validation errors surface inside the form
     }
     const nullable = NULLABLE_COLUMNS[currentDataSource.table_name] || [];
-    const changes = {};
-    Object.entries(values).forEach(([column, value]) => {
-      if (primaryKeys.includes(column)) return;
-      const normalized = value === "" && nullable.includes(column) ? null : value;
-      if (String(normalized ?? "") !== String(editRow[column] ?? "")) {
-        changes[column] = normalized;
-      }
-    });
+    const changes = buildChanges(editRow, values, primaryKeys, nullable);
+    const marker = rowKeyText(rowKeyObject(primaryKeys, editRow));
     if (Object.keys(changes).length === 0) {
-      message.info("No changed fields to stage");
+      const alreadyStaged = pendingUpdates.some(
+        (item) => rowKeyText(item.key) === marker,
+      );
+      if (alreadyStaged) {
+        // Re-edited back to the original: treat this as reverting the row.
+        setPendingUpdates((current) =>
+          current.filter((item) => rowKeyText(item.key) !== marker),
+        );
+        closeEditor();
+        message.info("Reverted to original; staged change removed.");
+      } else {
+        setStageHint("No changed fields to stage — edit at least one value.");
+        message.info("No changed fields to stage");
+      }
       return;
     }
-    const marker = rowKeyText(rowKeyObject(primaryKeys, editRow));
     const exists = pendingUpdates.some((item) => rowKeyText(item.key) === marker);
     if (!exists && pendingUpdates.length >= MAX_BATCH) {
       message.error(`A batch can contain at most ${MAX_BATCH} rows`);
@@ -534,6 +544,7 @@ export default function DataSourceList() {
         width={isMobile ? "100%" : 800}
         onClose={() => setDrawerVisible(false)}
         open={drawerVisible}
+        zIndex={DRAWER_Z_INDEX}
         styles={{ body: { paddingBottom: "max(16px, env(safe-area-inset-bottom))" } }}
       >
         {currentDataSource && (
@@ -608,33 +619,48 @@ export default function DataSourceList() {
         onOk={stageUpdate}
         onCancel={closeEditor}
         okText="Stage change"
-        destroyOnClose
-        forceRender
+        maskClosable={false}
+        zIndex={EDIT_MODAL_Z_INDEX}
         styles={{ body: { maxHeight: "80dvh", overflowY: "auto", paddingBottom: "max(8px, env(safe-area-inset-bottom))" } }}
       >
         <p className="mb-3 text-xs text-ink/60">
           Primary-key columns are read-only. Empty values become NULL only for nullable columns. Nothing is
           written until you Save the batch.
         </p>
-        <Form form={form} layout="vertical" preserve={false}>
+        {stageHint && (
+          <p className="mb-2 text-xs text-danger" role="alert">{stageHint}</p>
+        )}
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          onValuesChange={() => { if (stageHint) setStageHint(""); }}
+        >
           {previewColumns.map((column) => {
             const isKey = primaryKeys.includes(column.name);
             return (
-              <Form.Item
-                key={column.name}
-                name={column.name}
-                label={(
-                  <span className="flex items-center gap-2">
-                    {column.name}
-                    {isKey && <Tag color="default">key</Tag>}
-                  </span>
-                )}
-              >
-                <Input disabled={isKey} autoComplete="off" />
-                <div className="mt-1 truncate text-[11px] text-ink/45">
+              <div key={column.name}>
+                {/*
+                  Form.Item must have a SINGLE child, otherwise antd cannot inject
+                  value/onChange: the input then shows blank and user edits never
+                  reach the Form Store (validateFields keeps returning the old row).
+                  The "Original" caption therefore lives OUTSIDE the Form.Item.
+                */}
+                <Form.Item
+                  name={column.name}
+                  label={(
+                    <span className="flex items-center gap-2">
+                      {column.name}
+                      {isKey && <Tag color="default">key</Tag>}
+                    </span>
+                  )}
+                >
+                  <Input disabled={isKey} autoComplete="off" />
+                </Form.Item>
+                <div className="-mt-4 mb-3 truncate text-[11px] text-ink/45">
                   Original: {editRow?.[column.name] == null ? "NULL" : String(editRow[column.name])}
                 </div>
-              </Form.Item>
+              </div>
             );
           })}
         </Form>
