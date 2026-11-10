@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  /* Stop iOS Safari from inflating text after an orientation change. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   color: rgb(var(--foreground));
@@ -13,7 +25,30 @@ body {
 }
 
 #root {
-  min-height: 100dvh;
+  /* --app-height is synced to the visual viewport (see main.jsx) so the shell
+     shrinks with the iOS on-screen keyboard and the composer stays visible. */
+  min-height: var(--app-height, 100dvh);
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+/* iOS Safari zooms the whole page when a focused form control has a computed
+   font-size below 16px. Keep user zoom enabled; just make fields readable at
+   arm's length on phones. Scoped to small screens so desktop type is unchanged. */
+@media (max-width: 767.98px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* A fixed background attachment can cause repaint jank / mis-painting behind
+   fixed overlays on older iOS Safari. Fall back to a scrolling background. */
+@media (max-width: 767.98px) {
+  body {
+    background-attachment: scroll;
+  }
 }
 
 .trace-pre {

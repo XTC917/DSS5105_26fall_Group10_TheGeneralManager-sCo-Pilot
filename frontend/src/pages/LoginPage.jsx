@@ -97,7 +97,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-canvas px-4 py-10">
+    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-canvas px-4 py-10">
       <div
         className="pointer-events-none absolute inset-0 opacity-60"
         aria-hidden="true"

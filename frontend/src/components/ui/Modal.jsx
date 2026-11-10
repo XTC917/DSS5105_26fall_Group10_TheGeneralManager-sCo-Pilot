@@ -71,10 +71,11 @@ export default function Modal({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cx(
-          "relative w-full rounded-t-xl border border-line bg-surface text-foreground shadow-float outline-none sm:rounded-card",
+          "relative w-full max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-xl border border-line bg-surface text-foreground shadow-float outline-none sm:rounded-card",
           WIDTH[size] || WIDTH.md,
           className,
         )}
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
           <div>

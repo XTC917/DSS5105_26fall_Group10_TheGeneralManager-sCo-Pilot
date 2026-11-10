@@ -270,6 +270,7 @@ export default function MorningBriefingModal({
   onClose,
   refreshToken,
   onAlertCreated,
+  onPanelChange,
   initialPanel = "today",
   embedded = false,
   data: externalData = null,
@@ -301,6 +302,12 @@ export default function MorningBriefingModal({
   useEffect(() => {
     setPanel(initialPanel === "week" ? "week" : "today");
   }, [initialPanel]);
+
+  function selectPanel(next) {
+    const value = next === "week" ? "week" : "today";
+    setPanel(value);
+    onPanelChange?.(value);
+  }
 
   useEffect(() => {
     if (externalData) {
@@ -881,7 +888,7 @@ export default function MorningBriefingModal({
                 type="button"
                 role="tab"
                 aria-selected={panel === "today"}
-                onClick={() => setPanel("today")}
+                onClick={() => selectPanel("today")}
                 className={`rounded-control px-3 py-2 type-caption font-semibold ${
                   panel === "today" ? "bg-accent text-accentContrast" : "text-muted hover:text-foreground"
                 }`}
@@ -892,7 +899,7 @@ export default function MorningBriefingModal({
                 type="button"
                 role="tab"
                 aria-selected={panel === "week"}
-                onClick={() => setPanel("week")}
+                onClick={() => selectPanel("week")}
                 className={`rounded-control px-3 py-2 type-caption font-semibold ${
                   panel === "week" ? "bg-accent text-accentContrast" : "text-muted hover:text-foreground"
                 }`}

@@ -47,7 +47,7 @@ function isThemePreview() {
  */
 function PreviewFallback() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-canvas">
+    <div className="flex min-h-dvh items-center justify-center bg-canvas">
       <p className="text-sm text-muted">Loading design preview…</p>
     </div>
   );
@@ -63,7 +63,7 @@ function Shell() {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-paper">
+      <div className="flex min-h-dvh items-center justify-center bg-paper">
         <p className="text-sm text-ink/60">Loading…</p>
       </div>
     );

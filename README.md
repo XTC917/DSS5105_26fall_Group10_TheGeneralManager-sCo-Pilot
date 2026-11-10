@@ -192,3 +192,75 @@ Suggested order so the core Track 1 bar is covered before polish:
 
 API logs go to the console and `logs/app.log`. Query/tool/action traces also go
 to `data/copilot_state.db` (gitignored; survives CSV reload of `factory.db`).
+
+## Phase 5D — mobile, Weekly state, Alert Finish, email delivery
+
+This round fixed real-use issues on top of `main` (`0f0634a`) without changing
+the Soft Intelligence UI, the seven themes, the agent prompt/routing/tools, or
+the deployed environment.
+
+### iPhone Safari (P0)
+
+Root causes and fixes:
+
+- **Input auto-zoom.** iOS Safari zooms any focused `input` / `textarea` /
+  `select` whose computed font-size is below 16px. The composer, search, login,
+  email and clarification fields were 12–14px. `src/index.css` now sets form
+  controls to 16px on screens `< 768px` (mobile only; desktop type is unchanged).
+- **Keyboard / address bar height.** The shell used `h-dvh`, which iOS does not
+  reliably shrink when the keyboard opens. `src/main.jsx` syncs `--app-height`
+  to `visualViewport.height`; the `Home` shell uses
+  `height: var(--app-height, 100dvh)`, so the composer and bottom nav stay above
+  the keyboard.
+- **Horizontal overflow / safe area.** `html, body` are `overflow-x: hidden`
+  with `max-width: 100%`; the viewport now uses `viewport-fit=cover` so
+  `env(safe-area-inset-bottom)` works on notched iPhones. The bottom nav already
+  pads with the safe-area inset. User zoom is **not** disabled (no
+  `maximum-scale` / `user-scalable=no`).
+- **Modals** cap at `92dvh`, scroll internally, and respect the bottom safe area.
+
+Manual check sizes: 375 / 390 / 393 / 430 px. Real iPhone Safari / WebKit
+verification is still a manual step (not run automatically here).
+
+### Weekly briefing keeps its tab (P1)
+
+`Morning` / `Weekly` is now owned by `Home` (`briefingPanel`) and persisted to
+`sessionStorage` (`sweaterco:briefing-panel`). Switching Overview → Ask AI →
+Overview (or refreshing data) keeps the choice for the browser session. Default
+is still Morning. `Sidebar` and `MorningBriefingModal` accept an optional
+controlled `panel` / `onPanelChange`, so the fullscreen briefing tabs stay in
+sync too.
+
+Weekly backend range (read-only review): `previous_working_week()` returns the
+Monday–Saturday before the week containing the factory date. **Edge case:** if
+the factory date is a Sunday, it returns the *prior* week, skipping the
+Monday–Saturday that just finished; the week chart includes that just-finished
+week. This is reported, not changed, per the no-backend-rules rule.
+
+### Alert Finish (P0)
+
+Frontend: `POST /api/watches/{id}/finish`. Backend: the same route exists in
+`backend/main.py` and returns status `DONE` for a `FIRED` watch. The **deployed
+Render** `/openapi.json` does not list the route (only `/api/watches`), so the
+live 404 is a **stale backend release**, not a contract mismatch. Redeploy the
+backend from current `main` (`0f0634a`; the route entered in `0d5da2f`). The
+frontend now explains a 404 as “not available on the deployed API yet”. Finish
+is never faked through Cancel.
+
+### Email delivery (P1)
+
+- Draft / edit endpoints are registered on Render; the send endpoint exists at
+  `POST /api/email/drafts/{draft_id}/send`.
+- Delivery is gated by `_delivery_config()`: enabled only when
+  `EMAIL_DELIVERY_ENABLED=true` **and** `EMAIL_FROM` **and** `RESEND_API_KEY` are
+  set. The UI only shows “Confirm and send” when `can_send` is true.
+- The documented production setting `EMAIL_DELIVERY_ENABLED=false` makes the
+  send endpoint return `503 Email delivery is not configured.` — the most likely
+  reason real mail cannot be sent today.
+- `render.yaml` does not declare email variables; add them manually and redeploy.
+- **Safety:** `EMAIL_TEST_RECIPIENT` is read but no longer enforced; when enabled
+  the app emails the single valid address entered on the draft. See
+  `docs/email_delivery.md`.
+
+Never enable delivery, send real mail, or finish/cancel a production watch as
+part of verification without explicit human approval.

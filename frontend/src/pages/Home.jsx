@@ -31,6 +31,15 @@ import {
 import { Avatar, BrandMark, Icon } from "../pages/design-preview/bits.jsx";
 
 const SEARCH_DEBOUNCE_MS = 300;
+const BRIEFING_PANEL_KEY = "sweaterco:briefing-panel";
+
+function readBriefingPanel() {
+  try {
+    return sessionStorage.getItem(BRIEFING_PANEL_KEY) === "week" ? "week" : "today";
+  } catch {
+    return "today";
+  }
+}
 
 function storageKey(userId) {
   return `sweaterco:last-conversation:${userId}`;
@@ -145,6 +154,18 @@ export default function Home() {
   const [healthError, setHealthError] = useState("");
   const [boardTick, setBoardTick] = useState(0);
   const [activeView, setActiveView] = useState("copilot");
+  // Owned here (not inside Sidebar) so switching to Ask AI and back keeps the
+  // Morning/Weekly choice. sessionStorage keeps it across reloads in this tab.
+  const [briefingPanel, setBriefingPanel] = useState(readBriefingPanel);
+  const changeBriefingPanel = useCallback((next) => {
+    const value = next === "week" ? "week" : "today";
+    setBriefingPanel(value);
+    try {
+      sessionStorage.setItem(BRIEFING_PANEL_KEY, value);
+    } catch {
+      /* storage may be blocked; the in-memory state still holds this session */
+    }
+  }, []);
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const [deactivateBusy, setDeactivateBusy] = useState(false);
   const [deactivateError, setDeactivateError] = useState("");
@@ -741,8 +762,8 @@ export default function Home() {
 
   return (
     <div
-      className="flex h-dvh flex-col overflow-hidden bg-transparent text-foreground"
-      style={{ background: "rgb(var(--surface) / 0.96)" }}
+      className="flex flex-col overflow-hidden bg-transparent text-foreground"
+      style={{ height: "var(--app-height, 100dvh)", background: "rgb(var(--surface) / 0.96)" }}
     >
       <div className="dp-shell">
         <aside className="dp-rail hidden md:flex" aria-label="Primary navigation">
@@ -967,6 +988,8 @@ export default function Home() {
             <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
               <Sidebar
                 refreshToken={boardTick}
+                panel={briefingPanel}
+                onPanelChange={changeBriefingPanel}
                 onFactoryDate={(value) => {
                   if (!value) return;
                   setFactoryDateState(value);

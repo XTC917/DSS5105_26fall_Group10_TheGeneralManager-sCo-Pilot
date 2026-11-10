@@ -101,14 +101,25 @@ function IssueRow({ item }) {
  * Overview / Insights — Top Issues + Morning/Weekly briefing carousel.
  * Alerts / watches / audit live in the left rail, not here.
  */
-export default function Sidebar({ refreshToken = 0, onFactoryDate }) {
+export default function Sidebar({ refreshToken = 0, onFactoryDate, panel: controlledPanel, onPanelChange }) {
   const cached = peekOverviewCache();
   const [briefing, setBriefing] = useState(cached?.briefing || null);
   const [discovery, setDiscovery] = useState(cached?.discovery || null);
   const [error, setError] = useState(cached?.error || "");
   const [status, setStatus] = useState(cached?.briefing ? "cached" : "idle");
   const [fetchedAt, setFetchedAt] = useState(cached?.fetchedAt || 0);
-  const [panel, setPanel] = useState("today");
+  // Morning/Weekly is lifted to Home so it survives switching to Ask AI and
+  // back. Fall back to local state when used without a controlling parent.
+  const [internalPanel, setInternalPanel] = useState("today");
+  const panel = controlledPanel === "week" || controlledPanel === "today" ? controlledPanel : internalPanel;
+  const setPanel = useCallback(
+    (next) => {
+      const value = next === "week" ? "week" : "today";
+      if (onPanelChange) onPanelChange(value);
+      else setInternalPanel(value);
+    },
+    [onPanelChange],
+  );
   const [modalOpen, setModalOpen] = useState(false);
   const [issuesOpen, setIssuesOpen] = useState(true);
   const [priorities, setPriorities] = useState(() => new Set());
@@ -399,6 +410,7 @@ export default function Sidebar({ refreshToken = 0, onFactoryDate }) {
         <MorningBriefingModal
           key={`modal-${panel}`}
           initialPanel={showingWeek ? "week" : "today"}
+          onPanelChange={setPanel}
           onClose={() => setModalOpen(false)}
           refreshToken={refreshToken}
           onAlertCreated={() => refresh({ force: true })}

@@ -93,6 +93,14 @@ export async function finishWatch(watchId) {
   }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
+    // The endpoint reports resource/status problems as 400, so a 404 here means
+    // the route is missing from the deployed backend (a stale Render release),
+    // not a missing watch. Say that plainly instead of surfacing "Not Found".
+    if (res.status === 404) {
+      throw new Error(
+        "Finish is not available on the deployed API yet (404). The backend needs the latest main deployed — nothing was changed.",
+      );
+    }
     const detail = body.detail || res.statusText;
     throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
   }

@@ -2,7 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Keep user zoom enabled (no maximum-scale / user-scalable=no).
+         viewport-fit=cover lets env(safe-area-inset-*) work on notched iPhones. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>SweaterCo — GM Co-Pilot</title>
     <script>
       // Apply the persisted colour theme before first paint to avoid a flash (FOUC).
