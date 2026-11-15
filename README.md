@@ -40,13 +40,13 @@ This project is the **General Manager's Co-Pilot** (NUS DSS5105 Track 1): an ins
 
 ![Clarification cards](docs/assets/ui-clarify.png)
 
-**Feasibility answer** (Soft Intelligence — tool-backed capacity verdict)
+**Feasibility check** (UC example — 1,000 crewnecks by 15 April 2026, with capacity chart)
 
-![Feasibility answer](docs/assets/ui-feasibility.png)
+![Feasibility answer with chart](docs/assets/ui-feasibility.png)
 
-**Why panel** (inspectable steps and sources behind an answer)
+**Why panel** (full explanation card only — steps and sources)
 
-![Why this answer](docs/assets/ui-why.jpg)
+![Why this answer](docs/assets/ui-why.png)
 
 ---
 
