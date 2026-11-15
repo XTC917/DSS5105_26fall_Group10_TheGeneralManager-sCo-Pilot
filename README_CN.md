@@ -1,5 +1,7 @@
 # SweaterCo GM Co-Pilot（DSS5105 Track 1）
 
+> 审阅分支（`for-review`）：只保留产品代码、文档、测试与评测脚手架。OCR 中间产物、幻灯片生成脚本、课程讲义 PDF、本地 Agent 工具链不在此分支。
+
 面向小型针织服装工厂总经理的 **AI 管理 Co-Pilot**。
 
 本项目的核心是一个**基于 LangGraph、能够调用业务工具的 Agent（Tool-Using Agent）**，而不是一个通用聊天机器人。
@@ -92,7 +94,7 @@ Track 1 要求系统具备五类工具能力：
 
 ---
 
-`evaluation/questions.json` 是 few-shot 答法模板库，不是评测 runner。
+`evaluation/questions.json` 是 few-shot 答法模板库，也是开发阶段评测题集。三条件跑批见 `evaluation/run_conditions.py`。
 
 ---
 
@@ -216,12 +218,15 @@ Agent 只提出方案（`confirmed=false`）。消息上出现 **Confirm / Dismi
 # Repository Layout｜项目结构
 
 ```text
-backend/          FastAPI + LangGraph + tools + services
-frontend/         React + Vite + Tailwind
-data/             Track 1 CSV 数据集（Source of Truth）
-docs/             architecture.md、tool_spec.md
-evaluation/       Track 1 开发阶段评测集（非正式 Held-out Score）
-tests/            pytest 测试，无需 LLM API Key
+backend/              FastAPI + LangGraph + tools + services
+frontend/             React + Vite + Tailwind + Ant Design
+data/                 Track 1 CSV、semantic_layer.yaml、examples3.0 快照
+docs/                 architecture、tool_spec、部署与邮件说明
+evaluation/           题库、标注分包、评分 SOP、三条件 runner
+tests/                pytest（无需 LLM API Key）
+postgresql_database/  PostgreSQL 设计与校验
+SQL_related_app/      独立数据管理实验应用
+deploy/               云环境示例
 ```
 
 修改业务规则前，请先阅读：

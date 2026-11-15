@@ -13,10 +13,23 @@ data/factory.db
 data/copilot_state.db
 data/factory_copilot_preview.db
 logs/
+exports/
 .env
+env.txt
 evaluation/last_tools_report.json
 evaluation/last_agent_report.json
 evaluation/results/
+evaluation/test_set_preparation/_source_shots/
+evaluation/test_set_preparation/_kan39_bad.txt
+
+# Local scratch / media not part of the product
+motion/
+_ocr_sample/
+=
+部分通过与不通过汇总.md
+docs/demo-script.md
+scripts/_*.py
+scripts/account_bundle.py
 
 # Frontend
 frontend/node_modules/
@@ -27,9 +40,13 @@ frontend/dist/
 Thumbs.db
 .idea/
 .vscode/
+.cursor/
+.agents/
 *.swp
 RUN.txt
 .neon
 .neon-admin.local
 .env.local-backup-before-neon
 node_modules/
+skills-lock.json
+neon.ts

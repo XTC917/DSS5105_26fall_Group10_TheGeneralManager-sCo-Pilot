@@ -1,5 +1,9 @@
 # SweaterCo GM Co-Pilot (DSS5105 Track 1)
 
+> Review branch (`for-review`): product code, docs, tests, and the evaluation
+> harness only. Intermediate OCR dumps, slide-build scripts, course handout
+> PDFs, and local agent tooling are omitted.
+
 AI co-pilot for the general manager of a small knitwear factory. The core is a
 **tool-using LangGraph agent**, not a generic chatbot.
 
@@ -72,20 +76,24 @@ real-time monitoring and **not** a scheduler.
 - `WatchNotifier` is the future email hook. V1 is `LocalWatchNotifier` only (no SMTP)
 - `create_reminder` is unchanged: a local calendar note, not a watch
 
-`evaluation/questions.json` is a few-shot wording bank for the agent, not a scoring harness.
+`evaluation/questions.json` is the few-shot wording bank and the development
+evaluation question set. `evaluation/run_conditions.py` runs the three-condition
+summary/tool harness. This is not a held-out official score.
 
 
 ## Repository layout
 
 ```
-backend/          FastAPI + LangGraph + tools + services
-frontend/         React + Vite + Tailwind
-data/             Track 1 CSVs + semantic_layer.yaml + examples3.0 as-of snapshots
-docs/             architecture.md, tool_spec.md
-evaluation/       Track 1 development evaluation set (not a held-out official score)
-tests/            pytest — no LLM key required
-postgresql_database/  PostgreSQL schema, seed data, validation, and permission tests
-SQL_related_app/      Standalone data-administration app and PostgreSQL experiment
+backend/              FastAPI + LangGraph + tools + services
+frontend/             React + Vite + Tailwind + Ant Design
+data/                 Track 1 CSVs, semantic_layer.yaml, examples3.0 as-of snapshots
+docs/                 architecture, tool_spec, deployment, email delivery
+evaluation/           question bank, annotation packs, scoring SOP, condition runner
+tests/                pytest — no LLM key required
+postgresql_database/  PostgreSQL schema, seed data, validation
+SQL_related_app/      Standalone data-administration experiment
+deploy/               cloud env example
+Presentation_Group10_Sprint1_beautify.pptx
 ```
 
 Read `docs/architecture.md` and `docs/tool_spec.md` before changing rules.
