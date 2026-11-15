@@ -188,7 +188,11 @@ def _cycle_days(row: dict) -> int | None:
     return calendar_days_between(start, end)
 
 
-@tool(args_schema=TraceOrderInput)
+class CompareOrderProgressInput(BaseModel):
+    order_id: str = Field(..., description="Order id the manager wrote.")
+
+
+@tool(args_schema=CompareOrderProgressInput)
 def compare_order_progress(order_id: str) -> str:
     """Compare one order with completed orders of the same category and similar size.
 

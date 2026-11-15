@@ -193,8 +193,8 @@ def test_supplement_adds_called_tool_template():
     merged = supplement_templates_for_tools(q, hits, ["get_orders_at_risk"])
     merged_ids = [h["id"] for h in merged]
     assert merged_ids[: len(ids)] == ids
-    assert "Q001" in merged_ids
-    assert next(h for h in merged if h["id"] == "Q001")["relevant_tool"] == (
+    assert "ETS-089" in merged_ids
+    assert next(h for h in merged if h["id"] == "ETS-089")["relevant_tool"] == (
         "get_orders_at_risk"
     )
 
@@ -223,12 +223,19 @@ def test_concern_turn_supplements_at_risk_template():
                         content='{"ok": true, "tool": "get_today_priority"}',
                         tool_call_id="call-2",
                     ),
+                    ToolMessage(
+                        content='{"ok": true, "tool": "render_table"}',
+                        tool_call_id="call-3",
+                    ),
                 ]
             }
         )
         text = after[0].content
-        assert "Q005" in text
-        assert "Q001" in text
+        # Retrieved hit already covers get_today_priority (ETS-101);
+        # get_orders_at_risk is supplemented from the bank (ETS-089).
+        assert "Retrieved answer templates" in text
+        assert "ETS-101" in text
+        assert "ETS-089" in text
     finally:
         _TEMPLATE_QUERY.reset(token)
 

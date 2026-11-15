@@ -172,6 +172,21 @@ def test_clarification_choice_sticks_to_the_latest_unanswered_card():
     record_clarification_choice(2, conversation["id"], "Harbor Knits")
     history = read_history_window(2, conversation["id"], limit=5)
     assert history["turns"][0]["response_json"]["clarification_choice"] == "TrendCart"
+
+
+def test_conversation_api_and_chat_are_authenticated(
+    monkeypatch,
+    employee_auth_headers,
+):
+    with TestClient(app) as client:
+        assert client.get("/api/conversations").status_code == 401
+        created = client.post(
+            "/api/conversations",
+            headers=employee_auth_headers,
+        )
+        assert created.status_code == 201
+        conversation_id = created.json()["id"]
+
         admin_conversation = create_conversation(1)
         hidden = client.get(
             f"/api/conversations/{admin_conversation['id']}",

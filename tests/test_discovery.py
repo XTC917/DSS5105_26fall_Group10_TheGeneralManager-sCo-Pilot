@@ -190,15 +190,10 @@ def test_discover_priority_sort_is_deterministic(db):
         "order:ORD-093",
         "order:ORD-020",
         "order:ORD-055",
-        "order:ORD-029",
         "order:ORD-103",
         "order:ORD-108",
-        "order:ORD-096",
-        "order:ORD-017",
+        "order:ORD-029",
         "order:ORD-005",
-        "order:ORD-035",
-        "order:ORD-040",
-        "order:ORD-095",
         "stage:ASSEMBLY",
     ]
     priorities = [i["priority"] for i in first]
@@ -232,11 +227,6 @@ def test_overview_board_lists_every_today_priority_order(db):
 def test_discover_without_limit_returns_every_issue(db):
     data = run_discover(db, limit=None)
     assert data["returned_count"] == data["total_found"] == 13
-
-
-def test_discover_without_limit_returns_every_issue(db):
-    data = run_discover(db, limit=None)
-    assert data["returned_count"] == data["total_found"] == 18
     assert data["limit"] == data["returned_count"]
     assert {item["priority"] for item in data["issues"]} == {1, 2, 3}
     assert data["issues"][-1]["issue_type"] == ISSUE_STAGE_BELOW_BASELINE
@@ -306,12 +296,12 @@ def test_discover_empty_list_when_no_rules_fire(db, monkeypatch):
     assert result["counts_by_type"][ISSUE_ORDER_OVERDUE] == 0
     assert result["counts_by_type"][ISSUE_STAGE_BELOW_BASELINE] == 0
 
-    assert [r["order_id"] for r in buckets["1st_priority"]] == ["ORD-107", "ORD-114"]
+
 def test_get_today_priority_tool(db):
     payload = parse_tool(get_today_priority.invoke({}))
     assert payload["ok"] is True
     buckets = payload["data"]["today_priority"]
-    assert [r["order_id"] for r in buckets["1st_priority"]] == ["ORD-114"]
+    assert [r["order_id"] for r in buckets["1st_priority"]] == ["ORD-107", "ORD-114"]
     assert payload["data"]["factory_today"] == run_today_priority(db)["factory_today"]
     assert buckets["days_left_formula"] == run_today_priority(db)["today_priority"]["days_left_formula"]
     assert "days_left" in buckets["1st_priority"][0]

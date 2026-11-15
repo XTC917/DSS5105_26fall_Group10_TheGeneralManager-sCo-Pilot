@@ -107,7 +107,7 @@ def test_get_orders_at_risk_fixed_stage_rate(db):
     assert data["assumption"] == {
         "stage": "ASSEMBLY",
         "pieces_per_day": 455.0,
-        "replaces": "30-day median for this stage only",
+        "replaces": "30-day_median(stage) for this stage only",
     }
     assert data["stage_rates_pieces_per_day"]["ASSEMBLY"] == 455.0
     assert data["stage_rates_pieces_per_day"]["KNITTING"] == baseline["data"]["stage_rates_pieces_per_day"]["KNITTING"]

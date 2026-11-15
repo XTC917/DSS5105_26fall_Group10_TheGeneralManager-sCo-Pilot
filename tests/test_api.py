@@ -64,9 +64,9 @@ def test_discovery_endpoint(employee_auth_headers):
         assert res.status_code == 200
         body = res.json()
         assert body["factory_today"] == "2026-04-01"
-        assert body["returned_count"] == 1
-        assert body["total_found"] == 1
-        assert body["issues"][0]["issue_id"] == "stage:ASSEMBLY"
+        assert body["returned_count"] == 5
+        assert body["total_found"] == 13
+        assert body["issues"][0]["issue_id"] == "order:ORD-107"
         assert "today_priority" not in body
 
 

@@ -269,13 +269,9 @@ def _complete_chat(
         attempt_id = int(attempt["id"])
 
         if not llm_is_configured():
-            return _problem_response(
-                request,
-                user,
-                attempt_id=attempt_id,
-                duration_ms=duration_ms(),
-                answer="Chat is not ready yet. Please try again later.",
-            )
+            notice = "Chat is not ready yet. Please try again later."
+            record_failure("LLM_NOT_CONFIGURED", notice)
+            raise HTTPException(status_code=503, detail=notice)
 
         if request.clarification_reply:
             record_clarification_choice(

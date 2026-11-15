@@ -65,17 +65,62 @@ Deployed shape: **frontend on Vercel**, **API on Render (Docker)**, **email via 
 
 - Python **3.10+**
 - Node.js **18+**
-- Local **PostgreSQL** (chat history / auth / checkpoints)
+- Local **PostgreSQL 16+** with `psql` on your `PATH`  
+  (on Windows, add e.g. `C:\Program Files\PostgreSQL\18\bin`)
 - An OpenAI-compatible API key **only if you want the chat agent**  
-  (`pytest` and data loading work without a key)
+  (`pytest` works without a key)
+
+Factory operational tables (`app.orders`, `production_log`, `workshops`, …),
+auth, chat history, and LangGraph checkpoints all live in **PostgreSQL**.
 
 ---
 
 ## Run locally
 
-### 1. Backend
+Do these steps in order the first time on a machine.
 
-From the repo root (PowerShell):
+### 0. Start PostgreSQL
+
+```powershell
+Get-Service -Name "postgresql*"
+# If Stopped (Administrator PowerShell):
+# Start-Service -Name "postgresql-x64-18"   # use the name from Get-Service
+
+pg_isready -h localhost -p 5432
+# expect: localhost:5432 - accepting connections
+```
+
+### 1. Create the database (first time only)
+
+From `postgresql_database/` (paths in `03_import.sql` are relative):
+
+```powershell
+cd postgresql_database
+
+# Once, as the Postgres superuser (prompts for the postgres password, then
+# asks you to set passwords for factory_admin / factory_user / factory_agent):
+psql -X -h localhost -p 5432 -U postgres -d postgres -W -f "sql/01_roles_and_database.sql"
+
+# Once, as factory_admin:
+psql -X -h localhost -p 5432 -U factory_admin -d factory_copilot_db -W -f "sql/02_schema_tables_permissions.sql"
+
+# Baseline import / reset of business tables:
+psql -X -h localhost -p 5432 -U factory_admin -d factory_copilot_db -W -f "sql/03_import.sql"
+
+# Optional check (expect VALIDATION PASSED):
+psql -X -h localhost -p 5432 -U factory_admin -d factory_copilot_db -W -f "sql/04_validate.sql"
+
+cd ..
+```
+
+Do **not** re-run `01` / `02` on an existing database. Re-running `03` wipes
+post-baseline order-state history and restores the tracked seed.
+
+Details: `postgresql_database/README.md`.
+
+### 2. Python env and `.env`
+
+From the repo root:
 
 ```powershell
 python -m venv .venv
@@ -84,22 +129,43 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` so it matches the passwords you set in step 1. The example defaults are:
 
-- `OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL`, `LLM_MODEL`)
-- Postgres roles/passwords (`PGUSER` / `PGPASSWORD`, admin pair for migrations)
-- `AUTH_SECRET_KEY` (≥ 32 chars) and `ADMIN_REGISTRATION_CODE`
+| Variable | Example | Role |
+| --- | --- | --- |
+| `PGHOST` / `PGPORT` / `PGDATABASE` | `localhost` / `5432` / `factory_copilot_db` | connection |
+| `PGSCHEMA` | `app` | factory tables |
+| `PG_COPILOT_SCHEMA` / `PG_AUTH_SCHEMA` / `PG_ADMIN_META_SCHEMA` | `copilot` / `auth` / `admin_meta` | app schemas |
+| `PGUSER` / `PGPASSWORD` | `factory_agent` / *(your password)* | runtime app login |
+| `PG_ADMIN_USER` / `PG_ADMIN_PASSWORD` | `factory_admin` / *(your password)* | Alembic + admin ops |
+| `AUTH_SECRET_KEY` | ≥ 32 random characters | required for login |
+| `ADMIN_REGISTRATION_CODE` | any shared code you choose | admin signup |
+| `OPENAI_API_KEY` | your key | chat agent only |
+| `LLM_MODEL` | `gpt-5.6` (default in example) | optional override |
 
-Apply migrations, then start the API:
+Leave `EMAIL_DELIVERY_ENABLED=false` unless you have configured Resend
+(`docs/email_delivery.md`).
+
+### 3. App migrations (auth / chat / checkpoints)
+
+Still in the activated venv, from the repo root:
 
 ```powershell
 alembic -c alembic.ini upgrade head
+```
+
+This creates/updates `auth` and `copilot` tables on top of the SQL baseline.
+FastAPI startup does **not** run migrations for you.
+
+### 4. Backend
+
+```powershell
 uvicorn backend.main:app --reload --port 8000
 ```
 
 Health check: http://127.0.0.1:8000/api/health
 
-### 2. Frontend
+### 5. Frontend
 
 ```powershell
 cd frontend
@@ -110,7 +176,7 @@ npm run dev
 Open http://localhost:5173  
 Vite proxies `/api` to port `8000`.
 
-### 3. Tests
+### 6. Tests
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
@@ -125,7 +191,8 @@ These tests cover schemas, dates, risk flags, routing, and tool JSON. They do **
 
 ### Data
 
-- Source of truth for factory facts: `data/orders.csv`, `production_log.csv`, `workshops.csv`
+- Runtime factory facts: PostgreSQL schema `app` (seeded from the CSVs under
+  `data/` / `postgresql_database/data/` via the SQL baseline)
 - Field meanings for the agent: `data/semantic_layer.yaml`
 - `production_log` is factory-wide (`date × stage`), **not** per order
 
