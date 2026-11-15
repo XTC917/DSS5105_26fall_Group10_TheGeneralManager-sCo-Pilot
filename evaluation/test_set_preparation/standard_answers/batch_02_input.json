@@ -1,0 +1,146 @@
+[
+  {
+    "test_id": "ETS-019",
+    "question": "How is the TrendCart order doing?",
+    "language": "en",
+    "source_record_id": "Q53",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-019.png"
+  },
+  {
+    "test_id": "ETS-020",
+    "question": "Compare the risk levels of ORD-061 and ORD-108.",
+    "language": "en",
+    "source_record_id": "15",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-020.png"
+  },
+  {
+    "test_id": "ETS-021",
+    "question": "Compare the production progress of ORD-096, ORD-005, and ORD-017.",
+    "language": "en",
+    "source_record_id": "16",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-021.png"
+  },
+  {
+    "test_id": "ETS-022",
+    "question": "Which completed orders are currently overdue?",
+    "language": "en",
+    "source_record_id": "B04",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-022.png"
+  },
+  {
+    "test_id": "ETS-023",
+    "question": "Which completed TrendCart orders were delivered late?",
+    "language": "en",
+    "source_record_id": "Q29",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-023.png"
+  },
+  {
+    "test_id": "ETS-024",
+    "question": "Show me ORD-107, but only if it belongs to TrendCart.",
+    "language": "en",
+    "source_record_id": "B05",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-024.png"
+  },
+  {
+    "test_id": "ETS-025",
+    "question": "Which customers currently have multiple orders at risk of late delivery?",
+    "language": "en",
+    "source_record_id": "JAST-B11",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-025.png"
+  },
+  {
+    "test_id": "ETS-026",
+    "question": "when will trendcart orders all finish",
+    "language": "en",
+    "source_record_id": "JAST-B21",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-026.png"
+  },
+  {
+    "test_id": "ETS-027",
+    "question": "Which customers currently have multiple orders at risk of late delivery?",
+    "language": "en",
+    "source_record_id": "JAST-B10",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-027.png"
+  },
+  {
+    "test_id": "ETS-028",
+    "question": "Do any customers have an unusually high number of delayed orders, and are there common causes?",
+    "language": "en",
+    "source_record_id": "JAST-B17",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-028.png"
+  },
+  {
+    "test_id": "ETS-029",
+    "question": "Are there any signs that production delays are spreading from one stage to another?",
+    "language": "en",
+    "source_record_id": "JAST-G22",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-029.png"
+  },
+  {
+    "test_id": "ETS-030",
+    "question": "What is the earliest realistic delivery date for a new order of 2,000 Scarves?",
+    "language": "en",
+    "source_record_id": "JAST-B27",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-030.png"
+  },
+  {
+    "test_id": "ETS-031",
+    "question": "请为 ORD-005 起草一封催办邮件，只生成草稿，不发送。",
+    "language": "zh",
+    "source_record_id": "Q44",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-031.png"
+  },
+  {
+    "test_id": "ETS-032",
+    "question": "Draft a chase email for ORD-103, but do not send it.",
+    "language": "en",
+    "source_record_id": "25",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-032.png"
+  },
+  {
+    "test_id": "ETS-033",
+    "question": "Draft a chase-up email for ORD-120. Do not send",
+    "language": "en",
+    "source_record_id": "Q43",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-033.png"
+  },
+  {
+    "test_id": "ETS-034",
+    "question": "Write an email to the customers who have overdue orders",
+    "language": "en",
+    "source_record_id": "JAST-B20",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-034.png"
+  },
+  {
+    "test_id": "ETS-035",
+    "question": "List TrendCart Hoodie orders that are still in progress.",
+    "language": "en",
+    "source_record_id": "Q15",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-035.png"
+  },
+  {
+    "test_id": "ETS-036",
+    "question": "Is it feasible to accept a new order for 2,000 scarves due on May 15, 2026?",
+    "language": "en",
+    "source_record_id": "22",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-036.png"
+  }
+]

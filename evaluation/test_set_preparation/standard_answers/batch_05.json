@@ -1,0 +1,128 @@
+[
+  {
+    "test_id": "ETS-073",
+    "question": "Can ORD-103 be completed on time? Explain your conclusion.",
+    "source_record_id": "14",
+    "original_rating": "GOOD",
+    "answer": "ORD-103 is unlikely to be completed on time at the current pace.\n\nThe 2,000-piece scarf order is due April 4. It has four working days available, but the estimated remaining work is 8.4 working days—leaving a modeled shortfall of 4.4 working days. It is only in assembly, with assembly, washing, and packing still to finish.\n\nThe order is therefore flagged TIGHT_DEADLINE. It is neither overdue nor stalled: its last recorded movement was March 30. The conclusion is pace-based, using factory-wide 30-day stage medians; it is an operational estimate rather than a guarantee."
+  },
+  {
+    "test_id": "ETS-074",
+    "question": "How many orders were completed over the past month, and what was the on-time delivery rate?",
+    "source_record_id": "JAST-B26",
+    "original_rating": "BAD",
+    "answer": "I can't get the data required based on the tools I have, so I can't answer this."
+  },
+  {
+    "test_id": "ETS-075",
+    "question": "Show me the status of ORD-002.",
+    "source_record_id": "2",
+    "original_rating": "GOOD",
+    "answer": "ORD-002 is IN_PROGRESS in WASHING. It is a 1,000-piece crewneck sweater order for Cotton Club.\n\nIt was due on March 29, 2026, so it is overdue. It has not moved since March 23—eight working days ago—and is flagged as stalled. Washing and packing remain, so this order needs immediate follow-up."
+  },
+  {
+    "test_id": "ETS-076",
+    "question": "When did ORD-005 last move, and is it stalled?",
+    "source_record_id": "Q27",
+    "original_rating": "GOOD",
+    "answer": "ORD-005 last moved on March 24, 2026, when it entered KNITTING. Yes, it is stalled—it has had no activity for 7 working days, exceeding the 3-working-day stall threshold."
+  },
+  {
+    "test_id": "ETS-077",
+    "question": "请查询 ORD-057 的完成情况和是否按时交付。",
+    "source_record_id": "Q04",
+    "original_rating": "GOOD",
+    "answer": "ORD-057 已于 2026年1月25日完成，原定交付日期为 2026年2月2日。订单按时交付，提前8天完成，目前没有剩余生产工序。"
+  },
+  {
+    "test_id": "ETS-078",
+    "question": "What is the current status of ORD-107?",
+    "source_record_id": "3",
+    "original_rating": "GOOD",
+    "answer": "ORD-107 is still IN_PROGRESS and has reached PACKING, its final production stage. It is a 2,000-piece cardigan order for Northwind Apparel.\n\nIt was due on March 16, 2026, so it is currently overdue. However, it entered packing today, April 1, meaning the order is active rather than stalled. Packing is the only remaining stage."
+  },
+  {
+    "test_id": "ETS-079",
+    "question": "Show me ORD-108, 2000 Scarf, Harbor Knits, now at ASSEMBLY.",
+    "source_record_id": "B07",
+    "original_rating": "BAD",
+    "answer": "ORD-108 is in progress at ASSEMBLY. It last moved on 2026-03-31 and is due 2026-04-03. After assembly, washing and packing remain. It is not currently flagged as overdue, stalled, or on a tight deadline."
+  },
+  {
+    "test_id": "ETS-080",
+    "question": "What is the current production status of ORD-114?",
+    "source_record_id": "4",
+    "original_rating": "GOOD",
+    "answer": "ORD-114 is IN_PROGRESS in PACKING, the final production stage. It is a 2,000-piece hoodie order for Northwind Apparel.\n\nIt was due on March 23, 2026, so it is overdue. Its last activity was March 30, two working days ago, but it is not currently flagged as stalled. Packing is the only remaining stage."
+  },
+  {
+    "test_id": "ETS-081",
+    "question": "How is ORD-120 doing?",
+    "source_record_id": "JAST-B02",
+    "original_rating": "BAD",
+    "answer": "Which of these did you mean?\n\nAs of 2026-04-01, ORD-120 for TrendCart is still in progress at ASSEMBLY. The 1,500-piece vest order was due on 2026-03-17 and is 15 calendar days overdue.\n\nProduction began after a 28-calendar-day start delay. Its last activity was 2 working days ago, so it is not flagged as stalled. ASSEMBLY, WASHING, and PACKING remain, with an estimated 6.3 working days of work at the current pace.\n\nThe order is flagged OVERDUE and AT RISK, but not STALLED or TIGHT_DEADLINE. External workshop support should be considered. No completion date is recorded.\n\nThe stage history comes from the order snapshot; factory-wide production data cannot provide per-order output. The production log ends on 2026-03-31."
+  },
+  {
+    "test_id": "ETS-082",
+    "question": "Show the observed stage history for ORD-120, without treating factory-wide production as own output.",
+    "source_record_id": "Q28",
+    "original_rating": "GOOD",
+    "answer": "ORD-120’s observed history comes from the per-order snapshot: it was ordered on 2026-02-27, entered KNITTING on 2026-03-27, and entered ASSEMBLY on 2026-03-30, where it remains in progress.\n\nThese are stage-entry events—not output credited from the factory-wide production log. No WASHING, PACKING, or COMPLETE event has been observed yet."
+  },
+  {
+    "test_id": "ETS-083",
+    "question": "How is ORD-120 doing?",
+    "source_record_id": "Q01",
+    "original_rating": "GOOD",
+    "answer": "As of 2026-04-01, ORD-120 for TrendCart is still in progress at ASSEMBLY. The order covers 1,500 vests and was due on 2026-03-17, so it is 15 calendar days overdue.\n\nIts last recorded activity was 2026-03-30, two working days ago, so it does not meet the stalled-order threshold. ASSEMBLY, WASHING, and PACKING remain. No completion date is recorded."
+  },
+  {
+    "test_id": "ETS-084",
+    "question": "How was its estimated remaining time calculated?",
+    "source_record_id": "Q03",
+    "original_rating": "GOOD",
+    "answer": "Which of these did you mean?\n\nI’ll explain how the time remaining until ORD-120’s due date was calculated.\nI’ll explain how ORD-120’s estimated production time for its remaining stages was calculated.\n\nORD-120’s remaining production time in that reading was based on its lifecycle stages, not a throughput forecast.\n\nBecause the order is currently in ASSEMBLY, the unfinished stages are:\n\nASSEMBLY → WASHING → PACKING\n\nThe calculation counted those three remaining stages, giving a remaining-stage count of 3. The prior result did not include stage-output medians or a pace-based duration, so it does not support a more detailed production-time estimate."
+  },
+  {
+    "test_id": "ETS-085",
+    "question": "How is ORD-120 doing?",
+    "source_record_id": "V07",
+    "original_rating": "GOOD",
+    "answer": "🔴 ORD-120 — High Risk\n1,500 vests | TrendCart | 15 days overdue\n\nORD-120 is risky because it was due on 2026-03-17 and remains in progress. It was ordered on 2026-02-27, but production did not begin until 2026-03-27, a 28-calendar-day delay before knitting started.\n\nIt is currently in ASSEMBLY, with ASSEMBLY, WASHING, and PACKING still to complete. At the current pace, the remaining work is estimated at 6.3 working days.\n\nThe order last moved on 2026-03-30, so it is not currently flagged as stalled. The risk flag is OVERDUE, driven by the late production start and substantial work remaining. External workshop support could be considered to accelerate completion."
+  },
+  {
+    "test_id": "ETS-086",
+    "question": "How is ORD-120 doing?",
+    "source_record_id": "JAST-B03",
+    "original_rating": "BAD",
+    "answer": "Which of these did you mean?\n\nAs of 2026-04-01, ORD-120 for TrendCart is still in progress at ASSEMBLY. The 1,500-piece vest order was due on 2026-03-17 and is 15 calendar days overdue.\n\nProduction began after a 28-calendar-day start delay. Its last activity was 2 working days ago, so it is not flagged as stalled. ASSEMBLY, WASHING, and PACKING remain, with an estimated 6.3 working days of work at the current pace.\n\nThe order is flagged OVERDUE and AT RISK, but not STALLED or TIGHT_DEADLINE. External workshop support should be considered. No completion date is recorded.\n\nThe stage history comes from the order snapshot; factory-wide production data cannot provide per-order output. The production log ends on 2026-03-31."
+  },
+  {
+    "test_id": "ETS-087",
+    "question": "Which production stage has shown the most unstable output over the past 30 days?",
+    "source_record_id": "JAST-B25",
+    "original_rating": "BAD",
+    "answer": "I can’t determine the most unstable stage over the full 30 days from the available metrics because they provide a 30-day median, not day-to-day volatility or variance.\n\nWhat is supported: Assembly had the clearest latest deviation, producing 455 pieces versus its 30-day median of 758. That shows a recent drop, but it does not prove Assembly was the most unstable across the entire period."
+  },
+  {
+    "test_id": "ETS-088",
+    "question": "What outsourcing cost per piece is recorded for the active TOPS workshops?",
+    "source_record_id": "Q60",
+    "original_rating": "GOOD",
+    "answer": "I can't get the data required based on the tools I have, so I can't answer this."
+  },
+  {
+    "test_id": "ETS-089",
+    "question": "How many orders are currently overdue, and how many days late are they expected to be in total?",
+    "source_record_id": "JAST-G04",
+    "original_rating": "GOOD",
+    "answer": "8 orders are currently overdue.\n\nThe available factory calculation provides each order’s current lateness and estimated remaining working days, but does not return an aggregate expected total days late. I can’t safely total or extrapolate that figure without a tool-computed result."
+  },
+  {
+    "test_id": "ETS-090",
+    "question": "Which orders are late?",
+    "source_record_id": "Q56",
+    "original_rating": "BAD",
+    "answer": "8 orders are overdue as of 2026-04-01: ORD-107, ORD-120, ORD-083, ORD-114, ORD-002, ORD-093, ORD-020, and ORD-055.\n\nThe oldest are ORD-107 (due March 16) and ORD-120 (due March 17). ORD-002 is especially concerning because it is both overdue and stalled, with no activity since March 23. All eight remain in progress."
+  }
+]

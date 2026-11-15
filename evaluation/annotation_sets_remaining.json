@@ -1,0 +1,647 @@
+{
+  "meta": {
+    "purpose": "Three disjoint 22-question packs for the people who did not grade pack_a or pack_b.",
+    "source": "evaluation/questions.json",
+    "excludes": "evaluation/annotation_sets.json pack_a and pack_b (40 questions).",
+    "types": {
+      "risk": "风险与优先级",
+      "lookup": "订单查询",
+      "clarify": "澄清与追问",
+      "production": "生产异常",
+      "feasibility": "可行性",
+      "action": "操作与审计",
+      "scope": "范围与边界",
+      "chart": "图表"
+    },
+    "split": "Same type buckets as the first two packs. Within each type, questions are split as evenly as possible and the extra item rotates across packs, so each pack has 22 questions.",
+    "quota": {
+      "risk": [
+        6,
+        5,
+        5
+      ],
+      "lookup": [
+        9,
+        9,
+        9
+      ],
+      "clarify": [
+        1,
+        2,
+        2
+      ],
+      "production": [
+        1,
+        1,
+        1
+      ],
+      "feasibility": [
+        3,
+        2,
+        2
+      ],
+      "action": [
+        1,
+        2,
+        1
+      ],
+      "scope": [
+        1,
+        1,
+        2
+      ]
+    },
+    "answers": "expected_answer is copied from evaluation/questions.json for each question."
+  },
+  "pack_c": [
+    {
+      "id": "ETS-068",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_stalled",
+      "relevant_tool": "get_orders_at_risk",
+      "question": "Which orders have spent longer than normal in their current production stage?",
+      "expected_answer": "Two orders have spent longer than normal in their current stage: ORD-002 and ORD-005.\n\n🔴 ORD-002 needs immediate attention. The 1,000-piece Cotton Club crewneck order has remained in Washing for 8 working days and is already overdue. Washing and Packing are still left.\n\n🟠 ORD-005 should be checked next. The 500-piece TrendCart scarf order has remained in Knitting for 7 working days. All four production stages remain, although its due date is April 20."
+    },
+    {
+      "id": "ETS-076",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_stalled",
+      "relevant_tool": "get_order_status",
+      "question": "When did ORD-005 last move, and is it stalled?",
+      "expected_answer": "ORD-005 last moved on March 24, 2026, when it entered KNITTING. Yes, it is stalled—it has had no activity for 7 working days, exceeding the 3-working-day stall threshold."
+    },
+    {
+      "id": "ETS-089",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_overdue",
+      "relevant_tool": "get_orders_at_risk",
+      "question": "How many orders are currently overdue, and how many days late are they expected to be in total?",
+      "expected_answer": "8 orders are currently overdue.\n\nThe available factory calculation provides each order’s current lateness and estimated remaining working days, but does not return an aggregate expected total days late. I can’t safely total or extrapolate that figure without a tool-computed result."
+    },
+    {
+      "id": "ETS-091",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_overdue",
+      "relevant_tool": "get_orders_at_risk",
+      "question": "Show OVERDUE orders in a table, including how many days overdue each is.",
+      "expected_answer": "As of 2026-04-01, 8 orders are overdue. The table shows the delay as negative days until due—for example, -16 means 16 calendar days overdue. ORD-002 is also flagged as stalled."
+    },
+    {
+      "id": "ETS-096",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "priority",
+      "relevant_tool": "get_today_priority",
+      "question": "Which overdue orders should we finish first?",
+      "expected_answer": "Finish these overdue orders first:\n\n1. ORD-107 and ORD-114 — both are already in Packing, with an estimated 3.0 working days left each. They are in the first-priority bucket because they are overdue and closest to completion.\n2. ORD-120, ORD-083, ORD-002, and ORD-093 — these form the second-priority overdue group:\n   • ORD-120 remains in Assembly with 6.3 working days left.\n   • ORD-083 and ORD-002 remain in Washing with 2.9 working days left each.\n   • ORD-093 remains in Washing with 2.0 working days left.\n\nThe priority model does not rank orders within each bucket, so do not infer a further ordering among tied orders."
+    },
+    {
+      "id": "ETS-098",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "priority",
+      "relevant_tool": "get_today_priority",
+      "question": "If we can only accelerate three orders today, which ones should we choose?",
+      "expected_answer": "Choose ORD-107 and ORD-114 first. Both are in the official first-priority bucket: overdue, already in Packing, and estimated to need 3.0 working days each.\n\nThe model does not identify a unique third order. These are tied in the second-priority bucket:\n\n• ORD-029\n• ORD-120\n• ORD-083\n• ORD-002\n• ORD-093\n\nA third choice requires a tie-break criterion—such as earliest completion, greatest lateness, or protecting today’s due date.\n\nI recommend ORD-093 as the third order.\n\nIt has the shortest estimated remaining time in the second-priority bucket—2.0 working days—and is already in Washing, with only Washing and Packing left. That makes it the strongest choice if the goal is to turn acceleration into a completed order quickly.\n\nThis is an operational tie-break, not a change to the official priority bucket."
+    },
+    {
+      "id": "ETS-052",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_list",
+      "relevant_tool": "find_orders",
+      "question": "Show all in-progress orders for Harbor Knits.",
+      "expected_answer": "I found 5 in-progress Harbor Knits orders. Three are in washing and two are in assembly. The full list is shown in the table."
+    },
+    {
+      "id": "ETS-053",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_list",
+      "relevant_tool": "find_orders",
+      "question": "List all Northwind Apparel orders that are currently in production.",
+      "expected_answer": "Northwind Apparel has 5 orders currently in production: two in washing, one in assembly, and two in packing. The full order details are shown in the table."
+    },
+    {
+      "id": "ETS-055",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_list",
+      "relevant_tool": "find_orders",
+      "question": "List all Crewneck sweater orders.",
+      "expected_answer": "I found 13 Crewneck sweater orders. Three are in progress: ORD-002, ORD-055, and ORD-081. The other 10 are complete. Full details are shown in the table."
+    },
+    {
+      "id": "ETS-056",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_list",
+      "relevant_tool": "find_orders",
+      "question": "List all Hoodie orders.",
+      "expected_answer": "I found 26 Hoodie orders. The full list is shown in the table, including customer, pieces, due date, status, current stage, and last activity date."
+    },
+    {
+      "id": "ETS-057",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_list",
+      "relevant_tool": "find_orders",
+      "question": "List the in-progress Scarf orders in a table.",
+      "expected_answer": "As of 2026-04-01, there are 6 in-progress Scarf orders, shown in the table above."
+    },
+    {
+      "id": "ETS-058",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_list",
+      "relevant_tool": "find_orders",
+      "question": "Which orders are currently in ASSEMBLY? Show them in a table.",
+      "expected_answer": "As of 2026-04-01, 10 orders are currently in ASSEMBLY. All are in progress; the full details are shown in the table."
+    },
+    {
+      "id": "ETS-059",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_list",
+      "relevant_tool": "find_orders",
+      "question": "列出当前处于 PACKING 阶段的在制订单。",
+      "expected_answer": "当前共有 2 个处于 PACKING 阶段的在制订单，均属于 Northwind Apparel。订单明细已在表格中列出。"
+    },
+    {
+      "id": "ETS-060",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_list",
+      "relevant_tool": "find_orders",
+      "question": "List in-progress orders currently in WASHING.",
+      "expected_answer": "As of 2026-04-01, 10 in-progress orders are currently in the WASHING stage. The full list is shown in the table."
+    },
+    {
+      "id": "ETS-064",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_list",
+      "relevant_tool": "find_orders",
+      "question": "Which TrendCart orders are still in progress?",
+      "expected_answer": "TrendCart has 6 orders still in progress. Four are in KNITTING, one is in WASHING, and one is in ASSEMBLY, as shown in the table."
+    },
+    {
+      "id": "ETS-021",
+      "type": "clarify",
+      "type_label": "澄清与追问",
+      "category": "clarification",
+      "relevant_tool": "assess_ambiguity",
+      "question": "Compare the production progress of ORD-096, ORD-005, and ORD-017.",
+      "expected_answer": "Which of these did you mean?\n\nI’ll compare the current production status, stage, due date, pieces, and latest activity for ORD-096, ORD-005, and ORD-017.\n\nI’ll compare the detailed stage histories, start delays, remaining pace, and risk flags for ORD-096, ORD-005, and ORD-017.\n\nOther"
+    },
+    {
+      "id": "ETS-004",
+      "type": "production",
+      "type_label": "生产异常",
+      "category": "anomaly",
+      "relevant_tool": "discover_factory_issues",
+      "question": "Summarize recent production anomalies in a table.",
+      "expected_answer": "Only Assembly triggered the recent anomaly rule. Its March 31 output fell below 70% of its 30-day median; no other production stage was flagged."
+    },
+    {
+      "id": "ETS-041",
+      "type": "feasibility",
+      "type_label": "可行性",
+      "category": "feasibility",
+      "relevant_tool": "check_feasibility",
+      "question": "Can we accept 500 hoodies for delivery by April 4?",
+      "expected_answer": "Under the current capacity heuristic, 500 hoodies due April 4, 2026 are not feasible (NOT_FEASIBLE).\n\nThe model counts 4 working days and identifies PACKING as the bottleneck, with median throughput of 672 pieces per working day. Estimated factory window capacity is 2,688 pieces, versus 32,850 pieces already in progress, so spare in-house capacity is clipped to 0.\n\nEligible ACTIVE workshops could provide an estimated 439 pieces, below the requested 500. Therefore, the order does not fit within estimated capacity.\n\nThis is a planning estimate, not a delivery guarantee. It:\n• Counts the full quantity of every IN_PROGRESS order because remaining quantities are unknown.\n• Uses the bottleneck median from the last 30 working days.\n• Does not model latency through the four sequential production stages.\n• Assumes at most one new batch per workshop.\n• Excludes SUSPENDED workshops."
+    },
+    {
+      "id": "ETS-042",
+      "type": "feasibility",
+      "type_label": "可行性",
+      "category": "feasibility",
+      "relevant_tool": "check_feasibility",
+      "question": "Can we accept an order for 800 Hoodies and deliver it at April the 11th using internal production only?",
+      "expected_answer": "No—not using internal production only.\n\nUnder the current capacity heuristic, the 800 hoodies due April 11, 2026 were evaluated as FEASIBLE_WITH_WORKSHOPS, not feasible in house.\n\nThe model counts 10 working days and identifies Packing as the bottleneck, with median throughput of 672 pieces per working day. That gives an estimated factory window capacity of 6,720 pieces. Existing in-progress orders account for 32,850 pieces, so estimated spare internal capacity is clipped to 0.\n\nActive workshops provide an estimated 5,061.55 pieces of overflow capacity, but that falls outside your internal-only condition.\n\nThis is a planning estimate, not a delivery guarantee. It counts the full quantity of every in-progress order because remaining quantities are unknown, uses the bottleneck median from the last 30 working days, and does not model latency through the four sequential production stages. Workshop estimates assume at most one new batch per workshop and exclude suspended workshops."
+    },
+    {
+      "id": "ETS-043",
+      "type": "feasibility",
+      "type_label": "可行性",
+      "category": "feasibility",
+      "relevant_tool": "check_feasibility",
+      "question": "Can we take 800 hoodies by August 25?",
+      "expected_answer": "Yes. Under the current capacity heuristic, 800 hoodies by August 25, 2026 are feasible in-house (FEASIBLE_IN_HOUSE).\n\nThe model counts 126 working days and identifies Packing as the bottleneck, with median throughput of 672 pieces per working day. Estimated factory window capacity is 84,672 pieces. After accounting for 32,850 pieces in existing in-progress orders, estimated spare factory capacity is 51,822 pieces, which covers the requested 800 pieces. Active workshops add an estimated 137,034.75 pieces of potential overflow, but they are not required by the verdict.\n\nThis is a planning estimate, not a delivery guarantee. It counts every in-progress order’s full quantity because remaining quantities are unknown, uses the bottleneck median from the last 30 working days, and does not model four-stage pipeline latency. Workshop estimates assume one new batch per workshop and exclude suspended workshops."
+    },
+    {
+      "id": "ETS-067",
+      "type": "action",
+      "type_label": "操作与审计",
+      "category": "security",
+      "relevant_tool": "list_watches",
+      "question": "List my active watches.",
+      "expected_answer": "You have 1 active watch and no fired watches. It monitors ORD-005 for inactivity by 2026-04-02."
+    }
+  ],
+  "pack_d": [
+    {
+      "id": "ETS-099",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "priority",
+      "relevant_tool": "get_today_priority",
+      "question": "Show three priority groups for today.",
+      "expected_answer": "Today’s production priorities are split into three groups:\n\n1st priority: Clear ORD-107 and ORD-114 first. Both are overdue and already in Packing, making them the quickest overdue orders to finish.\n2nd priority: Push ORD-029, ORD-120, ORD-083, ORD-002, and ORD-093. ORD-029 is due today; the others are overdue with substantial work remaining. ORD-120 needs particular attention, with 6.3 estimated working days left.\n3rd priority: Closely monitor ORD-108 and ORD-103. They are due within 2–3 calendar days but each has 8.4 estimated working days remaining.\n\nOperational focus: finish near-complete overdue work, accelerate urgent unfinished orders, then prevent the two upcoming scarf orders from slipping."
+    },
+    {
+      "id": "ETS-100",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "priority",
+      "relevant_tool": "get_today_priority",
+      "question": "今天最需要我处理的订单有哪些？请按优先级展示。",
+      "expected_answer": "今天按三个层级处理：\n\n🔴第1优先：先清掉接近完工的逾期订单\n优先推进 ORD-107、ORD-114。两单均已逾期且处于包装阶段，只剩包装，预计各需 3.0个工作日。\n\n🟠第2优先：处理到期或逾期、但仍有较多工序的订单\n紧接着处理 ORD-029、ORD-120、ORD-083、ORD-002、ORD-093。其中：\n\nORD-029 今天到期，仍需洗水和包装，预计剩余 4.3个工作日。\nORD-120 最需警惕：已逾期，仍有组装、洗水和包装，预计还需 6.3个工作日。\nORD-083、ORD-002、ORD-093 均已逾期，仍需完成洗水和包装。\n\n🟡第3优先：防止近期订单继续转为延期\n密切推进 ORD-108、ORD-103。两单分别于 4月3日、4月4日到期，但均仍在组装阶段，预计各需 8.4个工作日，存在明显交付压力。\n\n执行顺序：先完成 ORD-107、ORD-114 的包装，再集中资源推进 ORD-029 和 ORD-120，同时为 ORD-108、ORD-103 提前疏通后续工序。"
+    },
+    {
+      "id": "ETS-101",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "priority",
+      "relevant_tool": "get_today_priority",
+      "question": "Which orders should be prioritized today?",
+      "expected_answer": "Today’s production should be prioritized in three levels:\n\n🔴 1st — Clear near-complete overdue orders\nPush ORD-107 and ORD-114 first. Both are overdue and already in Packing, with 3.0 working days estimated for each.\n\n🟠 2nd — Address urgent unfinished orders\nPrioritize ORD-029, ORD-120, ORD-083, ORD-002, and ORD-093 next. ORD-029 is due today, while the others are overdue with substantial work remaining. ORD-120 needs particular attention: it is still in Assembly and has 6.3 working days estimated.\n\n🟡 3rd — Prevent upcoming delays\nClosely monitor ORD-108 and ORD-103. Both are 2,000-piece Scarf orders in Assembly, due within the next few days, but each has 8.4 working days estimated.\n\nFocus: finish Packing-stage overdue work first, then push due-today and overdue orders, while preparing for the two upcoming Scarf risks."
+    },
+    {
+      "id": "ETS-114",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_overdue",
+      "relevant_tool": "get_orders_at_risk",
+      "question": "Which orders are already overdue but still have significant production work remaining?",
+      "expected_answer": "8 in-progress orders are already overdue and still have production work remaining.\n\nThe strongest production concerns are:\n\n• ORD-120 — still at Assembly, with Assembly, Washing, and Packing remaining; estimated 6.3 working days left.\n• ORD-055 — also at Assembly with all three stages remaining; estimated 3.4 working days left.\n• ORD-020 — at Washing, with Washing and Packing remaining; estimated 3.5 working days left.\n• ORD-002 — Washing and Packing remain; estimated 2.9 working days left. It is also flagged STALLED, with no activity for 8 working days.\n• ORD-083 and ORD-093 likewise still need Washing and Packing, with 2.9 and 2.0 working days estimated, respectively.\n\nORD-107 and ORD-114 are overdue too, but they have reached Packing; each has an estimated 3.0 working days remaining."
+    },
+    {
+      "id": "ETS-115",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_stalled",
+      "relevant_tool": "get_orders_at_risk",
+      "question": "which orders are stalled",
+      "expected_answer": "2 orders are stalled: ORD-002 and ORD-005.\n\n• ORD-002 needs immediate attention: it has been in Washing since March 23, idle for 8 working days, and is also overdue.\n• ORD-005 has remained in Knitting since March 24, idle for 7 working days. It is due April 20 and is not currently overdue.\n\nPriority: investigate ORD-002 first, then ORD-005."
+    },
+    {
+      "id": "ETS-065",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_list",
+      "relevant_tool": "find_orders",
+      "question": "Which TrendCart orders are still in the Knitting stage?",
+      "expected_answer": "TrendCart has 4 orders still in knitting: ORD-005, ORD-017, ORD-082, and ORD-096. Their quantities, due dates, and knitting entry dates are shown in the table."
+    },
+    {
+      "id": "ETS-066",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_list",
+      "relevant_tool": "find_orders",
+      "question": "请列出 TrendCart 的所有订单。",
+      "expected_answer": "已列出 TrendCart 的全部 17 个订单，包括产品、件数、交期、状态、当前阶段及最近活动日期。"
+    },
+    {
+      "id": "ETS-078",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_status",
+      "relevant_tool": "get_order_status",
+      "question": "What is the current status of ORD-107?",
+      "expected_answer": "ORD-107 is still IN_PROGRESS and has reached PACKING, its final production stage. It is a 2,000-piece cardigan order for Northwind Apparel.\n\nIt was due on March 16, 2026, so it is currently overdue. However, it entered packing today, April 1, meaning the order is active rather than stalled. Packing is the only remaining stage."
+    },
+    {
+      "id": "ETS-080",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_status",
+      "relevant_tool": "get_order_status",
+      "question": "What is the current production status of ORD-114?",
+      "expected_answer": "ORD-114 is IN_PROGRESS in PACKING, the final production stage. It is a 2,000-piece hoodie order for Northwind Apparel.\n\nIt was due on March 23, 2026, so it is overdue. Its last activity was March 30, two working days ago, but it is not currently flagged as stalled. Packing is the only remaining stage."
+    },
+    {
+      "id": "ETS-118",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "trace_stage",
+      "relevant_tool": "trace_order",
+      "question": "Which production stage has taken the longest for ORD-002?",
+      "expected_answer": "Washing is the only stage whose duration can be assessed for ORD-002. It entered Washing on March 23 and has had no recorded movement since then: 9 calendar days / 8 working days as of April 1. It is therefore flagged as stalled.\n\nThe snapshot contains no entry dates for Knitting or Assembly, so the available data cannot reliably compare all production stages or prove which took the longest historically."
+    },
+    {
+      "id": "ETS-128",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "trace",
+      "relevant_tool": "trace_order",
+      "question": "Analyze the complete production trace of ORD-114.",
+      "expected_answer": "ORD-114 is a 2,000-piece Northwind Apparel hoodie order. It was placed on March 3 and first appears in the production-stage snapshot on March 23, a 20-calendar-day start delay. The recorded trace then moves through assembly and washing into packing, where it remains in progress.\n\nThe order was due March 23 and is now 9 calendar days overdue. Packing is the only remaining stage, with an estimated 3.0 working days of work left at the current pace. Its last activity was March 30, two working days ago, so it is flagged OVERDUE but not STALLED.\n\nPriority should be to complete packing immediately. The trace does not recommend external workshop support.\n\nNote: per-order stage dates come from the snapshot; the production log is factory-wide and cannot attribute daily output to ORD-114. The log ends March 31, one day before the factory date of April 1."
+    },
+    {
+      "id": "ETS-135",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "edge_case",
+      "relevant_tool": "find_orders",
+      "question": "List orders for the customer NorthStar Retail.",
+      "expected_answer": "I found no orders matching the customer name NorthStar Retail in the current order data. Please check the customer name if you expected to see an order."
+    },
+    {
+      "id": "Q003",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "normal_lookup",
+      "relevant_tool": "trace_order",
+      "question": "Why is ORD-120 considered risky?",
+      "expected_answer": "🔴 **ORD-120 — High Risk**\n1,500 Vest | TrendCart | **15-days-Overdue**\n\nORD-120 is considered high risk because it is already **15 days overdue**. The order was placed on **Feb 27**, but production did not start until **Mar 27**, nearly one month later. This late start is likely a major contributor to the delay.\n\nIt is currently in **Assembly**, with **3 stages remaining**. At the current production pace, it is estimated to need **at least 6 more days** to complete internally.\n\nGiven the existing delay and remaining workload, **external workshop support could be considered to speed up completion.**"
+    },
+    {
+      "id": "Q004",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "normal_lookup",
+      "relevant_tool": "trace_order",
+      "question": "Trace ORD-107 for me. What's its current situation?",
+      "expected_answer": "**ORD-107** is a **2,000-piece Cardigan order for Northwind Apparel**, due on **Mar 16**, already 16 days late.\n\nThe order was placed on **Mar 1**, but there was a noticeable delay (about 22 days) before it entered the first production stage, **Knitting**. The following three stages progressed at a relatively normal pace, but the late start contributed to the order missing its due date.\n\nThe good news is that ORD-107 has **now reached Packing, the final stage**. Based on the current production pace, **it is close to completion and is expected to be finished within this week.**"
+    },
+    {
+      "id": "ETS-039",
+      "type": "clarify",
+      "type_label": "澄清与追问",
+      "category": "clarification",
+      "relevant_tool": "check_feasibility",
+      "question": "Can we accept 300 scarves? I have not agreed a delivery date yet",
+      "expected_answer": "What delivery date should I test for the 300 scarves? Please provide the date.\n\nUnder the current capacity heuristic, 300 scarves by April 10, 2026 are feasible only with workshops (FEASIBLE_WITH_WORKSHOPS). The request maps to ACCESSORIES.\n\nThe model counts 9 working days and identifies PACKING as the bottleneck, with median throughput of 672 pieces per working day. Existing IN_PROGRESS orders account for 32,850 pieces, leaving estimated spare in-house capacity at 0. Eligible ACTIVE workshops provide an estimated 2,121.05 pieces of overflow capacity, so the 300-piece request fits using workshops.\n\nThis is a planning estimate, not a delivery guarantee. It:\n\nCounts the full quantity of every IN_PROGRESS order because remaining quantities are unknown.\nUses the bottleneck-stage median from the last 30 working days.\nDoes not model the latency of the four sequential production stages.\nAssumes at most one new batch per workshop.\nExcludes SUSPENDED workshops."
+    },
+    {
+      "id": "ETS-084",
+      "type": "clarify",
+      "type_label": "澄清与追问",
+      "category": "clarification",
+      "relevant_tool": "assess_ambiguity",
+      "question": "How was its estimated remaining time calculated?",
+      "expected_answer": "Which of these did you mean?\n\nI’ll explain how the time remaining until ORD-120’s due date was calculated.\nI’ll explain how ORD-120’s estimated production time for its remaining stages was calculated.\n\nORD-120’s remaining production time in that reading was based on its lifecycle stages, not a throughput forecast.\n\nBecause the order is currently in ASSEMBLY, the unfinished stages are:\n\nASSEMBLY → WASHING → PACKING\n\nThe calculation counted those three remaining stages, giving a remaining-stage count of 3. The prior result did not include stage-output medians or a pace-based duration, so it does not support a more detailed production-time estimate."
+    },
+    {
+      "id": "ETS-047",
+      "type": "production",
+      "type_label": "生产异常",
+      "category": "anomaly_judgement",
+      "relevant_tool": "discover_factory_issues",
+      "question": "Which production stage should we improve first to maximize our on-time delivery rate?",
+      "expected_answer": "Improve Assembly first.\n\nIt is the only stage currently flagged below baseline: 455 pieces versus a 30-day median of 758, with 10 in-progress orders queued there. Two orders likely to miss dates in the next seven days—ORD-108 and ORD-103—are also currently in Assembly with Washing and Packing still remaining.\n\nPacking is the long-run throughput bottleneck at a median of 672 pieces per working day, but its latest output is near normal and only 2 orders are queued there. For immediate on-time delivery improvement, Assembly is therefore the stronger first target.\n\nThis is an operational recommendation; the available model does not directly simulate the resulting change in on-time delivery rate."
+    },
+    {
+      "id": "ETS-044",
+      "type": "feasibility",
+      "type_label": "可行性",
+      "category": "feasibility",
+      "relevant_tool": "check_feasibility",
+      "question": "Explain the bottleneck and capacity assumptions in your feasibility result.",
+      "expected_answer": "The feasibility result used these assumptions:\n\nFactory bottleneck\n\n• PACKING was the bottleneck because it had the lowest 30-working-day median throughput: 672 pieces per working day.\n• The window from April 1 through May 15 contains 39 working days, counting Monday–Saturday and excluding Sundays.\n• The model therefore set factory window capacity at 26,208 pieces.\n• It treated all 32,850 pieces on IN_PROGRESS orders as competing workload. Because that exceeds the modeled window capacity, spare in-house capacity was clipped to 0.\n\nThis is conservative because the dataset does not show how many pieces remain unfinished on each active order; it assumes each order’s entire quantity is still outstanding.\n\nWorkshop capacity\n\nOnly ACTIVE workshops that make ACCESSORIES were included: W2, W4, and W6. For each workshop:\n\n• Available production days = working days minus pickup lead time and existing queue.\n• Output = daily capacity × available days × (1 − defect rate).\n• Any maximum batch limit would cap that output.\n• The model assumes no more than one new batch per workshop during the window.\n\nTheir combined estimated overflow capacity was 12,831.05 pieces. Since the factory had 0 modeled spare capacity but workshop capacity could cover the requested 2,000 scarves, the verdict was FEASIBLE_WITH_WORKSHOPS.\n\nThe estimate does not model the timing needed to move work sequentially through knitting, assembly, washing, and packing, so it is a capacity check—not a delivery guarantee."
+    },
+    {
+      "id": "Q013",
+      "type": "feasibility",
+      "type_label": "可行性",
+      "category": "feasibility",
+      "relevant_tool": "check_feasibility",
+      "question": "Could we accept 1,000 cardigans by May 30?",
+      "expected_answer": "Under the current capacity heuristic, accepting 1,000 cardigans by May 30, 2026 is feasible in-house (FEASIBLE_IN_HOUSE). The request was evaluated under the TOPS category. The model counts 52 working days and identifies PACKING as the bottleneck stage, with a median throughput of 672 pieces per working day. This gives an estimated factory window capacity of 34,944 pieces. Existing IN_PROGRESS orders account for 32,850 pieces, leaving an estimated spare factory capacity of 2,094 pieces. Because the requested 1,000 pieces fit within that spare capacity, the order is classified as FEASIBLE_IN_HOUSE. Eligible ACTIVE workshops provide an additional estimated overflow capacity of 52,844.95 pieces, but the in-house verdict does not rely on workshop capacity. This is a planning estimate, not a delivery guarantee. It counts the full piece quantity of every IN_PROGRESS order because remaining quantities are unknown, uses the bottleneck median from the last 30 working days, does not model sequential four-stage pipeline latency, assumes at most one new batch per workshop, and excludes SUSPENDED workshops."
+    },
+    {
+      "id": "ETS-072",
+      "type": "action",
+      "type_label": "操作与审计",
+      "category": "action_note",
+      "relevant_tool": "add_order_note",
+      "question": "Add a note to ORD-120: TEST Sprint1 Gem - verify status with production lead",
+      "expected_answer": "Note proposed for ORD-120: “TEST Sprint1 Gem — verify status with production lead.”\n\nClick Confirm to save it.\n\nConfirm\nDismiss"
+    },
+    {
+      "id": "ETS-103",
+      "type": "action",
+      "type_label": "操作与审计",
+      "category": "audit",
+      "relevant_tool": "get_recent_actions",
+      "question": "Show my five most recent actions.",
+      "expected_answer": "Your five most recent audit actions are shown above, newest first. The latest records a reminder for ORD-005 saved locally.\n\nNote: this is a local audit trail, not a full compliance system."
+    },
+    {
+      "id": "ETS-088",
+      "type": "scope",
+      "type_label": "范围与边界",
+      "category": "unsupported",
+      "relevant_tool": "",
+      "question": "What outsourcing cost per piece is recorded for the active TOPS workshops?",
+      "expected_answer": "I can't get the data required based on the tools I have, so I can't answer this."
+    }
+  ],
+  "pack_e": [
+    {
+      "id": "ETS-116",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "priority",
+      "relevant_tool": "get_today_priority",
+      "question": "How should we schedule production today to minimize the number of late orders?",
+      "expected_answer": "A true shift-by-shift optimum is not available because the data has no staffing, machine availability, or hourly capacity. Based on today’s priority model, use this production sequence:\n\n1. Protect Packing for ORD-107 and ORD-114.\n   They are the first-priority orders: overdue, closest to completion, and already in the final production stage.\n2. In Washing, accelerate ORD-093 first as the operational tie-break.\n   It has the shortest estimate in the second-priority bucket at 2.0 working days. Keep ORD-029, ORD-083, and ORD-002 moving as the rest of the second-priority Washing group; ORD-029 is due today.\n3. In Assembly, work ORD-120 before ORD-108 and ORD-103.\n   ORD-120 is in the second-priority overdue group. ORD-108 and ORD-103 are third priority but likely to miss their upcoming dates at the current pace.\n4. Give Assembly management attention today.\n   It is the only stage running materially below its normal output, so resolving that slowdown is important to prevent additional late orders.\n\nThis schedule follows the official priority buckets; only the choice of ORD-093 within the tied second-priority group is an operational tie-break based on shortest estimated remaining work."
+    },
+    {
+      "id": "ETS-123",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_list",
+      "relevant_tool": "get_orders_at_risk",
+      "question": "Separate the orders into three groups: overdue, stalled, and likely to miss their due dates. Do not place an order in more than one group.",
+      "expected_answer": "The orders are separated in the table with no duplicates.\n\nClassification rule: overdue takes precedence over stalled. ORD-002 has both flags, so it appears only in Overdue and is excluded from Stalled. The likely-to-miss group contains only orders that are not yet overdue."
+    },
+    {
+      "id": "ETS-138",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_judgement",
+      "relevant_tool": "trace_order",
+      "question": "Why is ORD-103 at risk late delivery?",
+      "expected_answer": "ORD-103 is at risk because the remaining workload exceeds the time available. The 2,000-piece scarf order is due April 4, leaving 4 working days, but Assembly, Washing, and Packing are estimated to require 8.4 working days at the current pace—a 4.4-working-day shortfall.\n\nIt also had a slow start: the order was placed on March 9 but did not enter Knitting until March 27, an 18-calendar-day delay. It is currently in Assembly and is neither overdue nor stalled, but the deadline is too tight for the work remaining."
+    },
+    {
+      "id": "ETS-139",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_judgement",
+      "relevant_tool": "trace_order",
+      "question": "Why is ORD-107 at risk?",
+      "expected_answer": "ORD-107 is not merely at risk—it is already overdue. It was due 2026-03-16, remains in Packing, and has 3.0 estimated working days left.\n\nThat 3.0-day figure is calculated as:\n\nmax(sum of pieces ÷ 30-day median output for each remaining stage, number of remaining stages)\n\nBecause Packing is its only remaining stage, the estimate uses the packing pace for its 2,000 pieces, with a minimum of one day. It is therefore 1st priority: overdue but close to completion."
+    },
+    {
+      "id": "ETS-140",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_judgement",
+      "relevant_tool": "trace_order",
+      "question": "Why is this order considered risky?",
+      "expected_answer": "ORD-120 is risky because it is already overdue, not because it is stalled.\n\nIts due date was 2026-03-17. Compared with the factory date of 2026-04-01, the calculation due date − factory today gives −15 calendar days, meaning it is 15 days past due with 0 working days remaining.\n\nIt is still in ASSEMBLY, with ASSEMBLY, WASHING, and PACKING left. Its last activity was 2026-03-30, only two working days ago, so it is not flagged as stalled."
+    },
+    {
+      "id": "Q005",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "normal_lookup",
+      "relevant_tool": "get_today_priority",
+      "question": "What should we prioritize today?",
+      "expected_answer": "**Today's production should be prioritized in three levels:**\n\n🔴 **1st Priority — Clear overdue orders that are close to completion**\n**ORD-107 and ORD-114** should be pushed first. Both are already overdue and in Packing, so prioritizing them can help clear the overdue backlog quickly.\n\n🟠 **2nd Priority — Urgent orders with significant work remaining**\n**ORD-029, ORD-120, ORD-083, ORD-002, and ORD-093** should receive immediate attention. ORD-029 is **due today**, while the others are already overdue and still have multiple days of production remaining. **ORD-093 is in Washing**, so it still has two stages left and is no longer treated as nearly done. Among them, **ORD-120 needs particular attention**, as it is already **15 days overdue** with around **6.3 days of work still needed**.\n\n🟡 **3rd Priority — Prevent upcoming delays**\n**ORD-108 and ORD-103** should be closely monitored next. Both are 2,000-piece Scarf orders due within **2–3 days**, but each still requires around **8.4 days of production** at the current pace.\n\n**Priority today: clear near-complete overdue orders first, then push urgent unfinished orders, while preparing for the upcoming risks.**"
+    },
+    {
+      "id": "Q006",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "normal_lookup",
+      "relevant_tool": "discover_factory_issues",
+      "question": "Are there any unusual production issues I should know about today?",
+      "expected_answer": "⚠️ **Assembly has been experiencing a prolonged production slowdown and requires immediate attention.**\n\nThere are currently **34 orders in progress**: 12 in Knitting, 10 in Assembly, 10 in Washing, and 2 in Packing.\n\nWhile Knitting, Washing, and Packing are performing close to their normal levels, **Assembly output has remained consistently low since 2026-03-25**, when it dropped to just 394 pieces, well below 60% of its 30-day median (758 pieces). **It has shown no clear signs of recovery, reaching only 455 pieces yesterday.** This suggests a persistent production issue rather than a one-off fluctuation. With **10 orders currently accumulated at Assembly**, the prolonged slowdown could create a bottleneck and delay orders moving into Washing.\n\n**Knitting has the largest queue with 12 orders**, but its output remains normal (905 vs. 898 median), so there is no clear performance issue there yet.\n\nOverall, **Assembly requires the most urgent attention**, as its sustained low output and growing backlog could lead to further production delays if left unresolved."
+    },
+    {
+      "id": "Q007",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "normal_lookup",
+      "relevant_tool": "get_order_status",
+      "question": "How is ORD-120 doing?",
+      "expected_answer": "As of 2026-04-01, ORD-120 for TrendCart is still in progress at the **ASSEMBLY** stage. The order is for 1,500 vests and was **due on 2026-03-17,** so it is **15 calendar days** **OVERDUE**.\n\nIts last recorded activity was on **2026-03-30**, indicating recent production activity with no signs of an unusual stall.\n\nThe order still has **3 stages remaining (Assembly, Washing, and Packing)**. At the current production pace, it is estimated to need **another 6.3 days** to complete internally, bringing the total expected delay to approximately **21 days**.\n\nAlthough the order is still active, **it remains significantly behind schedule and requires close monitoring** to prevent further delays."
+    },
+    {
+      "id": "Q009",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "not_found_lookup",
+      "relevant_tool": "get_order_status",
+      "question": "What is the status of ORD-999?",
+      "expected_answer": "I could not find an order with ID ORD-999. Please check the order ID and provide the correct one; I cannot report its status without a matching order."
+    },
+    {
+      "id": "Q010",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "customer_order_list",
+      "relevant_tool": "find_orders",
+      "question": "List all TrendCart orders.",
+      "expected_answer": "I found 17 TrendCart orders. In progress: ORD-005 (Scarf, KNITTING), ORD-017 (Cardigan, KNITTING), ORD-020 (Vest, WASHING), ORD-082 (Beanie, KNITTING), ORD-096 (Beanie, KNITTING), and ORD-120 (Vest, ASSEMBLY). Complete: ORD-014 (Vest), ORD-021 (Vest), ORD-028 (Beanie), ORD-030 (Cardigan), ORD-054 (Vest), ORD-059 (Scarf), ORD-076 (Crewneck sweater), ORD-087 (Hoodie), ORD-090 (Polo shirt), ORD-091 (Polo shirt), and ORD-115 (Cardigan)."
+    },
+    {
+      "id": "Q011",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "stage_filter",
+      "relevant_tool": "find_orders",
+      "question": "Which orders are currently in ASSEMBLY?",
+      "expected_answer": "As of 2026-04-01, 10 orders are in the ASSEMBLY stage: ORD-015 (UrbanThread), ORD-024 (Loom & Leaf), ORD-053 (UrbanThread), ORD-055 (Cotton Club), ORD-066 (Northwind Apparel), ORD-073 (Loom & Leaf), ORD-081 (Harbor Knits), ORD-103 (Bright Basics), ORD-108 (Harbor Knits), and ORD-120 (TrendCart). All 10 are in progress."
+    },
+    {
+      "id": "Q012",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "empty_result",
+      "relevant_tool": "find_orders",
+      "question": "List all orders for NoSuchBuyer.",
+      "expected_answer": "I found no orders matching the customer name NoSuchBuyer in the current order data. Please check the customer name if you expected to see an order."
+    },
+    {
+      "id": "Q016",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "customer_orders_summary",
+      "relevant_tool": "find_orders",
+      "question": "What is the overall status of TrendCart's orders?",
+      "expected_answer": "TrendCart has 17 orders in total: 6 are IN_PROGRESS and 11 are COMPLETE. Of the 6 in-progress orders, 4 are in KNITTING (ORD-005, ORD-017, ORD-082 and ORD-096), 1 is in WASHING (ORD-020), and 1 is in ASSEMBLY (ORD-120)."
+    },
+    {
+      "id": "Q017",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "normal_lookup",
+      "relevant_tool": "get_orders_at_risk",
+      "question": "How should we resequence production to minimize orders delivered late over the next 7 days?",
+      "expected_answer": "**3 orders are likely to miss their due dates in the next 7 days: ORD-108, ORD-103, and ORD-062.**\n\n🟠 **ORD-108 & ORD-103 — High risk**\n_2,000 Scarves | Harbor Knits | **Due in 3 days**\n2,000 Scarves | Bright Basics | **Due in 4 days**_\nBoth are in **Assembly**, with **Washing** and **Packing** also remaining. Each needs an estimated **8.4 working days**, compared with only **3** and **4 working days** available.\n\n🟡 **ORD-062 — At risk**\n_2,000 Scarves | Bright Basics | **Due in 8 days**_\nIt is still in **Knitting**, so all four production stages remain. Estimated work is **10.6 working days**, versus **7 working days** available.\n\n**Resequencing focus:** prioritize ORD-108, then ORD-103, while protecting capacity for ORD-062. Bright Basics has two 2,000-piece scarf orders moving through similar production stages, increasing pressure on the same workflow."
+    },
+    {
+      "id": "ETS-132",
+      "type": "clarify",
+      "type_label": "澄清与追问",
+      "category": "context_followup",
+      "relevant_tool": "get_orders_at_risk",
+      "question": "Which of those orders are likely to miss their due dates?",
+      "expected_answer": "None of those TrendCart orders are currently flagged as likely to miss their due dates under the factory’s near-term pace assessment."
+    },
+    {
+      "id": "ETS-133",
+      "type": "clarify",
+      "type_label": "澄清与追问",
+      "category": "context_followup",
+      "relevant_tool": "get_orders_at_risk",
+      "question": "其中哪些订单有风险？",
+      "expected_answer": "按当前的“可能错过交期”判定，这些 TrendCart 订单中没有订单进入风险名单。\n\n该名单只覆盖尚未逾期、交期在今天至未来 3 个日历日内，且预计剩余工时超过可用工作日的订单。"
+    },
+    {
+      "id": "ETS-092",
+      "type": "production",
+      "type_label": "生产异常",
+      "category": "anomaly_judgement",
+      "relevant_tool": "discover_factory_issues",
+      "question": "Is packing output keeping up with the flow of work from upstream stages?",
+      "expected_answer": "Packing appears to be keeping up overall, with no current bottleneck flagged.\n\nOn the latest working day, Packing completed 657 pieces, close to its 30-day median of 672, and only 2 orders are currently queued there.\n\nWashing completed 732 pieces, so its latest output was higher than Packing’s. That could increase the Packing queue if sustained, but the current queue and near-normal Packing output do not indicate an immediate concern. Assembly remains the more significant issue today."
+    },
+    {
+      "id": "Q014",
+      "type": "feasibility",
+      "type_label": "可行性",
+      "category": "feasibility",
+      "relevant_tool": "check_feasibility",
+      "question": "Can we take 300 accessories by April 4?",
+      "expected_answer": "Under the current capacity heuristic, the request for 300 accessories by April 4, 2026 is feasible only with workshops (FEASIBLE_WITH_WORKSHOPS). The request was evaluated under the ACCESSORIES category. The model counts 4 working days and identifies PACKING as the bottleneck stage, with a median throughput of 672 pieces per working day. This gives an estimated factory window capacity of 2,688 pieces. Existing IN_PROGRESS orders account for 32,850 pieces, so the estimated spare factory capacity is clipped to 0. Eligible ACTIVE workshops provide an estimated 418.5 pieces of overflow capacity. Because the requested 300 pieces fit within that estimated workshop capacity, the tool verdict is FEASIBLE_WITH_WORKSHOPS. This is a planning estimate, not a delivery guarantee. It counts the full piece quantity of every IN_PROGRESS order because remaining quantities are unknown, uses the bottleneck median from the last 30 working days, does not model sequential four-stage pipeline latency, assumes at most one new batch per workshop, and excludes SUSPENDED workshops."
+    },
+    {
+      "id": "Q015",
+      "type": "feasibility",
+      "type_label": "可行性",
+      "category": "feasibility",
+      "relevant_tool": "check_feasibility",
+      "question": "Could we accept 500 hoodies for delivery by April 4?",
+      "expected_answer": "Under the current capacity heuristic, the request for 500 hoodies by April 4, 2026 is not feasible (NOT_FEASIBLE). The request was evaluated under the TOPS category. The model counts 4 working days and identifies PACKING as the bottleneck stage, with a median throughput of 672 pieces per working day. This gives an estimated factory window capacity of 2,688 pieces. Existing IN_PROGRESS orders account for 32,850 pieces, so the estimated spare factory capacity is clipped to 0. Eligible ACTIVE workshops provide an estimated 439 pieces of overflow capacity. Because the total estimated capacity available to the new order is 439 pieces, which is below the requested 500 pieces, the tool verdict is NOT_FEASIBLE. This is a planning estimate, not a delivery guarantee. It counts the full piece quantity of every IN_PROGRESS order because remaining quantities are unknown, uses the bottleneck median from the last 30 working days, does not model sequential four-stage pipeline latency, assumes at most one new batch per workshop, and excludes SUSPENDED workshops."
+    },
+    {
+      "id": "ETS-106",
+      "type": "action",
+      "type_label": "操作与审计",
+      "category": "action_reminder",
+      "relevant_tool": "create_reminder",
+      "question": "create the reminder for ord-108",
+      "expected_answer": "Reminder proposed for April 3, 2026, anchored to ORD-108, to check ORD-029, ORD-108, and ORD-103 for stage movement and delivery risk.\n\nClick Confirm to save it locally. No external notification will be sent.\n\nProposed locally. Click Confirm to save — that is the confirmation step. Email is never actually sent."
+    },
+    {
+      "id": "ETS-109",
+      "type": "scope",
+      "type_label": "范围与边界",
+      "category": "out_of_scope",
+      "relevant_tool": "",
+      "question": "三月份的销售额是多少",
+      "expected_answer": "这项没有记录在我们的数据库里，所以我回答不了。"
+    },
+    {
+      "id": "ETS-117",
+      "type": "scope",
+      "type_label": "范围与边界",
+      "category": "out_of_scope",
+      "relevant_tool": "",
+      "question": "What is the selling price of a Hoodie?",
+      "expected_answer": "Selling price isn’t stored in the factory tables. The available cost_per_piece is what SweaterCo pays subcontract workshops, not the customer selling price."
+    }
+  ]
+}

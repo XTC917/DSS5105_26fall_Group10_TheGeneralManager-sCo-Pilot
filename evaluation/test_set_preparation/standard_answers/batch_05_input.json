@@ -1,0 +1,146 @@
+[
+  {
+    "test_id": "ETS-073",
+    "question": "Can ORD-103 be completed on time? Explain your conclusion.",
+    "language": "en",
+    "source_record_id": "14",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-073.png"
+  },
+  {
+    "test_id": "ETS-074",
+    "question": "How many orders were completed over the past month, and what was the on-time delivery rate?",
+    "language": "en",
+    "source_record_id": "JAST-B26",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-074.png"
+  },
+  {
+    "test_id": "ETS-075",
+    "question": "Show me the status of ORD-002.",
+    "language": "en",
+    "source_record_id": "2",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-075.png"
+  },
+  {
+    "test_id": "ETS-076",
+    "question": "When did ORD-005 last move, and is it stalled?",
+    "language": "en",
+    "source_record_id": "Q27",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-076.png"
+  },
+  {
+    "test_id": "ETS-077",
+    "question": "请查询 ORD-057 的完成情况和是否按时交付。",
+    "language": "zh",
+    "source_record_id": "Q04",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-077.png"
+  },
+  {
+    "test_id": "ETS-078",
+    "question": "What is the current status of ORD-107?",
+    "language": "en",
+    "source_record_id": "3",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-078.png"
+  },
+  {
+    "test_id": "ETS-079",
+    "question": "Show me ORD-108, 2000 Scarf, Harbor Knits, now at ASSEMBLY.",
+    "language": "en",
+    "source_record_id": "B07",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-079.png"
+  },
+  {
+    "test_id": "ETS-080",
+    "question": "What is the current production status of ORD-114?",
+    "language": "en",
+    "source_record_id": "4",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-080.png"
+  },
+  {
+    "test_id": "ETS-081",
+    "question": "How is ORD-120 doing?",
+    "language": "en",
+    "source_record_id": "JAST-B02",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-081.png"
+  },
+  {
+    "test_id": "ETS-082",
+    "question": "Show the observed stage history for ORD-120, without treating factory-wide production as own output.",
+    "language": "en",
+    "source_record_id": "Q28",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-082.png"
+  },
+  {
+    "test_id": "ETS-083",
+    "question": "How is ORD-120 doing?",
+    "language": "en",
+    "source_record_id": "Q01",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-083.png"
+  },
+  {
+    "test_id": "ETS-084",
+    "question": "How was its estimated remaining time calculated?",
+    "language": "en",
+    "source_record_id": "Q03",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-084.png"
+  },
+  {
+    "test_id": "ETS-085",
+    "question": "How is ORD-120 doing?",
+    "language": "en",
+    "source_record_id": "V07",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-085.png"
+  },
+  {
+    "test_id": "ETS-086",
+    "question": "How is ORD-120 doing?",
+    "language": "en",
+    "source_record_id": "JAST-B03",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-086.png"
+  },
+  {
+    "test_id": "ETS-087",
+    "question": "Which production stage has shown the most unstable output over the past 30 days?",
+    "language": "en",
+    "source_record_id": "JAST-B25",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-087.png"
+  },
+  {
+    "test_id": "ETS-088",
+    "question": "What outsourcing cost per piece is recorded for the active TOPS workshops?",
+    "language": "en",
+    "source_record_id": "Q60",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-088.png"
+  },
+  {
+    "test_id": "ETS-089",
+    "question": "How many orders are currently overdue, and how many days late are they expected to be in total?",
+    "language": "en",
+    "source_record_id": "JAST-G04",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-089.png"
+  },
+  {
+    "test_id": "ETS-090",
+    "question": "Which orders are late?",
+    "language": "en",
+    "source_record_id": "Q56",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-090.png"
+  }
+]

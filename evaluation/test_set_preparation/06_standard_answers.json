@@ -1,0 +1,1003 @@
+{
+  "meta": {
+    "name": "Sprint 1 standard answers transcribed from source screenshots",
+    "count": 142,
+    "note": "Assistant prose only. Charts, tables, tool lines, and Why panels are omitted. Not written into evaluation/questions.json."
+  },
+  "answers": [
+    {
+      "test_id": "ETS-001",
+      "question": "Are there any unusual production issues I should know about today?",
+      "source_record_id": "JAST-G09",
+      "original_rating": "GOOD",
+      "answer": "⚠️ Assembly is the main production issue to watch today.\n\nThere are 34 orders in progress: 12 in Knitting, 10 in Assembly, 10 in Washing, and 2 in Packing.\n\nAssembly produced only 455 pieces yesterday, 60% of its 30-day median of 758 pieces. With 10 orders already at Assembly, this slowdown could create a bottleneck and delay work moving into Washing.\n\nKnitting has the largest queue at 12 orders, but its output remains normal. Washing and Packing are also close to their usual levels.\n\nAssembly needs the closest attention today. This is the only issue flagged by the current stage-output rule; it is not a general anomaly scan."
+    },
+    {
+      "test_id": "ETS-002",
+      "question": "当前工厂有什么异常？请按严重程度列出前三项。",
+      "source_record_id": "Q32",
+      "original_rating": "GOOD",
+      "answer": "⚠️目前只识别出 1 项异常，未达到三项。\n\n装配（ASSEMBLY）产出低于正常基线。最近工作日（2026-03-31）完成 455 件，仅为30日中位数 758 件的 60%，低于 70% 的异常阈值。装配工序当前还有 10 个在制订单，产出下降可能形成瓶颈，建议优先关注。\n\n其余工序未触发异常规则：针织、洗水和包装的最近产出均接近或高于各自30日中位数。当前版本仅检测“工序产出低于30日中位数70%”这一规则，并非通用异常检测。"
+    },
+    {
+      "test_id": "ETS-003",
+      "question": "Which production stage is currently underperforming?",
+      "source_record_id": "18",
+      "original_rating": "GOOD",
+      "answer": "Assembly is underperforming. On March 31 it completed 455 pieces, only 60% of its 30-day median of 758, below the 70% alert threshold."
+    },
+    {
+      "test_id": "ETS-004",
+      "question": "Summarize recent production anomalies in a table.",
+      "source_record_id": "19",
+      "original_rating": "GOOD",
+      "answer": "Only Assembly triggered the recent anomaly rule. Its March 31 output fell below 70% of its 30-day median; no other production stage was flagged."
+    },
+    {
+      "test_id": "ETS-005",
+      "question": "Is the current backlog in Knitting concern?",
+      "source_record_id": "JAST-G11",
+      "original_rating": "GOOD",
+      "answer": "The Knitting backlog is worth monitoring, but it is not the main concern today.\n\nKnitting has the largest queue at 12 in-progress orders, but its latest output was 905 pieces, close to its 30-day median of 898, so it was not flagged as underperforming.\n\nThe specific concern within Knitting is ORD-005, which has remained there for 7 working days. Factory-wide, however, Assembly is the clearer bottleneck, with output below its normal baseline."
+    },
+    {
+      "test_id": "ETS-006",
+      "question": "Give me this morning's briefing",
+      "source_record_id": "JAST-B19",
+      "original_rating": "BAD",
+      "answer": "MORNING BRIEFING\n\nFactory date 2026-04-01\n3 orders need attention (overdue 0, stalled 0, tight 3)\nIN_PROGRESS: 34\nSuspended: OldMill, OldMill"
+    },
+    {
+      "test_id": "ETS-007",
+      "question": "Cancel the TEST Sprint1 Gem watch on ORD-005",
+      "source_record_id": "Q51",
+      "original_rating": "GOOD",
+      "answer": "Cancellation is ready for “TEST Sprint1 Gem” watch #1 on ORD-005. It is still active.\n\nClick Confirm to cancel it. The watch will remain in history as CANCELLED and will no longer fire."
+    },
+    {
+      "test_id": "ETS-008",
+      "question": "Show a line chart of factory PACKING output for the last seven calendar days, through April 1, 2026.",
+      "source_record_id": "Q41",
+      "original_rating": "GOOD",
+      "answer": "I can't get the data required based on the tools I have, so I can't answer this."
+    },
+    {
+      "test_id": "ETS-009",
+      "question": "What is the overall status of TrendCart's orders? Show the status counts in a bar chart.",
+      "source_record_id": "V03",
+      "original_rating": "BAD",
+      "answer": "TrendCart has 17 orders: 6 IN_PROGRESS and 11 COMPLETE. Of the in-progress orders, 4 are in KNITTING (ORD-005, ORD-017, ORD-082, ORD-096), 1 in WASHING (ORD-020), and 1 in ASSEMBLY (ORD-120)."
+    },
+    {
+      "test_id": "ETS-010",
+      "question": "用图表比较各客户在制订单的总件数。",
+      "source_record_id": "Q40",
+      "original_rating": "GOOD",
+      "answer": "抱歉，现有的工具不支持我对这个问题的回答。"
+    },
+    {
+      "test_id": "ETS-011",
+      "question": "Show a bar chart comparing the number of in-progress orders by stage.",
+      "source_record_id": "Q38",
+      "original_rating": "GOOD",
+      "answer": "The bar chart compares all 34 in-progress orders by their current production stage. Knitting has the largest queue, while Packing has the smallest."
+    },
+    {
+      "test_id": "ETS-012",
+      "question": "请用柱状图比较各生产阶段的在制订单数量。",
+      "source_record_id": "V17-ZH",
+      "original_rating": "GOOD",
+      "answer": "您想采用哪一种统计口径？\n\n我会使用每日生产快照中的在制订单数量，绘制柱状图比较 KNITTING、ASSEMBLY、WASHING 和 PACKING。\n\n我会使用工厂问题诊断中的各阶段队列数量，绘制柱状图比较 KNITTING、ASSEMBLY、WASHING 和 PACKING。"
+    },
+    {
+      "test_id": "ETS-013",
+      "question": "Show me the Northwind Apparel order.",
+      "source_record_id": "B01",
+      "original_rating": "BAD",
+      "answer": "14 orders match. Pick one, or type the order you mean.\n\nShow me ORD-006, 150 Vest, Northwind Apparel, now at COMPLETE.\nShow me ORD-013, 1000 Polo shirt, Northwind Apparel, now at COMPLETE.\nShow me ORD-019, 600 Vest, Northwind Apparel, now at COMPLETE.\nShow me ORD-029, 1500 Beanie, Northwind Apparel, now at WASHING.\nShow me ORD-032, 1500 Beanie, Northwind Apparel, now at COMPLETE.\nShow me ORD-048, 200 Hoodie, Northwind Apparel, now at COMPLETE.\nShow me ORD-050, 500 Vest, Northwind Apparel, now at COMPLETE.\nShow me ORD-066, 1000 Polo shirt, Northwind Apparel, now at ASSEMBLY.\nShow me ORD-070, 1200 Beanie, Northwind Apparel, now at COMPLETE.\nShow me ORD-079, 300 Crewneck sweater, Northwind Apparel, now at COMPLETE.\nShow me ORD-099, 1500 Polo shirt, Northwind Apparel, now at WASHING.\nShow me ORD-100, 200 Crewneck sweater, Northwind Apparel, now at COMPLETE.\nShow me ORD-107, 2000 Cardigan, Northwind Apparel, now at PACKING.\nShow me ORD-114, 2000 Hoodie, Northwind Apparel, now at PACKING."
+    },
+    {
+      "test_id": "ETS-014",
+      "question": "How is TrendCart doing?",
+      "source_record_id": "Q55",
+      "original_rating": "BAD",
+      "answer": "17 orders match. Pick one, or type the order you mean.\n\nShow me ORD-005, 500 Scarf, TrendCart, now at KNITTING.\nShow me ORD-014, 2000 Vest, TrendCart, now at COMPLETE.\nShow me ORD-017, 800 Cardigan, TrendCart, now at KNITTING.\nShow me ORD-020, 1200 Vest, TrendCart, now at WASHING.\nShow me ORD-021, 800 Vest, TrendCart, now at COMPLETE.\nShow me ORD-028, 150 Beanie, TrendCart, now at COMPLETE.\nShow me ORD-030, 400 Cardigan, TrendCart, now at COMPLETE.\nShow me ORD-054, 600 Vest, TrendCart, now at COMPLETE.\nShow me ORD-059, 100 Scarf, TrendCart, now at COMPLETE.\nShow me ORD-076, 1200 Crewneck sweater, TrendCart, now at COMPLETE.\nShow me ORD-082, 600 Beanie, TrendCart, now at KNITTING.\nShow me ORD-087, 1000 Hoodie, TrendCart, now at COMPLETE.\nShow me ORD-090, 600 Polo shirt, TrendCart, now at COMPLETE.\nShow me ORD-091, 600 Polo shirt, TrendCart, now at COMPLETE.\nShow me ORD-096, 1000 Beanie, TrendCart, now at KNITTING.\nShow me ORD-115, 2000 Cardigan, TrendCart, now at COMPLETE.\nShow me ORD-120, 1500 Vest, TrendCart, now at ASSEMBLY.\n\nORD-005 is still in KNITTING and is due April 20. It has not moved since March 24—7 working days—so it is flagged as stalled.\nThere are 17 working days until the due date, with knitting, assembly, washing, and packing still remaining. The immediate priority is to restart movement through knitting."
+    },
+    {
+      "test_id": "ETS-015",
+      "question": "Show me the Harbor Knits scarf order.",
+      "source_record_id": "24",
+      "original_rating": "GOOD",
+      "answer": "4 orders match. Pick one, or type the order you mean.\n\nShow me ORD-049, 300 Scarf, Harbor Knits, now at COMPLETE.\nShow me ORD-061, 800 Scarf, Harbor Knits, now at WASHING.\nShow me ORD-101, 1200 Scarf, Harbor Knits, now at COMPLETE.\nShow me ORD-108, 2000 Scarf, Harbor Knits, now at ASSEMBLY."
+    },
+    {
+      "test_id": "ETS-016",
+      "question": "How is factory performance?",
+      "source_record_id": "Q54",
+      "original_rating": "GOOD",
+      "answer": "Which of these did you mean?\n\nI’ll show factory production performance, including queues, recent output versus the 30-day median, and ranked stage issues.\n\nI’ll show the daily factory snapshot, including at-risk orders, work-in-progress counts, stage output, and suspended workshops.\n\n⚠️ Assembly is the main production issue to watch today.\n\nThere are 34 orders in progress: 12 in Knitting, 10 in Assembly, 10 in Washing, and 2 in Packing.\n\nOn March 31, Assembly produced 455 pieces, just 60% of its 30-day median of 758 pieces. With 10 orders already queued there, this slowdown could create a bottleneck.\n\nThe other stages were close to normal:\n\nKnitting: 905 vs 898 median\nWashing: 732 vs 718 median\nPacking: 657 vs 672 median\n\nAssembly needs the closest attention today. This is the only stage flagged by the V1 rule; the check is not a general anomaly detector."
+    },
+    {
+      "test_id": "ETS-017",
+      "question": "If we could make only one change—increase internal output, change production priorities, or seek workshop support—which would most improve on-time delivery?",
+      "source_record_id": "JAST-B15",
+      "original_rating": "BAD",
+      "answer": "Which of these approaches did you mean?\n\nI’ll analyze production queues and output issues to identify which single change would most improve on-time delivery.\n\nI’ll use today’s at-risk orders, work in progress, stage output, and workshop status to recommend the single change that would most improve on-time delivery.\n\nI’ll use today’s production priorities and remaining work estimates to determine whether reprioritizing orders would most improve on-time delivery."
+    },
+    {
+      "test_id": "ETS-018",
+      "question": "How is ORD-120 doing?",
+      "source_record_id": "V01",
+      "original_rating": "GOOD",
+      "answer": "Which of these did you mean?\n\nAs of 2026-04-01, ORD-120 for TrendCart is still in progress at ASSEMBLY. The order is for 1,500 vests and was due on 2026-03-17, so it is 15 calendar days overdue.\n\nIts latest activity was on 2026-03-30, two working days ago, so it does not meet the stalled-order threshold. ASSEMBLY, WASHING, and PACKING remain before completion. No completion date is recorded."
+    },
+    {
+      "test_id": "ETS-019",
+      "question": "How is the TrendCart order doing?",
+      "source_record_id": "Q53",
+      "original_rating": "GOOD",
+      "answer": "17 orders match. Pick one, or type the order you mean.\n\nShow me ORD-005, 500 Scarf, TrendCart, now at KNITTING.\nShow me ORD-014, 2000 Vest, TrendCart, now at COMPLETE.\nShow me ORD-017, 800 Cardigan, TrendCart, now at KNITTING.\nShow me ORD-020, 1200 Vest, TrendCart, now at WASHING.\nShow me ORD-021, 800 Vest, TrendCart, now at COMPLETE.\nShow me ORD-028, 150 Beanie, TrendCart, now at COMPLETE.\nShow me ORD-030, 400 Cardigan, TrendCart, now at COMPLETE.\nShow me ORD-054, 600 Vest, TrendCart, now at COMPLETE.\nShow me ORD-059, 100 Scarf, TrendCart, now at COMPLETE.\nShow me ORD-076, 1200 Crewneck sweater, TrendCart, now at COMPLETE.\nShow me ORD-082, 600 Beanie, TrendCart, now at KNITTING.\nShow me ORD-087, 1000 Hoodie, TrendCart, now at COMPLETE.\nShow me ORD-090, 600 Polo shirt, TrendCart, now at COMPLETE.\nShow me ORD-091, 600 Polo shirt, TrendCart, now at COMPLETE.\nShow me ORD-096, 1000 Beanie, TrendCart, now at KNITTING.\nShow me ORD-115, 2000 Cardigan, TrendCart, now at COMPLETE.\nShow me ORD-120, 1500 Vest, TrendCart, now at ASSEMBLY.\n\nORD-082 is in progress at KNITTING. The 600 TrendCart beanies last moved on March 30 and are due May 1, with 27 working days remaining. Assembly, washing, and packing still follow; it is not currently flagged as overdue, stalled, or on a tight deadline."
+    },
+    {
+      "test_id": "ETS-020",
+      "question": "Compare the risk levels of ORD-061 and ORD-108.",
+      "source_record_id": "15",
+      "original_rating": "GOOD",
+      "answer": "ORD-108 is substantially riskier. It is flagged TIGHT_DEADLINE: due April 3, with 8.4 estimated working days of work remaining but only 3 working days available. Assembly, washing, and packing are still left.\n\nORD-061 is not currently at risk. It is due April 5, with 2.3 estimated working days needed and 4 working days available. Only washing and packing remain.\n\nNeither order is overdue or stalled. Prioritize ORD-108 first."
+    },
+    {
+      "test_id": "ETS-021",
+      "question": "Compare the production progress of ORD-096, ORD-005, and ORD-017.",
+      "source_record_id": "16",
+      "original_rating": "GOOD",
+      "answer": "Which of these did you mean?\n\nI’ll compare the current production status, stage, due date, pieces, and latest activity for ORD-096, ORD-005, and ORD-017.\n\nI’ll compare the detailed stage histories, start delays, remaining pace, and risk flags for ORD-096, ORD-005, and ORD-017.\n\nOther"
+    },
+    {
+      "test_id": "ETS-022",
+      "question": "Which completed orders are currently overdue?",
+      "source_record_id": "B04",
+      "original_rating": "BAD",
+      "answer": "I can't get the data required based on the tools I have, so I can't answer this."
+    },
+    {
+      "test_id": "ETS-023",
+      "question": "Which completed TrendCart orders were delivered late?",
+      "source_record_id": "Q29",
+      "original_rating": "GOOD",
+      "answer": "I can't get the data required based on the tools I have, so I can't answer this."
+    },
+    {
+      "test_id": "ETS-024",
+      "question": "Show me ORD-107, but only if it belongs to TrendCart.",
+      "source_record_id": "B05",
+      "original_rating": "BAD",
+      "answer": "ORD-107 does not belong to TrendCart, so I haven’t shown its order details."
+    },
+    {
+      "test_id": "ETS-025",
+      "question": "Which customers currently have multiple orders at risk of late delivery?",
+      "source_record_id": "JAST-B11",
+      "original_rating": "BAD",
+      "answer": "Bright Basics is the only customer with multiple orders at risk over the next 7 days:\n\n• ORD-103 — estimated 8.4 working days remaining, due in 4 working days.\n• ORD-062 — estimated 10.6 working days remaining, due in 7 working days.\n\nBoth are 2,000-piece scarf orders, increasing the delivery risk for that customer. In the immediate due-today-through-three-days list alone, no customer has more than one at-risk order.\n\nAmong ORD-029, ORD-108, ORD-103, and ORD-062, 0 orders are currently overdue, so their total current lateness is 0 days."
+    },
+    {
+      "test_id": "ETS-026",
+      "question": "when will trendcart orders all finish",
+      "source_record_id": "JAST-B21",
+      "original_rating": "BAD",
+      "answer": "ORD-120 was not in the manager's question. Do not take an order id from an answer template or a field example. Call again using only the customer, product, or other words they used. If several rows match, stop and ask which order id."
+    },
+    {
+      "test_id": "ETS-027",
+      "question": "Which customers currently have multiple orders at risk of late delivery?",
+      "source_record_id": "JAST-B10",
+      "original_rating": "BAD",
+      "answer": "Bright Basics is the only customer with multiple orders at risk over the next 7 days:\n\n• ORD-103 — estimated 8.4 working days remaining, due in 4 working days.\n• ORD-062 — estimated 10.6 working days remaining, due in 7 working days.\n\nBoth are 2,000-piece scarf orders, increasing the delivery risk for that customer. In the immediate due-today-through-three-days list alone, no customer has more than one at-risk order."
+    },
+    {
+      "test_id": "ETS-028",
+      "question": "Do any customers have an unusually high number of delayed orders, and are there common causes?",
+      "source_record_id": "JAST-B17",
+      "original_rating": "BAD",
+      "answer": "I can't get the data required based on the tools I have, so I can't answer this."
+    },
+    {
+      "test_id": "ETS-029",
+      "question": "Are there any signs that production delays are spreading from one stage to another?",
+      "source_record_id": "JAST-G22",
+      "original_rating": "GOOD",
+      "answer": "There is no clear evidence yet that the delay is spreading across stages. The problem currently appears concentrated in Assembly.\n\nAssembly produced 455 pieces, only 60% of its 30-day median of 758, with 10 orders queued there. However:\n\n• Washing output remains normal at 732 pieces versus a 718 median, despite its 10-order queue.\n• Packing is close to normal at 657 pieces versus a 672 median, with only 2 orders queued.\n• Knitting output is also normal, although it has the largest queue at 12 orders.\n\nThe main warning sign is that a sustained Assembly slowdown could restrict work entering Washing. For now, though, the available snapshot has flagged only Assembly—not a downstream chain of stage delays. This check compares the latest working day with 30-day medians; it is not a full propagation or trend analysis."
+    },
+    {
+      "test_id": "ETS-030",
+      "question": "What is the earliest realistic delivery date for a new order of 2,000 Scarves?",
+      "source_record_id": "JAST-B27",
+      "original_rating": "BAD",
+      "answer": "I can't get the data required based on the tools I have, so I can't answer this."
+    },
+    {
+      "test_id": "ETS-031",
+      "question": "请为 ORD-005 起草一封催办邮件，只生成草稿，不发送。",
+      "source_record_id": "Q44",
+      "original_rating": "BAD",
+      "answer": "已生成 ORD-005 的催办邮件草稿，如表格所示。\n\n该草稿仅保存在本地，未发送。订单数据中没有客户邮箱，因此未虚构收件地址。"
+    },
+    {
+      "test_id": "ETS-032",
+      "question": "Draft a chase email for ORD-103, but do not send it.",
+      "source_record_id": "25",
+      "original_rating": "GOOD",
+      "answer": "To: Bright Basics — customer email address is not stored\nSubject: SweaterCo order ORD-103 (Scarf) needs attention\n\nOrder ORD-103 for Bright Basics: 2,000 Scarves, status IN_PROGRESS, currently at ASSEMBLY, due 4 April 2026, with last activity on 30 March 2026. Factory risk flag: TIGHT DEADLINE.\n\nThis is a local draft only and was not sent.\n\nProposed locally. Click Confirm to save — that is the confirmation step. Email is never actually sent."
+    },
+    {
+      "test_id": "ETS-033",
+      "question": "Draft a chase-up email for ORD-120. Do not send",
+      "source_record_id": "Q43",
+      "original_rating": "GOOD",
+      "answer": "Subject: SweaterCo order ORD-120 (Vest) needs attention\n\nDraft:\n\nOrder ORD-120 for TrendCart: 1,500 vests, status IN_PROGRESS, currently in ASSEMBLY, due 2026-03-17, with last activity on 2026-03-30. Factory risk flag: OVERDUE.\n\nThis draft was not sent. No customer email address is stored, and there is no email integration."
+    },
+    {
+      "test_id": "ETS-034",
+      "question": "Write an email to the customers who have overdue orders",
+      "source_record_id": "JAST-B20",
+      "original_rating": "BAD",
+      "answer": "I drafted two separate overdue-order emails to TrendCart:\n\nSubject: SweaterCo order ORD-120 (Vest) needs attention\nBody: Order ORD-120 for TrendCart: 1,500 Vest, currently in Assembly, was due 2026-03-17. The last recorded activity was 2026-03-30. This order is overdue.\n\nSubject: SweaterCo order ORD-020 (Vest) needs attention\nBody: Order ORD-020 for TrendCart: 1,200 Vest, currently in Washing, was due 2026-03-31. The last recorded activity was 2026-03-30. This order is overdue.\n\nThese are local drafts only and were not sent. No customer email address is stored.\n\nProposed locally. Click Confirm to save — that is the confirmation step. Email is never actually sent."
+    },
+    {
+      "test_id": "ETS-035",
+      "question": "List TrendCart Hoodie orders that are still in progress.",
+      "source_record_id": "Q15",
+      "original_rating": "BAD",
+      "answer": "There are no TrendCart Hoodie orders currently in progress."
+    },
+    {
+      "test_id": "ETS-036",
+      "question": "Is it feasible to accept a new order for 2,000 scarves due on May 15, 2026?",
+      "source_record_id": "22",
+      "original_rating": "GOOD",
+      "answer": "Under the current capacity heuristic, accepting 2,000 scarves by May 15, 2026 is feasible only with workshops (FEASIBLE_WITH_WORKSHOPS).\n\nThe request was evaluated as ACCESSORIES. The model counts 39 working days and identifies PACKING as the bottleneck, with median throughput of 672 pieces per working day. Existing IN_PROGRESS orders account for 32,850 pieces, leaving estimated spare factory capacity at 0. Eligible ACTIVE workshops provide an estimated 12,831.05 pieces of overflow capacity, enough to cover the order.\n\nThis is a planning estimate, not a delivery guarantee. It treats every IN_PROGRESS order’s full quantity as competing demand because remaining quantities are unknown, uses the bottleneck median from the last 30 working days, does not model four-stage pipeline latency, assumes at most one new batch per workshop, and excludes SUSPENDED workshops."
+    },
+    {
+      "test_id": "ETS-037",
+      "question": "Can we take 200 beanies by April 3, 2026?",
+      "source_record_id": "Q34",
+      "original_rating": "GOOD",
+      "answer": "Under the current capacity heuristic, 200 beanies by April 3, 2026 are feasible only with workshops (FEASIBLE_WITH_WORKSHOPS). The request was evaluated as ACCESSORIES.\n\nThe model counts 3 working days and identifies PACKING as the bottleneck, with median throughput of 672 pieces per working day. Estimated factory window capacity is 2,016 pieces, while existing IN_PROGRESS orders account for 32,850 pieces, leaving estimated spare factory capacity at 0. ACTIVE workshops provide 226.39999999999998 pieces of estimated overflow capacity, enough for the 200-piece request.\n\nThis is a planning estimate, not a delivery guarantee. It uses the full quantity of every IN_PROGRESS order because remaining quantities are unknown, relies on the bottleneck-stage median from the last 30 working days, does not model four-stage pipeline latency, assumes at most one new batch per workshop, and excludes SUSPENDED workshops."
+    },
+    {
+      "test_id": "ETS-038",
+      "question": "Can the factory produce 300 accessories by April 4, 2026?",
+      "source_record_id": "21",
+      "original_rating": "GOOD",
+      "answer": "Under the current capacity heuristic, 300 accessories by April 4, 2026 are feasible only with workshops (FEASIBLE_WITH_WORKSHOPS).\n\nThe model counts 4 working days and identifies PACKING as the bottleneck, with median throughput of 672 pieces per working day. Existing IN_PROGRESS orders account for 32,850 pieces, so estimated spare in-house capacity is 0. Eligible ACTIVE workshops provide an estimated 418.5 pieces of overflow capacity, enough for the requested 300 pieces.\n\nThis is a planning estimate, not a delivery guarantee. It assumes every IN_PROGRESS order’s full quantity remains, uses the bottleneck median from the last 30 working days, does not model four-stage pipeline latency, assumes at most one new batch per workshop, and excludes SUSPENDED workshops."
+    },
+    {
+      "test_id": "ETS-039",
+      "question": "Can we accept 300 scarves? I have not agreed a delivery date yet",
+      "source_record_id": "Q37",
+      "original_rating": "GOOD",
+      "answer": "What delivery date should I test for the 300 scarves? Please provide the date.\n\nUnder the current capacity heuristic, 300 scarves by April 10, 2026 are feasible only with workshops (FEASIBLE_WITH_WORKSHOPS). The request maps to ACCESSORIES.\n\nThe model counts 9 working days and identifies PACKING as the bottleneck, with median throughput of 672 pieces per working day. Existing IN_PROGRESS orders account for 32,850 pieces, leaving estimated spare in-house capacity at 0. Eligible ACTIVE workshops provide an estimated 2,121.05 pieces of overflow capacity, so the 300-piece request fits using workshops.\n\nThis is a planning estimate, not a delivery guarantee. It:\n\nCounts the full quantity of every IN_PROGRESS order because remaining quantities are unknown.\nUses the bottleneck-stage median from the last 30 working days.\nDoes not model the latency of the four sequential production stages.\nAssumes at most one new batch per workshop.\nExcludes SUSPENDED workshops."
+    },
+    {
+      "test_id": "ETS-040",
+      "question": "我们能否在 2026 年 4 月 2 日前完成新增 5000 件围巾订单？",
+      "source_record_id": "Q35",
+      "original_rating": "GOOD",
+      "answer": "按照当前产能模型，无法在 2026 年 4 月 2 日前完成新增 5,000 件围巾订单（NOT_FEASIBLE）。\n\n该订单按 ACCESSORIES（配饰）类别评估。模型计入 2 个工作日，瓶颈为包装环节，其过去 30 个工作日的中位产能是每天 672 件，对应窗口产能 1,344 件。当前在制订单共有 32,850 件，因此工厂剩余产能被裁为 0 件；符合条件的 ACTIVE 外协厂只能再提供约 34.3 件产能，远低于新增的 5,000 件需求。\n\n这是产能规划估算，并非交付保证。模型的限制包括：\n\n由于没有各订单当前阶段的剩余件数，模型将所有在制订单的完整件数计入竞争需求。\n工厂产能采用过去 30 个工作日的瓶颈环节中位数，未模拟四个生产环节依次流转所需的时间。\n每家外协厂在该窗口内最多按一个新批次计算，并排除暂停合作的外协厂。\n结果仅是产能算术检查，不代表实际交付承诺。"
+    },
+    {
+      "test_id": "ETS-041",
+      "question": "Can we accept 500 hoodies for delivery by April 4?",
+      "source_record_id": "V15",
+      "original_rating": "GOOD",
+      "answer": "Under the current capacity heuristic, 500 hoodies due April 4, 2026 are not feasible (NOT_FEASIBLE).\n\nThe model counts 4 working days and identifies PACKING as the bottleneck, with median throughput of 672 pieces per working day. Estimated factory window capacity is 2,688 pieces, versus 32,850 pieces already in progress, so spare in-house capacity is clipped to 0.\n\nEligible ACTIVE workshops could provide an estimated 439 pieces, below the requested 500. Therefore, the order does not fit within estimated capacity.\n\nThis is a planning estimate, not a delivery guarantee. It:\n• Counts the full quantity of every IN_PROGRESS order because remaining quantities are unknown.\n• Uses the bottleneck median from the last 30 working days.\n• Does not model latency through the four sequential production stages.\n• Assumes at most one new batch per workshop.\n• Excludes SUSPENDED workshops."
+    },
+    {
+      "test_id": "ETS-042",
+      "question": "Can we accept an order for 800 Hoodies and deliver it at April the 11th using internal production only?",
+      "source_record_id": "JAST-G19",
+      "original_rating": "GOOD",
+      "answer": "No—not using internal production only.\n\nUnder the current capacity heuristic, the 800 hoodies due April 11, 2026 were evaluated as FEASIBLE_WITH_WORKSHOPS, not feasible in house.\n\nThe model counts 10 working days and identifies Packing as the bottleneck, with median throughput of 672 pieces per working day. That gives an estimated factory window capacity of 6,720 pieces. Existing in-progress orders account for 32,850 pieces, so estimated spare internal capacity is clipped to 0.\n\nActive workshops provide an estimated 5,061.55 pieces of overflow capacity, but that falls outside your internal-only condition.\n\nThis is a planning estimate, not a delivery guarantee. It counts the full quantity of every in-progress order because remaining quantities are unknown, uses the bottleneck median from the last 30 working days, and does not model latency through the four sequential production stages. Workshop estimates assume at most one new batch per workshop and exclude suspended workshops."
+    },
+    {
+      "test_id": "ETS-043",
+      "question": "Can we take 800 hoodies by August 25?",
+      "source_record_id": "JAST-G20",
+      "original_rating": "GOOD",
+      "answer": "Yes. Under the current capacity heuristic, 800 hoodies by August 25, 2026 are feasible in-house (FEASIBLE_IN_HOUSE).\n\nThe model counts 126 working days and identifies Packing as the bottleneck, with median throughput of 672 pieces per working day. Estimated factory window capacity is 84,672 pieces. After accounting for 32,850 pieces in existing in-progress orders, estimated spare factory capacity is 51,822 pieces, which covers the requested 800 pieces. Active workshops add an estimated 137,034.75 pieces of potential overflow, but they are not required by the verdict.\n\nThis is a planning estimate, not a delivery guarantee. It counts every in-progress order’s full quantity because remaining quantities are unknown, uses the bottleneck median from the last 30 working days, and does not model four-stage pipeline latency. Workshop estimates assume one new batch per workshop and exclude suspended workshops."
+    },
+    {
+      "test_id": "ETS-044",
+      "question": "Explain the bottleneck and capacity assumptions in your feasibility result.",
+      "source_record_id": "23",
+      "original_rating": "GOOD",
+      "answer": "The feasibility result used these assumptions:\n\nFactory bottleneck\n\n• PACKING was the bottleneck because it had the lowest 30-working-day median throughput: 672 pieces per working day.\n• The window from April 1 through May 15 contains 39 working days, counting Monday–Saturday and excluding Sundays.\n• The model therefore set factory window capacity at 26,208 pieces.\n• It treated all 32,850 pieces on IN_PROGRESS orders as competing workload. Because that exceeds the modeled window capacity, spare in-house capacity was clipped to 0.\n\nThis is conservative because the dataset does not show how many pieces remain unfinished on each active order; it assumes each order’s entire quantity is still outstanding.\n\nWorkshop capacity\n\nOnly ACTIVE workshops that make ACCESSORIES were included: W2, W4, and W6. For each workshop:\n\n• Available production days = working days minus pickup lead time and existing queue.\n• Output = daily capacity × available days × (1 − defect rate).\n• Any maximum batch limit would cap that output.\n• The model assumes no more than one new batch per workshop during the window.\n\nTheir combined estimated overflow capacity was 12,831.05 pieces. Since the factory had 0 modeled spare capacity but workshop capacity could cover the requested 2,000 scarves, the verdict was FEASIBLE_WITH_WORKSHOPS.\n\nThe estimate does not model the timing needed to move work sequentially through knitting, assembly, washing, and packing, so it is a capacity check—not a delivery guarantee."
+    },
+    {
+      "test_id": "ETS-045",
+      "question": "What is my first priority today?",
+      "source_record_id": "Q21",
+      "original_rating": "GOOD",
+      "answer": "First priority: push ORD-107 and ORD-114 through Packing. Both Northwind Apparel orders are overdue, close to completion, and each has an estimated 3.0 working days left. Clearing them first will reduce the overdue backlog quickly."
+    },
+    {
+      "test_id": "ETS-046",
+      "question": "Which orders would be at risk of missing their due dates if Assembly output stays at 455 pieces per day?",
+      "source_record_id": "JAST-B28",
+      "original_rating": "BAD",
+      "answer": "I can’t run that hypothetical from the available tools. The risk model uses each stage’s 30-day median, not a custom assumption of Assembly staying at 455 pieces per day for the next week.\n\nThe current pace-based risk list is available, but it would not answer this specific Assembly-output scenario accurately."
+    },
+    {
+      "test_id": "ETS-047",
+      "question": "Which production stage should we improve first to maximize our on-time delivery rate?",
+      "source_record_id": "JAST-G23",
+      "original_rating": "GOOD",
+      "answer": "Improve Assembly first.\n\nIt is the only stage currently flagged below baseline: 455 pieces versus a 30-day median of 758, with 10 in-progress orders queued there. Two orders likely to miss dates in the next seven days—ORD-108 and ORD-103—are also currently in Assembly with Washing and Packing still remaining.\n\nPacking is the long-run throughput bottleneck at a median of 672 pieces per working day, but its latest output is near normal and only 2 orders are queued there. For immediate on-time delivery improvement, Assembly is therefore the stronger first target.\n\nThis is an operational recommendation; the available model does not directly simulate the resulting change in on-time delivery rate."
+    },
+    {
+      "test_id": "ETS-048",
+      "question": "Answer in French: What is the status of ORD-107?",
+      "source_record_id": "B03",
+      "original_rating": "BAD",
+      "answer": "Northwind Apparel’s order ORD-107 is still in progress, at the final packing stage. It is for 2,000 cardigans and was due to be delivered on March 16, 2026, so it is late. However, activity was recorded today, April 1, 2026, and only packing remains to be completed."
+    },
+    {
+      "test_id": "ETS-049",
+      "question": "List all completed orders.",
+      "source_record_id": "Q14",
+      "original_rating": "BAD",
+      "answer": "There are 86 completed orders in the current data. The table shows the 60 rows returned by the lookup; the result was truncated, so 26 completed orders are not displayed."
+    },
+    {
+      "test_id": "ETS-050",
+      "question": "列出 Cotton Club 的所有订单。",
+      "source_record_id": "Q09",
+      "original_rating": "GOOD",
+      "answer": "已找到 19 个 Cotton Club 订单。完整清单及产品、件数、交期、状态和当前阶段见上表。"
+    },
+    {
+      "test_id": "ETS-051",
+      "question": "Show all Cotton Club orders currently in the Washing stage.",
+      "source_record_id": "8",
+      "original_rating": "GOOD",
+      "answer": "As of 2026-04-01, 2 Cotton Club orders are currently in the Washing stage. Both are in progress; details are shown in the table."
+    },
+    {
+      "test_id": "ETS-052",
+      "question": "Show all in-progress orders for Harbor Knits.",
+      "source_record_id": "5",
+      "original_rating": "GOOD",
+      "answer": "I found 5 in-progress Harbor Knits orders. Three are in washing and two are in assembly. The full list is shown in the table."
+    },
+    {
+      "test_id": "ETS-053",
+      "question": "List all Northwind Apparel orders that are currently in production.",
+      "source_record_id": "6",
+      "original_rating": "GOOD",
+      "answer": "Northwind Apparel has 5 orders currently in production: two in washing, one in assembly, and two in packing. The full order details are shown in the table."
+    },
+    {
+      "test_id": "ETS-054",
+      "question": "List all overdue orders.",
+      "source_record_id": "Q17",
+      "original_rating": "GOOD",
+      "answer": "8 orders are overdue as of April 1, 2026.\n\nThe most overdue are ORD-107 and ORD-120. ORD-002 is especially concerning because it is both overdue and stalled. The full list, current stages, and estimated work remaining are shown in the table."
+    },
+    {
+      "test_id": "ETS-055",
+      "question": "List all Crewneck sweater orders.",
+      "source_record_id": "Q11",
+      "original_rating": "GOOD",
+      "answer": "I found 13 Crewneck sweater orders. Three are in progress: ORD-002, ORD-055, and ORD-081. The other 10 are complete. Full details are shown in the table."
+    },
+    {
+      "test_id": "ETS-056",
+      "question": "List all Hoodie orders.",
+      "source_record_id": "Q10",
+      "original_rating": "GOOD",
+      "answer": "I found 26 Hoodie orders. The full list is shown in the table, including customer, pieces, due date, status, current stage, and last activity date."
+    },
+    {
+      "test_id": "ETS-057",
+      "question": "List the in-progress Scarf orders in a table.",
+      "source_record_id": "V05",
+      "original_rating": "GOOD",
+      "answer": "As of 2026-04-01, there are 6 in-progress Scarf orders, shown in the table above."
+    },
+    {
+      "test_id": "ETS-058",
+      "question": "Which orders are currently in ASSEMBLY? Show them in a table.",
+      "source_record_id": "V04",
+      "original_rating": "GOOD",
+      "answer": "As of 2026-04-01, 10 orders are currently in ASSEMBLY. All are in progress; the full details are shown in the table."
+    },
+    {
+      "test_id": "ETS-059",
+      "question": "列出当前处于 PACKING 阶段的在制订单。",
+      "source_record_id": "Q13",
+      "original_rating": "GOOD",
+      "answer": "当前共有 2 个处于 PACKING 阶段的在制订单，均属于 Northwind Apparel。订单明细已在表格中列出。"
+    },
+    {
+      "test_id": "ETS-060",
+      "question": "List in-progress orders currently in WASHING.",
+      "source_record_id": "Q12",
+      "original_rating": "GOOD",
+      "answer": "As of 2026-04-01, 10 in-progress orders are currently in the WASHING stage. The full list is shown in the table."
+    },
+    {
+      "test_id": "ETS-061",
+      "question": "Show all stalled orders.",
+      "source_record_id": "V10",
+      "original_rating": "GOOD",
+      "answer": "There are 2 stalled orders as of 2026-04-01. ORD-002 is also overdue; ORD-005 is stalled but not overdue."
+    },
+    {
+      "test_id": "ETS-062",
+      "question": "哪些订单处于 STALLED 状态？",
+      "source_record_id": "Q18",
+      "original_rating": "GOOD",
+      "answer": "目前有 2 个订单处于 STALLED 状态：ORD-002 和 ORD-005。\n\nORD-002 最后活动于 2026-03-23，停在洗水阶段；同时已逾期，需优先跟进。\nORD-005 最后活动于 2026-03-24，停在针织阶段；交期为 2026-04-20，目前尚未逾期。"
+    },
+    {
+      "test_id": "ETS-063",
+      "question": "List all TrendCart orders.",
+      "source_record_id": "Q06",
+      "original_rating": "GOOD",
+      "answer": "I found 17 TrendCart orders. The table shows each order’s product, quantity, due date, status, current stage, and last activity date."
+    },
+    {
+      "test_id": "ETS-064",
+      "question": "Which TrendCart orders are still in progress?",
+      "source_record_id": "W15",
+      "original_rating": "GOOD",
+      "answer": "TrendCart has 6 orders still in progress. Four are in KNITTING, one is in WASHING, and one is in ASSEMBLY, as shown in the table."
+    },
+    {
+      "test_id": "ETS-065",
+      "question": "Which TrendCart orders are still in the Knitting stage?",
+      "source_record_id": "7",
+      "original_rating": "GOOD",
+      "answer": "TrendCart has 4 orders still in knitting: ORD-005, ORD-017, ORD-082, and ORD-096. Their quantities, due dates, and knitting entry dates are shown in the table."
+    },
+    {
+      "test_id": "ETS-066",
+      "question": "请列出 TrendCart 的所有订单。",
+      "source_record_id": "W01-ZH",
+      "original_rating": "GOOD",
+      "answer": "已列出 TrendCart 的全部 17 个订单，包括产品、件数、交期、状态、当前阶段及最近活动日期。"
+    },
+    {
+      "test_id": "ETS-067",
+      "question": "List my active watches.",
+      "source_record_id": "Q50",
+      "original_rating": "GOOD",
+      "answer": "You have 1 active watch and no fired watches. It monitors ORD-005 for inactivity by 2026-04-02."
+    },
+    {
+      "test_id": "ETS-068",
+      "question": "Which orders have spent longer than normal in their current production stage?",
+      "source_record_id": "JAST-G10",
+      "original_rating": "GOOD",
+      "answer": "Two orders have spent longer than normal in their current stage: ORD-002 and ORD-005.\n\n🔴 ORD-002 needs immediate attention. The 1,000-piece Cotton Club crewneck order has remained in Washing for 8 working days and is already overdue. Washing and Packing are still left.\n\n🟠 ORD-005 should be checked next. The 500-piece TrendCart scarf order has remained in Knitting for 7 working days. All four production stages remain, although its due date is April 20."
+    },
+    {
+      "test_id": "ETS-069",
+      "question": "how is ord-099 doing? will it miss its due date?",
+      "source_record_id": "JAST-B06",
+      "original_rating": "BAD",
+      "answer": "I couldn’t find ord-099 in the orders table. Please check the order ID and resend it exactly as recorded."
+    },
+    {
+      "test_id": "ETS-070",
+      "question": "Which orders should be closely monitored over the next 48 hours?",
+      "source_record_id": "JAST-B14",
+      "original_rating": "BAD",
+      "answer": "Closely monitor ORD-029, ORD-108, and ORD-103 over the next 48 hours.\n\n• ORD-029: Confirm that it clears Washing and enters Packing; it is due today and its remaining-work estimate exceeds the time [unclear].\n• ORD-108: Watch for movement out of Assembly. Its current pace leaves a substantial shortfall against its April 3 due date.\n• ORD-103: Monitor alongside ORD-108 because it has the same remaining stages and pace estimate, with delivery due April 4.\n\nNone is currently overdue, but all three are likely to miss their due dates at the present pace. Assembly progress deserves particular [unclear] for the two scarf orders."
+    },
+    {
+      "test_id": "ETS-071",
+      "question": "What is the status of ORD-999?",
+      "source_record_id": "Q05",
+      "original_rating": "GOOD",
+      "answer": "I could not find an order with ID ORD-999. Please check the order ID and provide the correct one; I cannot report its status without a matching order."
+    },
+    {
+      "test_id": "ETS-072",
+      "question": "Add a note to ORD-120: TEST Sprint1 Gem - verify status with production lead",
+      "source_record_id": "Q45",
+      "original_rating": "GOOD",
+      "answer": "Note proposed for ORD-120: “TEST Sprint1 Gem — verify status with production lead.”\n\nClick Confirm to save it.\n\nConfirm\nDismiss"
+    },
+    {
+      "test_id": "ETS-073",
+      "question": "Can ORD-103 be completed on time? Explain your conclusion.",
+      "source_record_id": "14",
+      "original_rating": "GOOD",
+      "answer": "ORD-103 is unlikely to be completed on time at the current pace.\n\nThe 2,000-piece scarf order is due April 4. It has four working days available, but the estimated remaining work is 8.4 working days—leaving a modeled shortfall of 4.4 working days. It is only in assembly, with assembly, washing, and packing still to finish.\n\nThe order is therefore flagged TIGHT_DEADLINE. It is neither overdue nor stalled: its last recorded movement was March 30. The conclusion is pace-based, using factory-wide 30-day stage medians; it is an operational estimate rather than a guarantee."
+    },
+    {
+      "test_id": "ETS-074",
+      "question": "How many orders were completed over the past month, and what was the on-time delivery rate?",
+      "source_record_id": "JAST-B26",
+      "original_rating": "BAD",
+      "answer": "I can't get the data required based on the tools I have, so I can't answer this."
+    },
+    {
+      "test_id": "ETS-075",
+      "question": "Show me the status of ORD-002.",
+      "source_record_id": "2",
+      "original_rating": "GOOD",
+      "answer": "ORD-002 is IN_PROGRESS in WASHING. It is a 1,000-piece crewneck sweater order for Cotton Club.\n\nIt was due on March 29, 2026, so it is overdue. It has not moved since March 23—eight working days ago—and is flagged as stalled. Washing and packing remain, so this order needs immediate follow-up."
+    },
+    {
+      "test_id": "ETS-076",
+      "question": "When did ORD-005 last move, and is it stalled?",
+      "source_record_id": "Q27",
+      "original_rating": "GOOD",
+      "answer": "ORD-005 last moved on March 24, 2026, when it entered KNITTING. Yes, it is stalled—it has had no activity for 7 working days, exceeding the 3-working-day stall threshold."
+    },
+    {
+      "test_id": "ETS-077",
+      "question": "请查询 ORD-057 的完成情况和是否按时交付。",
+      "source_record_id": "Q04",
+      "original_rating": "GOOD",
+      "answer": "ORD-057 已于 2026年1月25日完成，原定交付日期为 2026年2月2日。订单按时交付，提前8天完成，目前没有剩余生产工序。"
+    },
+    {
+      "test_id": "ETS-078",
+      "question": "What is the current status of ORD-107?",
+      "source_record_id": "3",
+      "original_rating": "GOOD",
+      "answer": "ORD-107 is still IN_PROGRESS and has reached PACKING, its final production stage. It is a 2,000-piece cardigan order for Northwind Apparel.\n\nIt was due on March 16, 2026, so it is currently overdue. However, it entered packing today, April 1, meaning the order is active rather than stalled. Packing is the only remaining stage."
+    },
+    {
+      "test_id": "ETS-079",
+      "question": "Show me ORD-108, 2000 Scarf, Harbor Knits, now at ASSEMBLY.",
+      "source_record_id": "B07",
+      "original_rating": "BAD",
+      "answer": "ORD-108 is in progress at ASSEMBLY. It last moved on 2026-03-31 and is due 2026-04-03. After assembly, washing and packing remain. It is not currently flagged as overdue, stalled, or on a tight deadline."
+    },
+    {
+      "test_id": "ETS-080",
+      "question": "What is the current production status of ORD-114?",
+      "source_record_id": "4",
+      "original_rating": "GOOD",
+      "answer": "ORD-114 is IN_PROGRESS in PACKING, the final production stage. It is a 2,000-piece hoodie order for Northwind Apparel.\n\nIt was due on March 23, 2026, so it is overdue. Its last activity was March 30, two working days ago, but it is not currently flagged as stalled. Packing is the only remaining stage."
+    },
+    {
+      "test_id": "ETS-081",
+      "question": "How is ORD-120 doing?",
+      "source_record_id": "JAST-B02",
+      "original_rating": "BAD",
+      "answer": "Which of these did you mean?\n\nAs of 2026-04-01, ORD-120 for TrendCart is still in progress at ASSEMBLY. The 1,500-piece vest order was due on 2026-03-17 and is 15 calendar days overdue.\n\nProduction began after a 28-calendar-day start delay. Its last activity was 2 working days ago, so it is not flagged as stalled. ASSEMBLY, WASHING, and PACKING remain, with an estimated 6.3 working days of work at the current pace.\n\nThe order is flagged OVERDUE and AT RISK, but not STALLED or TIGHT_DEADLINE. External workshop support should be considered. No completion date is recorded.\n\nThe stage history comes from the order snapshot; factory-wide production data cannot provide per-order output. The production log ends on 2026-03-31."
+    },
+    {
+      "test_id": "ETS-082",
+      "question": "Show the observed stage history for ORD-120, without treating factory-wide production as own output.",
+      "source_record_id": "Q28",
+      "original_rating": "GOOD",
+      "answer": "ORD-120’s observed history comes from the per-order snapshot: it was ordered on 2026-02-27, entered KNITTING on 2026-03-27, and entered ASSEMBLY on 2026-03-30, where it remains in progress.\n\nThese are stage-entry events—not output credited from the factory-wide production log. No WASHING, PACKING, or COMPLETE event has been observed yet."
+    },
+    {
+      "test_id": "ETS-083",
+      "question": "How is ORD-120 doing?",
+      "source_record_id": "Q01",
+      "original_rating": "GOOD",
+      "answer": "As of 2026-04-01, ORD-120 for TrendCart is still in progress at ASSEMBLY. The order covers 1,500 vests and was due on 2026-03-17, so it is 15 calendar days overdue.\n\nIts last recorded activity was 2026-03-30, two working days ago, so it does not meet the stalled-order threshold. ASSEMBLY, WASHING, and PACKING remain. No completion date is recorded."
+    },
+    {
+      "test_id": "ETS-084",
+      "question": "How was its estimated remaining time calculated?",
+      "source_record_id": "Q03",
+      "original_rating": "GOOD",
+      "answer": "Which of these did you mean?\n\nI’ll explain how the time remaining until ORD-120’s due date was calculated.\nI’ll explain how ORD-120’s estimated production time for its remaining stages was calculated.\n\nORD-120’s remaining production time in that reading was based on its lifecycle stages, not a throughput forecast.\n\nBecause the order is currently in ASSEMBLY, the unfinished stages are:\n\nASSEMBLY → WASHING → PACKING\n\nThe calculation counted those three remaining stages, giving a remaining-stage count of 3. The prior result did not include stage-output medians or a pace-based duration, so it does not support a more detailed production-time estimate."
+    },
+    {
+      "test_id": "ETS-085",
+      "question": "How is ORD-120 doing?",
+      "source_record_id": "V07",
+      "original_rating": "GOOD",
+      "answer": "🔴 ORD-120 — High Risk\n1,500 vests | TrendCart | 15 days overdue\n\nORD-120 is risky because it was due on 2026-03-17 and remains in progress. It was ordered on 2026-02-27, but production did not begin until 2026-03-27, a 28-calendar-day delay before knitting started.\n\nIt is currently in ASSEMBLY, with ASSEMBLY, WASHING, and PACKING still to complete. At the current pace, the remaining work is estimated at 6.3 working days.\n\nThe order last moved on 2026-03-30, so it is not currently flagged as stalled. The risk flag is OVERDUE, driven by the late production start and substantial work remaining. External workshop support could be considered to accelerate completion."
+    },
+    {
+      "test_id": "ETS-086",
+      "question": "How is ORD-120 doing?",
+      "source_record_id": "JAST-B03",
+      "original_rating": "BAD",
+      "answer": "Which of these did you mean?\n\nAs of 2026-04-01, ORD-120 for TrendCart is still in progress at ASSEMBLY. The 1,500-piece vest order was due on 2026-03-17 and is 15 calendar days overdue.\n\nProduction began after a 28-calendar-day start delay. Its last activity was 2 working days ago, so it is not flagged as stalled. ASSEMBLY, WASHING, and PACKING remain, with an estimated 6.3 working days of work at the current pace.\n\nThe order is flagged OVERDUE and AT RISK, but not STALLED or TIGHT_DEADLINE. External workshop support should be considered. No completion date is recorded.\n\nThe stage history comes from the order snapshot; factory-wide production data cannot provide per-order output. The production log ends on 2026-03-31."
+    },
+    {
+      "test_id": "ETS-087",
+      "question": "Which production stage has shown the most unstable output over the past 30 days?",
+      "source_record_id": "JAST-B25",
+      "original_rating": "BAD",
+      "answer": "I can’t determine the most unstable stage over the full 30 days from the available metrics because they provide a 30-day median, not day-to-day volatility or variance.\n\nWhat is supported: Assembly had the clearest latest deviation, producing 455 pieces versus its 30-day median of 758. That shows a recent drop, but it does not prove Assembly was the most unstable across the entire period."
+    },
+    {
+      "test_id": "ETS-088",
+      "question": "What outsourcing cost per piece is recorded for the active TOPS workshops?",
+      "source_record_id": "Q60",
+      "original_rating": "GOOD",
+      "answer": "I can't get the data required based on the tools I have, so I can't answer this."
+    },
+    {
+      "test_id": "ETS-089",
+      "question": "How many orders are currently overdue, and how many days late are they expected to be in total?",
+      "source_record_id": "JAST-G04",
+      "original_rating": "GOOD",
+      "answer": "8 orders are currently overdue.\n\nThe available factory calculation provides each order’s current lateness and estimated remaining working days, but does not return an aggregate expected total days late. I can’t safely total or extrapolate that figure without a tool-computed result."
+    },
+    {
+      "test_id": "ETS-090",
+      "question": "Which orders are late?",
+      "source_record_id": "Q56",
+      "original_rating": "BAD",
+      "answer": "8 orders are overdue as of 2026-04-01: ORD-107, ORD-120, ORD-083, ORD-114, ORD-002, ORD-093, ORD-020, and ORD-055.\n\nThe oldest are ORD-107 (due March 16) and ORD-120 (due March 17). ORD-002 is especially concerning because it is both overdue and stalled, with no activity since March 23. All eight remain in progress."
+    },
+    {
+      "test_id": "ETS-091",
+      "question": "Show OVERDUE orders in a table, including how many days overdue each is.",
+      "source_record_id": "Q42",
+      "original_rating": "GOOD",
+      "answer": "As of 2026-04-01, 8 orders are overdue. The table shows the delay as negative days until due—for example, -16 means 16 calendar days overdue. ORD-002 is also flagged as stalled."
+    },
+    {
+      "test_id": "ETS-092",
+      "question": "Is packing output keeping up with the flow of work from upstream stages?",
+      "source_record_id": "JAST-G12",
+      "original_rating": "GOOD",
+      "answer": "Packing appears to be keeping up overall, with no current bottleneck flagged.\n\nOn the latest working day, Packing completed 657 pieces, close to its 30-day median of 672, and only 2 orders are currently queued there.\n\nWashing completed 732 pieces, so its latest output was higher than Packing’s. That could increase the Packing queue if sustained, but the current queue and near-normal Packing output do not indicate an immediate concern. Assembly remains the more significant issue today."
+    },
+    {
+      "test_id": "ETS-093",
+      "question": "How has output at each production stage performed over the past week?",
+      "source_record_id": "JAST-B24",
+      "original_rating": "BAD",
+      "answer": "I can't get the data required based on the tools I have, so I can't answer this."
+    },
+    {
+      "test_id": "ETS-094",
+      "question": "Which orders should be prioritized in Washing today?",
+      "source_record_id": "JAST-G15",
+      "original_rating": "GOOD",
+      "answer": "According to today’s priority model, prioritize these Washing orders as one second-priority group:\n\n• ORD-029 — due today; estimated 4.3 working days left\n• ORD-083 — overdue; estimated 2.9 working days left\n• ORD-002 — overdue; estimated 2.9 working days left\n• ORD-093 — overdue; estimated 2.0 working days left\n\nThe model does not rank orders within the same bucket, so it does not specify a further order among these four."
+    },
+    {
+      "test_id": "ETS-095",
+      "question": "Which orders could be completed the fastest if prioritized?",
+      "source_record_id": "JAST-G14",
+      "original_rating": "GOOD",
+      "answer": "Within today’s priority list, ORD-093 has the shortest estimated completion time at 2.0 working days. It is currently in Washing, with Washing and Packing remaining.\n\nHowever, the urgency model still places ORD-107 and ORD-114 first because they are overdue and already in Packing; each has an estimated 3.0 working days left.\n\nThis is not a factory-wide fastest-completion ranking—the available model ranks urgency rather than sorting every active order by completion time."
+    },
+    {
+      "test_id": "ETS-096",
+      "question": "Which overdue orders should we finish first?",
+      "source_record_id": "JAST-G13",
+      "original_rating": "GOOD",
+      "answer": "Finish these overdue orders first:\n\n1. ORD-107 and ORD-114 — both are already in Packing, with an estimated 3.0 working days left each. They are in the first-priority bucket because they are overdue and closest to completion.\n2. ORD-120, ORD-083, ORD-002, and ORD-093 — these form the second-priority overdue group:\n   • ORD-120 remains in Assembly with 6.3 working days left.\n   • ORD-083 and ORD-002 remain in Washing with 2.9 working days left each.\n   • ORD-093 remains in Washing with 2.0 working days left.\n\nThe priority model does not rank orders within each bucket, so do not infer a further ordering among tied orders."
+    },
+    {
+      "test_id": "ETS-097",
+      "question": "Should we prioritize ORD-029 or ORD-107 today?",
+      "source_record_id": "JAST-B13",
+      "original_rating": "BAD",
+      "answer": "Prioritize ORD-107 first.\n\nIt is already overdue and is in Packing, with an estimated 3.0 working days left, placing it in the first-priority bucket.\n\nORD-029 comes next. It is due today, remains in Washing, and has an estimated 4.3 working days left, placing it in the second-priority bucket."
+    },
+    {
+      "test_id": "ETS-098",
+      "question": "If we can only accelerate three orders today, which ones should we choose?",
+      "source_record_id": "JAST-G16",
+      "original_rating": "GOOD",
+      "answer": "Choose ORD-107 and ORD-114 first. Both are in the official first-priority bucket: overdue, already in Packing, and estimated to need 3.0 working days each.\n\nThe model does not identify a unique third order. These are tied in the second-priority bucket:\n\n• ORD-029\n• ORD-120\n• ORD-083\n• ORD-002\n• ORD-093\n\nA third choice requires a tie-break criterion—such as earliest completion, greatest lateness, or protecting today’s due date.\n\nI recommend ORD-093 as the third order.\n\nIt has the shortest estimated remaining time in the second-priority bucket—2.0 working days—and is already in Washing, with only Washing and Packing left. That makes it the strongest choice if the goal is to turn acceleration into a completed order quickly.\n\nThis is an operational tie-break, not a change to the official priority bucket."
+    },
+    {
+      "test_id": "ETS-099",
+      "question": "Show three priority groups for today.",
+      "source_record_id": "Q24",
+      "original_rating": "GOOD",
+      "answer": "Today’s production priorities are split into three groups:\n\n1st priority: Clear ORD-107 and ORD-114 first. Both are overdue and already in Packing, making them the quickest overdue orders to finish.\n2nd priority: Push ORD-029, ORD-120, ORD-083, ORD-002, and ORD-093. ORD-029 is due today; the others are overdue with substantial work remaining. ORD-120 needs particular attention, with 6.3 estimated working days left.\n3rd priority: Closely monitor ORD-108 and ORD-103. They are due within 2–3 calendar days but each has 8.4 estimated working days remaining.\n\nOperational focus: finish near-complete overdue work, accelerate urgent unfinished orders, then prevent the two upcoming scarf orders from slipping."
+    },
+    {
+      "test_id": "ETS-100",
+      "question": "今天最需要我处理的订单有哪些？请按优先级展示。",
+      "source_record_id": "Q25",
+      "original_rating": "GOOD",
+      "answer": "今天按三个层级处理：\n\n🔴第1优先：先清掉接近完工的逾期订单\n优先推进 ORD-107、ORD-114。两单均已逾期且处于包装阶段，只剩包装，预计各需 3.0个工作日。\n\n🟠第2优先：处理到期或逾期、但仍有较多工序的订单\n紧接着处理 ORD-029、ORD-120、ORD-083、ORD-002、ORD-093。其中：\n\nORD-029 今天到期，仍需洗水和包装，预计剩余 4.3个工作日。\nORD-120 最需警惕：已逾期，仍有组装、洗水和包装，预计还需 6.3个工作日。\nORD-083、ORD-002、ORD-093 均已逾期，仍需完成洗水和包装。\n\n🟡第3优先：防止近期订单继续转为延期\n密切推进 ORD-108、ORD-103。两单分别于 4月3日、4月4日到期，但均仍在组装阶段，预计各需 8.4个工作日，存在明显交付压力。\n\n执行顺序：先完成 ORD-107、ORD-114 的包装，再集中资源推进 ORD-029 和 ORD-120，同时为 ORD-108、ORD-103 提前疏通后续工序。"
+    },
+    {
+      "test_id": "ETS-101",
+      "question": "Which orders should be prioritized today?",
+      "source_record_id": "10",
+      "original_rating": "GOOD",
+      "answer": "Today’s production should be prioritized in three levels:\n\n🔴 1st — Clear near-complete overdue orders\nPush ORD-107 and ORD-114 first. Both are overdue and already in Packing, with 3.0 working days estimated for each.\n\n🟠 2nd — Address urgent unfinished orders\nPrioritize ORD-029, ORD-120, ORD-083, ORD-002, and ORD-093 next. ORD-029 is due today, while the others are overdue with substantial work remaining. ORD-120 needs particular attention: it is still in Assembly and has 6.3 working days estimated.\n\n🟡 3rd — Prevent upcoming delays\nClosely monitor ORD-108 and ORD-103. Both are 2,000-piece Scarf orders in Assembly, due within the next few days, but each has 8.4 working days estimated.\n\nFocus: finish Packing-stage overdue work first, then push due-today and overdue orders, while preparing for the two upcoming Scarf risks."
+    },
+    {
+      "test_id": "ETS-102",
+      "question": "Has ORD-029 progressed normally compared with orders in the same category and of similar size?",
+      "source_record_id": "JAST-B23",
+      "original_rating": "BAD",
+      "answer": "I can't get the data required based on the tools I have, so I can't answer this."
+    },
+    {
+      "test_id": "ETS-103",
+      "question": "Show my five most recent actions.",
+      "source_record_id": "Q47",
+      "original_rating": "GOOD",
+      "answer": "Your five most recent audit actions are shown above, newest first. The latest records a reminder for ORD-005 saved locally.\n\nNote: this is a local audit trail, not a full compliance system."
+    },
+    {
+      "test_id": "ETS-104",
+      "question": "Create a reminder for ORD-120 tomorrow: TEST Sprint1 Gem - dismiss this proposal.",
+      "source_record_id": "Q48",
+      "original_rating": "GOOD",
+      "answer": "Reminder proposal for ORD-120 on 2026-04-02 was dismissed and not saved."
+    },
+    {
+      "test_id": "ETS-105",
+      "question": "Create a reminder for ORD-005 tomorrow: TEST Sprint1 Gem - check order progress",
+      "source_record_id": "Q46",
+      "original_rating": "GOOD",
+      "answer": "Reminder proposed for ORD-005 on 2026-04-02: “TEST Sprint1 Gem — check order progress.”\n\nClick Confirm to save it locally. No push notification will be sent."
+    },
+    {
+      "test_id": "ETS-106",
+      "question": "create the reminder for ord-108",
+      "source_record_id": "JAST-G18",
+      "original_rating": "GOOD",
+      "answer": "Reminder proposed for April 3, 2026, anchored to ORD-108, to check ORD-029, ORD-108, and ORD-103 for stage movement and delivery risk.\n\nClick Confirm to save it locally. No external notification will be sent.\n\nProposed locally. Click Confirm to save — that is the confirmation step. Email is never actually sent."
+    },
+    {
+      "test_id": "ETS-107",
+      "question": "How should we resequence production to minimize orders delivered late over the next 7 days?",
+      "source_record_id": "JAST-G21",
+      "original_rating": "GOOD",
+      "answer": "Which of these did you mean?\n\nI’ll identify the orders most likely to miss their due dates in the next seven days so production can be resequenced around them.\n\nI’ll provide today’s production priorities in first-, second-, and third-priority groups with estimated days remaining.\n\nOther"
+    },
+    {
+      "test_id": "ETS-108",
+      "question": "What was TrendCart revenue in March 2026?",
+      "source_record_id": "Q57",
+      "original_rating": "GOOD",
+      "answer": "Revenue can’t be determined from the factory tables. They contain order quantities and workshop costs, but no customer selling prices or revenue fields."
+    },
+    {
+      "test_id": "ETS-109",
+      "question": "三月份的销售额是多少",
+      "source_record_id": "Q59",
+      "original_rating": "GOOD",
+      "answer": "这项没有记录在我们的数据库里，所以我回答不了。"
+    },
+    {
+      "test_id": "ETS-110",
+      "question": "Which orders are likely to miss their due dates?",
+      "source_record_id": "JAST-G01",
+      "original_rating": "GOOD",
+      "answer": "3 orders are likely to miss their due dates: ORD-029, ORD-108, and ORD-103.\n\n🔴 ORD-029 — Immediate attention\nDue today with only 1 working day available. Washing and Packing remain, while the pace estimate is 4.3 working days. Prioritize it immediately.\n\n🟠 ORD-108 — High risk\nDue April 3 with 3 working days available. Assembly, Washing, and Packing remain, requiring an estimated 8.4 working days at the current pace.\n\n🟠 ORD-103 — High risk\nDue April 4 with 4 working days available. It also has Assembly, Washing, and Packing remaining, against an estimated 8.4 working days of work.\n\nRecommended attention order: ORD-029 → ORD-108 → ORD-103."
+    },
+    {
+      "test_id": "ETS-111",
+      "question": "Which orders have the largest gap between their due dates and estimated completion dates?",
+      "source_record_id": "JAST-G05",
+      "original_rating": "GOOD",
+      "answer": "ORD-107 and ORD-120 have the largest apparent schedule gaps.\n\n• ORD-107 is already 16 calendar days past due and still needs an estimated 3.0 working days in Packing.\n• ORD-120 is already 15 calendar days past due and needs an estimated 6.3 working days across Assembly, Washing, and Packing. It has the heavier remaining workload and warrants first attention.\n\nThe tools do not return estimated completion dates or a computed due-date-to-completion gap, so these are identified from the current overdue position and pace estimate rather than an exact projected lateness calculation."
+    },
+    {
+      "test_id": "ETS-112",
+      "question": "Are any large orders at high risk of late delivery?",
+      "source_record_id": "JAST-B04",
+      "original_rating": "BAD",
+      "answer": "There is no stored cutoff for “large,” but among the 1,500–2,000-piece orders, several are at high risk:\n\nNot yet overdue but likely to miss\n\n• ORD-029 — 1,500 pieces: due today; Washing and Packing remain, with 4.3 working days estimated.\n• ORD-108 — 2,000 pieces: due April 3; Assembly, Washing, and Packing remain, with 8.4 working days estimated.\n• ORD-103 — 2,000 pieces: due April 4; the same three stages remain, with 8.4 working days estimated.\n• ORD-062 — 2,000 pieces: due April 8; still at Knitting, with 10.6 working days estimated.\n\nAlready overdue\n\n• ORD-120 — 1,500 pieces: overdue and still at Assembly, with 6.3 working days remaining.\n• ORD-107 and ORD-114 — 2,000 pieces each: overdue but already at Packing, with 3.0 working days estimated for each.\n\nThe most exposed large orders are ORD-120, ORD-108, ORD-103, and ORD-062 because multiple production stages remain."
+    },
+    {
+      "test_id": "ETS-113",
+      "question": "Which orders are due within the next 3 days but still have multiple production stages remaining?",
+      "source_record_id": "JAST-B08",
+      "original_rating": "BAD",
+      "answer": "I can't get the data required based on the tools I have, so I can't answer this."
+    },
+    {
+      "test_id": "ETS-114",
+      "question": "Which orders are already overdue but still have significant production work remaining?",
+      "source_record_id": "JAST-G02",
+      "original_rating": "GOOD",
+      "answer": "8 in-progress orders are already overdue and still have production work remaining.\n\nThe strongest production concerns are:\n\n• ORD-120 — still at Assembly, with Assembly, Washing, and Packing remaining; estimated 6.3 working days left.\n• ORD-055 — also at Assembly with all three stages remaining; estimated 3.4 working days left.\n• ORD-020 — at Washing, with Washing and Packing remaining; estimated 3.5 working days left.\n• ORD-002 — Washing and Packing remain; estimated 2.9 working days left. It is also flagged STALLED, with no activity for 8 working days.\n• ORD-083 and ORD-093 likewise still need Washing and Packing, with 2.9 and 2.0 working days estimated, respectively.\n\nORD-107 and ORD-114 are overdue too, but they have reached Packing; each has an estimated 3.0 working days remaining."
+    },
+    {
+      "test_id": "ETS-115",
+      "question": "which orders are stalled",
+      "source_record_id": "JAST-G03",
+      "original_rating": "GOOD",
+      "answer": "2 orders are stalled: ORD-002 and ORD-005.\n\n• ORD-002 needs immediate attention: it has been in Washing since March 23, idle for 8 working days, and is also overdue.\n• ORD-005 has remained in Knitting since March 24, idle for 7 working days. It is due April 20 and is not currently overdue.\n\nPriority: investigate ORD-002 first, then ORD-005."
+    },
+    {
+      "test_id": "ETS-116",
+      "question": "How should we schedule production today to minimize the number of late orders?",
+      "source_record_id": "JAST-G17",
+      "original_rating": "GOOD",
+      "answer": "A true shift-by-shift optimum is not available because the data has no staffing, machine availability, or hourly capacity. Based on today’s priority model, use this production sequence:\n\n1. Protect Packing for ORD-107 and ORD-114.\n   They are the first-priority orders: overdue, closest to completion, and already in the final production stage.\n2. In Washing, accelerate ORD-093 first as the operational tie-break.\n   It has the shortest estimate in the second-priority bucket at 2.0 working days. Keep ORD-029, ORD-083, and ORD-002 moving as the rest of the second-priority Washing group; ORD-029 is due today.\n3. In Assembly, work ORD-120 before ORD-108 and ORD-103.\n   ORD-120 is in the second-priority overdue group. ORD-108 and ORD-103 are third priority but likely to miss their upcoming dates at the current pace.\n4. Give Assembly management attention today.\n   It is the only stage running materially below its normal output, so resolving that slowdown is important to prevent additional late orders.\n\nThis schedule follows the official priority buckets; only the choice of ORD-093 within the tied second-priority group is an operational tie-break based on shortest estimated remaining work."
+    },
+    {
+      "test_id": "ETS-117",
+      "question": "What is the selling price of a Hoodie?",
+      "source_record_id": "Q58",
+      "original_rating": "GOOD",
+      "answer": "Selling price isn’t stored in the factory tables. The available cost_per_piece is what SweaterCo pays subcontract workshops, not the customer selling price."
+    },
+    {
+      "test_id": "ETS-118",
+      "question": "Which production stage has taken the longest for ORD-002?",
+      "source_record_id": "JAST-G08",
+      "original_rating": "GOOD",
+      "answer": "Washing is the only stage whose duration can be assessed for ORD-002. It entered Washing on March 23 and has had no recorded movement since then: 9 calendar days / 8 working days as of April 1. It is therefore flagged as stalled.\n\nThe snapshot contains no entry dates for Knitting or Assembly, so the available data cannot reliably compare all production stages or prove which took the longest historically."
+    },
+    {
+      "test_id": "ETS-119",
+      "question": "Which of those stages has the largest in-progress-order queue? Reply with only the stage name and order count.",
+      "source_record_id": "V17-F1-EN",
+      "original_rating": "GOOD",
+      "answer": "KNITTING — 12"
+    },
+    {
+      "test_id": "ETS-120",
+      "question": "在这些阶段中，哪个阶段的在制订单最多？只回答阶段名称和订单数。",
+      "source_record_id": "V17-F1-ZH",
+      "original_rating": "GOOD",
+      "answer": "KNITTING: 12 单"
+    },
+    {
+      "test_id": "ETS-121",
+      "question": "Which orders are at risk because they have made little or no production progress recently?",
+      "source_record_id": "JAST-B09",
+      "original_rating": "BAD",
+      "answer": "2 orders are flagged as stalled due to little or no recent production progress: ORD-002 and ORD-005.\n\n• ORD-002 — urgent: It has had no recorded movement for 8 working days, is still at Washing, and remains 2.9 estimated working days from completion. It is already overdue, with Washing and Packing still outstanding.\n• ORD-005 — stalled but with schedule room: It has been inactive for 7 working days and remains at Knitting, so all four production stages are still ahead. It has 17 working days available against 4.0 estimated working days, so it is stalled but not currently projected to miss its due date."
+    },
+    {
+      "test_id": "ETS-122",
+      "question": "Show a table of TrendCart orders with order ID, product, status, stage and due date.",
+      "source_record_id": "Q39",
+      "original_rating": "BAD",
+      "answer": "I can't get the data required based on the tools I have, so I can't answer this."
+    },
+    {
+      "test_id": "ETS-123",
+      "question": "Separate the orders into three groups: overdue, stalled, and likely to miss their due dates. Do not place an order in more than one group.",
+      "source_record_id": "26",
+      "original_rating": "GOOD",
+      "answer": "The orders are separated in the table with no duplicates.\n\nClassification rule: overdue takes precedence over stalled. ORD-002 has both flags, so it appears only in Overdue and is excluded from Stalled. The likely-to-miss group contains only orders that are not yet overdue."
+    },
+    {
+      "test_id": "ETS-124",
+      "question": "how is ORD-099 doing? will it miss its due date?",
+      "source_record_id": "JAST-B07",
+      "original_rating": "BAD",
+      "answer": "ORD-099 is not currently flagged as at risk, but its schedule is very tight.\n\nThe 1,500-piece Northwind Apparel polo-shirt order is at Washing, with Washing and Packing still to complete. It is due April 5 and has 4 working days available, while the current pace estimate is 4.3 working days—a 0.3-day shortfall.\n\nIt moved into Washing on March 31 and was active 1 working day ago, so it is not stalled. Production initially began after a 19-calendar-day start delay.\n\nOutlook: not officially flagged to miss yet, but there is almost no margin. Washing and Packing should be watched closely."
+    },
+    {
+      "test_id": "ETS-125",
+      "question": "What should I be concerned about right now?",
+      "source_record_id": "JAST-B16",
+      "original_rating": "BAD",
+      "answer": "P3 · ASSEMBLY output is below its 30-day baseline\nASSEMBLY"
+    },
+    {
+      "test_id": "ETS-126",
+      "question": "Show me the production trace for ORD-083.",
+      "source_record_id": "13",
+      "original_rating": "GOOD",
+      "answer": "ORD-083 is a 1,000-piece hoodie order for Maple & Co. It waited 20 calendar days between being ordered on March 7 and entering production on March 27. It is now in washing, with washing and packing still to complete.\n\nThe order was due March 23 and is 9 calendar days overdue. At the current pace, the remaining work is estimated at 2.9 working days. Its last activity was March 30, two working days ago, so it is flagged OVERDUE, not STALLED.\n\nPer-order stage dates come from the snapshot; factory-wide production-log output cannot be attributed specifically to this order."
+    },
+    {
+      "test_id": "ETS-127",
+      "question": "Trace ORD-107 for me. What's its current situation?",
+      "source_record_id": "JAST-G06",
+      "original_rating": "GOOD",
+      "answer": "ORD-107 is a 2,000-piece Cardigan order for Northwind Apparel, due on March 16. It remains in progress and is now 16 calendar days overdue.\n\nThe order was placed on March 1, but production did not begin until March 23—a 22-day delay before Knitting. It subsequently moved through Assembly and Washing and entered Packing on April 1.\n\nPacking is the only remaining stage, with an estimated 3.0 working days left at the current pace. The order is active rather than stalled, but completing it should be a priority because it is already overdue."
+    },
+    {
+      "test_id": "ETS-128",
+      "question": "Analyze the complete production trace of ORD-114.",
+      "source_record_id": "12",
+      "original_rating": "GOOD",
+      "answer": "ORD-114 is a 2,000-piece Northwind Apparel hoodie order. It was placed on March 3 and first appears in the production-stage snapshot on March 23, a 20-calendar-day start delay. The recorded trace then moves through assembly and washing into packing, where it remains in progress.\n\nThe order was due March 23 and is now 9 calendar days overdue. Packing is the only remaining stage, with an estimated 3.0 working days of work left at the current pace. Its last activity was March 30, two working days ago, so it is flagged OVERDUE but not STALLED.\n\nPriority should be to complete packing immediately. The trace does not recommend external workshop support.\n\nNote: per-order stage dates come from the snapshot; the production log is factory-wide and cannot attribute daily output to ORD-114. The log ends March 31, one day before the factory date of April 1."
+    },
+    {
+      "test_id": "ETS-129",
+      "question": "Trace ORD-120 and show the source evidence behind its risk flags.",
+      "source_record_id": "Q26",
+      "original_rating": "BAD",
+      "answer": "ORD-120 is at risk solely because it is overdue. It remains in progress at ASSEMBLY; its due date was 2026-03-17, versus factory today 2026-04-01, making it 15 calendar days overdue with no working days left before the due date.\n\nThe source order row records 1,500 vests for TrendCart, last active on 2026-03-30. That is two working days without movement, below the three-working-day stalled threshold, so STALLED is false. TIGHT_DEADLINE is also false because that flag applies only to orders that are not already overdue.\n\nThe snapshot history shows ORDERED on 2026-02-27, KNITTING on 2026-03-27, and ASSEMBLY on 2026-03-30. ASSEMBLY, WASHING, and PACKING remain, with an estimated 6.3 working days left at the modeled pace. It took 28 calendar days from ordering to the first production stage.\n\nThe order row comes from orders.csv; stage-entry history comes from app.snapshot. Factory-wide production_log.csv is not a per-order history and ends on 2026-03-31."
+    },
+    {
+      "test_id": "ETS-130",
+      "question": "Show only the order IDs and due dates for those at-risk orders.",
+      "source_record_id": "W03-EN",
+      "original_rating": "BAD",
+      "answer": "The table shows only the order IDs and due dates for the at-risk orders."
+    },
+    {
+      "test_id": "ETS-131",
+      "question": "显示这些风险订单的订单编号和交期。",
+      "source_record_id": "W03-ZH",
+      "original_rating": "GOOD",
+      "answer": "TrendCart 当前没有符合该风险定义的订单，因此没有可显示的订单编号和交期。"
+    },
+    {
+      "test_id": "ETS-132",
+      "question": "Which of those orders are likely to miss their due dates?",
+      "source_record_id": "Q07",
+      "original_rating": "GOOD",
+      "answer": "None of those TrendCart orders are currently flagged as likely to miss their due dates under the factory’s near-term pace assessment."
+    },
+    {
+      "test_id": "ETS-133",
+      "question": "其中哪些订单有风险？",
+      "source_record_id": "W02-ZH",
+      "original_rating": "GOOD",
+      "answer": "按当前的“可能错过交期”判定，这些 TrendCart 订单中没有订单进入风险名单。\n\n该名单只覆盖尚未逾期、交期在今天至未来 3 个日历日内，且预计剩余工时超过可用工作日的订单。"
+    },
+    {
+      "test_id": "ETS-134",
+      "question": "Why is the most urgent one at risk?",
+      "source_record_id": "B02",
+      "original_rating": "BAD",
+      "answer": "I found 17 TrendCart orders. The full list is shown in the table, including product, quantity, due date, status, current stage, and last activity date."
+    },
+    {
+      "test_id": "ETS-135",
+      "question": "List orders for the customer NorthStar Retail.",
+      "source_record_id": "Q16",
+      "original_rating": "GOOD",
+      "answer": "I found no orders matching the customer name NorthStar Retail in the current order data. Please check the customer name if you expected to see an order."
+    },
+    {
+      "test_id": "ETS-136",
+      "question": "Tell me if ORD-005 hasn't moved by Thursday / ... within 10 days",
+      "source_record_id": "JAST-B22",
+      "original_rating": "BAD",
+      "answer": "A watch is ready for ORD-005 on Thursday, 2026-04-02. It will create a local alert if the order is still inactive then.\n\nClick Confirm to save the watch. It has not been saved yet, and no external notification will be sent.\n\nProposed locally. Click Confirm to save — that is the confirmation step. Email is never actually sent.\n\nSave watch on ORD-005 by 2026-04-02\nConfirm\nDismiss"
+    },
+    {
+      "test_id": "ETS-137",
+      "question": "Tell me if ORD-005 hasn't moved by Thursday",
+      "source_record_id": "JAST-G25",
+      "original_rating": "GOOD",
+      "answer": "A watch is ready for ORD-005 on Thursday, 2026-04-02. It will create a local alert if the order is still inactive then.\n\nClick Confirm to save the watch. It has not been saved yet, and no external notification will be sent.\n\nProposed locally. Click Confirm to save — that is the confirmation step. Email is never actually sent.\n\nSave watch on ORD-005 by 2026-04-02\nConfirm\nDismiss"
+    },
+    {
+      "test_id": "ETS-138",
+      "question": "Why is ORD-103 at risk late delivery?",
+      "source_record_id": "JAST-G07",
+      "original_rating": "GOOD",
+      "answer": "ORD-103 is at risk because the remaining workload exceeds the time available. The 2,000-piece scarf order is due April 4, leaving 4 working days, but Assembly, Washing, and Packing are estimated to require 8.4 working days at the current pace—a 4.4-working-day shortfall.\n\nIt also had a slow start: the order was placed on March 9 but did not enter Knitting until March 27, an 18-calendar-day delay. It is currently in Assembly and is neither overdue nor stalled, but the deadline is too tight for the work remaining."
+    },
+    {
+      "test_id": "ETS-139",
+      "question": "Why is ORD-107 at risk?",
+      "source_record_id": "11",
+      "original_rating": "GOOD",
+      "answer": "ORD-107 is not merely at risk—it is already overdue. It was due 2026-03-16, remains in Packing, and has 3.0 estimated working days left.\n\nThat 3.0-day figure is calculated as:\n\nmax(sum of pieces ÷ 30-day median output for each remaining stage, number of remaining stages)\n\nBecause Packing is its only remaining stage, the estimate uses the packing pace for its 2,000 pieces, with a minimum of one day. It is therefore 1st priority: overdue but close to completion."
+    },
+    {
+      "test_id": "ETS-140",
+      "question": "Why is this order considered risky?",
+      "source_record_id": "Q02",
+      "original_rating": "GOOD",
+      "answer": "ORD-120 is risky because it is already overdue, not because it is stalled.\n\nIts due date was 2026-03-17. Compared with the factory date of 2026-04-01, the calculation due date − factory today gives −15 calendar days, meaning it is 15 days past due with 0 working days remaining.\n\nIt is still in ASSEMBLY, with ASSEMBLY, WASHING, and PACKING left. Its last activity was 2026-03-30, only two working days ago, so it is not flagged as stalled."
+    },
+    {
+      "test_id": "ETS-141",
+      "question": "How many in-progress orders are currently in each production stage? Include the order IDs supporting each count.",
+      "source_record_id": "B06",
+      "original_rating": "BAD",
+      "answer": "There are 34 in-progress orders in total. The displayed table shows each order’s current production stage and the supporting order ID."
+    },
+    {
+      "test_id": "ETS-142",
+      "question": "Which orders are so far behind schedule that we should consider external workshop support?",
+      "source_record_id": "JAST-B29",
+      "original_rating": "BAD",
+      "answer": "ORD-120 is the strongest candidate for an external-support assessment. It was due March 17, remains in Assembly, and still needs an estimated 6.3 working days across Assembly, Washing, and Packing.\n\nORD-002 also deserves escalation. It is both overdue and stalled, having remained in Washing for 8 working days.\n\nORD-055 is a secondary candidate because it is overdue while still in Assembly, with three production stages and an estimated 3.4 working days remaining.\n\nThe orders already in Packing—particularly ORD-107 and ORD-114—are better treated as internal finish-first priorities rather than obvious outsourcing candidates. The data does not record whether an existing partly completed order can be transferred to a workshop, so workshop suitability would require an operational assessment rather than being assumed."
+    }
+  ]
+}

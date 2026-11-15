@@ -1,0 +1,146 @@
+[
+  {
+    "test_id": "ETS-055",
+    "question": "List all Crewneck sweater orders.",
+    "language": "en",
+    "source_record_id": "Q11",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-055.png"
+  },
+  {
+    "test_id": "ETS-056",
+    "question": "List all Hoodie orders.",
+    "language": "en",
+    "source_record_id": "Q10",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-056.png"
+  },
+  {
+    "test_id": "ETS-057",
+    "question": "List the in-progress Scarf orders in a table.",
+    "language": "en",
+    "source_record_id": "V05",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-057.png"
+  },
+  {
+    "test_id": "ETS-058",
+    "question": "Which orders are currently in ASSEMBLY? Show them in a table.",
+    "language": "en",
+    "source_record_id": "V04",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-058.png"
+  },
+  {
+    "test_id": "ETS-059",
+    "question": "列出当前处于 PACKING 阶段的在制订单。",
+    "language": "zh",
+    "source_record_id": "Q13",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-059.png"
+  },
+  {
+    "test_id": "ETS-060",
+    "question": "List in-progress orders currently in WASHING.",
+    "language": "en",
+    "source_record_id": "Q12",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-060.png"
+  },
+  {
+    "test_id": "ETS-061",
+    "question": "Show all stalled orders.",
+    "language": "en",
+    "source_record_id": "V10",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-061.png"
+  },
+  {
+    "test_id": "ETS-062",
+    "question": "哪些订单处于 STALLED 状态？",
+    "language": "zh",
+    "source_record_id": "Q18",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-062.png"
+  },
+  {
+    "test_id": "ETS-063",
+    "question": "List all TrendCart orders.",
+    "language": "en",
+    "source_record_id": "Q06",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-063.png"
+  },
+  {
+    "test_id": "ETS-064",
+    "question": "Which TrendCart orders are still in progress?",
+    "language": "en",
+    "source_record_id": "W15",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-064.png"
+  },
+  {
+    "test_id": "ETS-065",
+    "question": "Which TrendCart orders are still in the Knitting stage?",
+    "language": "en",
+    "source_record_id": "7",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-065.png"
+  },
+  {
+    "test_id": "ETS-066",
+    "question": "请列出 TrendCart 的所有订单。",
+    "language": "zh",
+    "source_record_id": "W01-ZH",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-066.png"
+  },
+  {
+    "test_id": "ETS-067",
+    "question": "List my active watches.",
+    "language": "en",
+    "source_record_id": "Q50",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-067.png"
+  },
+  {
+    "test_id": "ETS-068",
+    "question": "Which orders have spent longer than normal in their current production stage?",
+    "language": "en",
+    "source_record_id": "JAST-G10",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-068.png"
+  },
+  {
+    "test_id": "ETS-069",
+    "question": "how is ord-099 doing? will it miss its due date?",
+    "language": "en",
+    "source_record_id": "JAST-B06",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-069.png"
+  },
+  {
+    "test_id": "ETS-070",
+    "question": "Which orders should be closely monitored over the next 48 hours?",
+    "language": "en",
+    "source_record_id": "JAST-B14",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-070.png"
+  },
+  {
+    "test_id": "ETS-071",
+    "question": "What is the status of ORD-999?",
+    "language": "en",
+    "source_record_id": "Q05",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-071.png"
+  },
+  {
+    "test_id": "ETS-072",
+    "question": "Add a note to ORD-120: TEST Sprint1 Gem - verify status with production lead",
+    "language": "en",
+    "source_record_id": "Q45",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-072.png"
+  }
+]

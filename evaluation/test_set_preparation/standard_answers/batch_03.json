@@ -1,0 +1,128 @@
+[
+  {
+    "test_id": "ETS-037",
+    "question": "Can we take 200 beanies by April 3, 2026?",
+    "source_record_id": "Q34",
+    "original_rating": "GOOD",
+    "answer": "Under the current capacity heuristic, 200 beanies by April 3, 2026 are feasible only with workshops (FEASIBLE_WITH_WORKSHOPS). The request was evaluated as ACCESSORIES.\n\nThe model counts 3 working days and identifies PACKING as the bottleneck, with median throughput of 672 pieces per working day. Estimated factory window capacity is 2,016 pieces, while existing IN_PROGRESS orders account for 32,850 pieces, leaving estimated spare factory capacity at 0. ACTIVE workshops provide 226.39999999999998 pieces of estimated overflow capacity, enough for the 200-piece request.\n\nThis is a planning estimate, not a delivery guarantee. It uses the full quantity of every IN_PROGRESS order because remaining quantities are unknown, relies on the bottleneck-stage median from the last 30 working days, does not model four-stage pipeline latency, assumes at most one new batch per workshop, and excludes SUSPENDED workshops."
+  },
+  {
+    "test_id": "ETS-038",
+    "question": "Can the factory produce 300 accessories by April 4, 2026?",
+    "source_record_id": "21",
+    "original_rating": "GOOD",
+    "answer": "Under the current capacity heuristic, 300 accessories by April 4, 2026 are feasible only with workshops (FEASIBLE_WITH_WORKSHOPS).\n\nThe model counts 4 working days and identifies PACKING as the bottleneck, with median throughput of 672 pieces per working day. Existing IN_PROGRESS orders account for 32,850 pieces, so estimated spare in-house capacity is 0. Eligible ACTIVE workshops provide an estimated 418.5 pieces of overflow capacity, enough for the requested 300 pieces.\n\nThis is a planning estimate, not a delivery guarantee. It assumes every IN_PROGRESS order’s full quantity remains, uses the bottleneck median from the last 30 working days, does not model four-stage pipeline latency, assumes at most one new batch per workshop, and excludes SUSPENDED workshops."
+  },
+  {
+    "test_id": "ETS-039",
+    "question": "Can we accept 300 scarves? I have not agreed a delivery date yet",
+    "source_record_id": "Q37",
+    "original_rating": "GOOD",
+    "answer": "What delivery date should I test for the 300 scarves? Please provide the date.\n\nUnder the current capacity heuristic, 300 scarves by April 10, 2026 are feasible only with workshops (FEASIBLE_WITH_WORKSHOPS). The request maps to ACCESSORIES.\n\nThe model counts 9 working days and identifies PACKING as the bottleneck, with median throughput of 672 pieces per working day. Existing IN_PROGRESS orders account for 32,850 pieces, leaving estimated spare in-house capacity at 0. Eligible ACTIVE workshops provide an estimated 2,121.05 pieces of overflow capacity, so the 300-piece request fits using workshops.\n\nThis is a planning estimate, not a delivery guarantee. It:\n\nCounts the full quantity of every IN_PROGRESS order because remaining quantities are unknown.\nUses the bottleneck-stage median from the last 30 working days.\nDoes not model the latency of the four sequential production stages.\nAssumes at most one new batch per workshop.\nExcludes SUSPENDED workshops."
+  },
+  {
+    "test_id": "ETS-040",
+    "question": "我们能否在 2026 年 4 月 2 日前完成新增 5000 件围巾订单？",
+    "source_record_id": "Q35",
+    "original_rating": "GOOD",
+    "answer": "按照当前产能模型，无法在 2026 年 4 月 2 日前完成新增 5,000 件围巾订单（NOT_FEASIBLE）。\n\n该订单按 ACCESSORIES（配饰）类别评估。模型计入 2 个工作日，瓶颈为包装环节，其过去 30 个工作日的中位产能是每天 672 件，对应窗口产能 1,344 件。当前在制订单共有 32,850 件，因此工厂剩余产能被裁为 0 件；符合条件的 ACTIVE 外协厂只能再提供约 34.3 件产能，远低于新增的 5,000 件需求。\n\n这是产能规划估算，并非交付保证。模型的限制包括：\n\n由于没有各订单当前阶段的剩余件数，模型将所有在制订单的完整件数计入竞争需求。\n工厂产能采用过去 30 个工作日的瓶颈环节中位数，未模拟四个生产环节依次流转所需的时间。\n每家外协厂在该窗口内最多按一个新批次计算，并排除暂停合作的外协厂。\n结果仅是产能算术检查，不代表实际交付承诺。"
+  },
+  {
+    "test_id": "ETS-041",
+    "question": "Can we accept 500 hoodies for delivery by April 4?",
+    "source_record_id": "V15",
+    "original_rating": "GOOD",
+    "answer": "Under the current capacity heuristic, 500 hoodies due April 4, 2026 are not feasible (NOT_FEASIBLE).\n\nThe model counts 4 working days and identifies PACKING as the bottleneck, with median throughput of 672 pieces per working day. Estimated factory window capacity is 2,688 pieces, versus 32,850 pieces already in progress, so spare in-house capacity is clipped to 0.\n\nEligible ACTIVE workshops could provide an estimated 439 pieces, below the requested 500. Therefore, the order does not fit within estimated capacity.\n\nThis is a planning estimate, not a delivery guarantee. It:\n• Counts the full quantity of every IN_PROGRESS order because remaining quantities are unknown.\n• Uses the bottleneck median from the last 30 working days.\n• Does not model latency through the four sequential production stages.\n• Assumes at most one new batch per workshop.\n• Excludes SUSPENDED workshops."
+  },
+  {
+    "test_id": "ETS-042",
+    "question": "Can we accept an order for 800 Hoodies and deliver it at April the 11th using internal production only?",
+    "source_record_id": "JAST-G19",
+    "original_rating": "GOOD",
+    "answer": "No—not using internal production only.\n\nUnder the current capacity heuristic, the 800 hoodies due April 11, 2026 were evaluated as FEASIBLE_WITH_WORKSHOPS, not feasible in house.\n\nThe model counts 10 working days and identifies Packing as the bottleneck, with median throughput of 672 pieces per working day. That gives an estimated factory window capacity of 6,720 pieces. Existing in-progress orders account for 32,850 pieces, so estimated spare internal capacity is clipped to 0.\n\nActive workshops provide an estimated 5,061.55 pieces of overflow capacity, but that falls outside your internal-only condition.\n\nThis is a planning estimate, not a delivery guarantee. It counts the full quantity of every in-progress order because remaining quantities are unknown, uses the bottleneck median from the last 30 working days, and does not model latency through the four sequential production stages. Workshop estimates assume at most one new batch per workshop and exclude suspended workshops."
+  },
+  {
+    "test_id": "ETS-043",
+    "question": "Can we take 800 hoodies by August 25?",
+    "source_record_id": "JAST-G20",
+    "original_rating": "GOOD",
+    "answer": "Yes. Under the current capacity heuristic, 800 hoodies by August 25, 2026 are feasible in-house (FEASIBLE_IN_HOUSE).\n\nThe model counts 126 working days and identifies Packing as the bottleneck, with median throughput of 672 pieces per working day. Estimated factory window capacity is 84,672 pieces. After accounting for 32,850 pieces in existing in-progress orders, estimated spare factory capacity is 51,822 pieces, which covers the requested 800 pieces. Active workshops add an estimated 137,034.75 pieces of potential overflow, but they are not required by the verdict.\n\nThis is a planning estimate, not a delivery guarantee. It counts every in-progress order’s full quantity because remaining quantities are unknown, uses the bottleneck median from the last 30 working days, and does not model four-stage pipeline latency. Workshop estimates assume one new batch per workshop and exclude suspended workshops."
+  },
+  {
+    "test_id": "ETS-044",
+    "question": "Explain the bottleneck and capacity assumptions in your feasibility result.",
+    "source_record_id": "23",
+    "original_rating": "GOOD",
+    "answer": "The feasibility result used these assumptions:\n\nFactory bottleneck\n\n• PACKING was the bottleneck because it had the lowest 30-working-day median throughput: 672 pieces per working day.\n• The window from April 1 through May 15 contains 39 working days, counting Monday–Saturday and excluding Sundays.\n• The model therefore set factory window capacity at 26,208 pieces.\n• It treated all 32,850 pieces on IN_PROGRESS orders as competing workload. Because that exceeds the modeled window capacity, spare in-house capacity was clipped to 0.\n\nThis is conservative because the dataset does not show how many pieces remain unfinished on each active order; it assumes each order’s entire quantity is still outstanding.\n\nWorkshop capacity\n\nOnly ACTIVE workshops that make ACCESSORIES were included: W2, W4, and W6. For each workshop:\n\n• Available production days = working days minus pickup lead time and existing queue.\n• Output = daily capacity × available days × (1 − defect rate).\n• Any maximum batch limit would cap that output.\n• The model assumes no more than one new batch per workshop during the window.\n\nTheir combined estimated overflow capacity was 12,831.05 pieces. Since the factory had 0 modeled spare capacity but workshop capacity could cover the requested 2,000 scarves, the verdict was FEASIBLE_WITH_WORKSHOPS.\n\nThe estimate does not model the timing needed to move work sequentially through knitting, assembly, washing, and packing, so it is a capacity check—not a delivery guarantee."
+  },
+  {
+    "test_id": "ETS-045",
+    "question": "What is my first priority today?",
+    "source_record_id": "Q21",
+    "original_rating": "GOOD",
+    "answer": "First priority: push ORD-107 and ORD-114 through Packing. Both Northwind Apparel orders are overdue, close to completion, and each has an estimated 3.0 working days left. Clearing them first will reduce the overdue backlog quickly."
+  },
+  {
+    "test_id": "ETS-046",
+    "question": "Which orders would be at risk of missing their due dates if Assembly output stays at 455 pieces per day?",
+    "source_record_id": "JAST-B28",
+    "original_rating": "BAD",
+    "answer": "I can’t run that hypothetical from the available tools. The risk model uses each stage’s 30-day median, not a custom assumption of Assembly staying at 455 pieces per day for the next week.\n\nThe current pace-based risk list is available, but it would not answer this specific Assembly-output scenario accurately."
+  },
+  {
+    "test_id": "ETS-047",
+    "question": "Which production stage should we improve first to maximize our on-time delivery rate?",
+    "source_record_id": "JAST-G23",
+    "original_rating": "GOOD",
+    "answer": "Improve Assembly first.\n\nIt is the only stage currently flagged below baseline: 455 pieces versus a 30-day median of 758, with 10 in-progress orders queued there. Two orders likely to miss dates in the next seven days—ORD-108 and ORD-103—are also currently in Assembly with Washing and Packing still remaining.\n\nPacking is the long-run throughput bottleneck at a median of 672 pieces per working day, but its latest output is near normal and only 2 orders are queued there. For immediate on-time delivery improvement, Assembly is therefore the stronger first target.\n\nThis is an operational recommendation; the available model does not directly simulate the resulting change in on-time delivery rate."
+  },
+  {
+    "test_id": "ETS-048",
+    "question": "Answer in French: What is the status of ORD-107?",
+    "source_record_id": "B03",
+    "original_rating": "BAD",
+    "answer": "Northwind Apparel’s order ORD-107 is still in progress, at the final packing stage. It is for 2,000 cardigans and was due to be delivered on March 16, 2026, so it is late. However, activity was recorded today, April 1, 2026, and only packing remains to be completed."
+  },
+  {
+    "test_id": "ETS-049",
+    "question": "List all completed orders.",
+    "source_record_id": "Q14",
+    "original_rating": "BAD",
+    "answer": "There are 86 completed orders in the current data. The table shows the 60 rows returned by the lookup; the result was truncated, so 26 completed orders are not displayed."
+  },
+  {
+    "test_id": "ETS-050",
+    "question": "列出 Cotton Club 的所有订单。",
+    "source_record_id": "Q09",
+    "original_rating": "GOOD",
+    "answer": "已找到 19 个 Cotton Club 订单。完整清单及产品、件数、交期、状态和当前阶段见上表。"
+  },
+  {
+    "test_id": "ETS-051",
+    "question": "Show all Cotton Club orders currently in the Washing stage.",
+    "source_record_id": "8",
+    "original_rating": "GOOD",
+    "answer": "As of 2026-04-01, 2 Cotton Club orders are currently in the Washing stage. Both are in progress; details are shown in the table."
+  },
+  {
+    "test_id": "ETS-052",
+    "question": "Show all in-progress orders for Harbor Knits.",
+    "source_record_id": "5",
+    "original_rating": "GOOD",
+    "answer": "I found 5 in-progress Harbor Knits orders. Three are in washing and two are in assembly. The full list is shown in the table."
+  },
+  {
+    "test_id": "ETS-053",
+    "question": "List all Northwind Apparel orders that are currently in production.",
+    "source_record_id": "6",
+    "original_rating": "GOOD",
+    "answer": "Northwind Apparel has 5 orders currently in production: two in washing, one in assembly, and two in packing. The full order details are shown in the table."
+  },
+  {
+    "test_id": "ETS-054",
+    "question": "List all overdue orders.",
+    "source_record_id": "Q17",
+    "original_rating": "GOOD",
+    "answer": "8 orders are overdue as of April 1, 2026.\n\nThe most overdue are ORD-107 and ORD-120. ORD-002 is especially concerning because it is both overdue and stalled. The full list, current stages, and estimated work remaining are shown in the table."
+  }
+]

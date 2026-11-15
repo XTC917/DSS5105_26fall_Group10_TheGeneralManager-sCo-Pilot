@@ -1,0 +1,146 @@
+[
+  {
+    "test_id": "ETS-109",
+    "question": "三月份的销售额是多少",
+    "language": "zh",
+    "source_record_id": "Q59",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-109.png"
+  },
+  {
+    "test_id": "ETS-110",
+    "question": "Which orders are likely to miss their due dates?",
+    "language": "en",
+    "source_record_id": "JAST-G01",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-110.png"
+  },
+  {
+    "test_id": "ETS-111",
+    "question": "Which orders have the largest gap between their due dates and estimated completion dates?",
+    "language": "en",
+    "source_record_id": "JAST-G05",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-111.png"
+  },
+  {
+    "test_id": "ETS-112",
+    "question": "Are any large orders at high risk of late delivery?",
+    "language": "en",
+    "source_record_id": "JAST-B04",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-112.png"
+  },
+  {
+    "test_id": "ETS-113",
+    "question": "Which orders are due within the next 3 days but still have multiple production stages remaining?",
+    "language": "en",
+    "source_record_id": "JAST-B08",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-113.png"
+  },
+  {
+    "test_id": "ETS-114",
+    "question": "Which orders are already overdue but still have significant production work remaining?",
+    "language": "en",
+    "source_record_id": "JAST-G02",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-114.png"
+  },
+  {
+    "test_id": "ETS-115",
+    "question": "which orders are stalled",
+    "language": "en",
+    "source_record_id": "JAST-G03",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-115.png"
+  },
+  {
+    "test_id": "ETS-116",
+    "question": "How should we schedule production today to minimize the number of late orders?",
+    "language": "en",
+    "source_record_id": "JAST-G17",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-116.png"
+  },
+  {
+    "test_id": "ETS-117",
+    "question": "What is the selling price of a Hoodie?",
+    "language": "en",
+    "source_record_id": "Q58",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-117.png"
+  },
+  {
+    "test_id": "ETS-118",
+    "question": "Which production stage has taken the longest for ORD-002?",
+    "language": "en",
+    "source_record_id": "JAST-G08",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-118.png"
+  },
+  {
+    "test_id": "ETS-119",
+    "question": "Which of those stages has the largest in-progress-order queue? Reply with only the stage name and order count.",
+    "language": "en",
+    "source_record_id": "V17-F1-EN",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-119.png"
+  },
+  {
+    "test_id": "ETS-120",
+    "question": "在这些阶段中，哪个阶段的在制订单最多？只回答阶段名称和订单数。",
+    "language": "zh",
+    "source_record_id": "V17-F1-ZH",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-120.png"
+  },
+  {
+    "test_id": "ETS-121",
+    "question": "Which orders are at risk because they have made little or no production progress recently?",
+    "language": "en",
+    "source_record_id": "JAST-B09",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-121.png"
+  },
+  {
+    "test_id": "ETS-122",
+    "question": "Show a table of TrendCart orders with order ID, product, status, stage and due date.",
+    "language": "en",
+    "source_record_id": "Q39",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-122.png"
+  },
+  {
+    "test_id": "ETS-123",
+    "question": "Separate the orders into three groups: overdue, stalled, and likely to miss their due dates. Do not place an order in more than one group.",
+    "language": "en",
+    "source_record_id": "26",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-123.png"
+  },
+  {
+    "test_id": "ETS-124",
+    "question": "how is ORD-099 doing? will it miss its due date?",
+    "language": "en",
+    "source_record_id": "JAST-B07",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-124.png"
+  },
+  {
+    "test_id": "ETS-125",
+    "question": "What should I be concerned about right now?",
+    "language": "en",
+    "source_record_id": "JAST-B16",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-125.png"
+  },
+  {
+    "test_id": "ETS-126",
+    "question": "Show me the production trace for ORD-083.",
+    "language": "en",
+    "source_record_id": "13",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-126.png"
+  }
+]

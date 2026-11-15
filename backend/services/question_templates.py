@@ -29,6 +29,10 @@ _TOKEN = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _ORDER_ID = re.compile(r"ORD-\d+", re.IGNORECASE)
 
 
+def _exact_key(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "").strip()).casefold()
+
+
 def _tokens(text: str) -> list[str]:
     tokens: list[str] = []
     for tok in _TOKEN.findall((text or "").lower()):
@@ -118,6 +122,10 @@ def _query_scores(query: str) -> np.ndarray | None:
 
 def retrieve_answer_templates(query: str, k: int = DEFAULT_K) -> list[dict[str, Any]]:
     """Two closest questions in the query language, then one in the other language."""
+    from backend.agent.eval_mode import few_shot_mode, response_templates_enabled
+
+    if not response_templates_enabled() or few_shot_mode() == "off":
+        return []
     items, _, _, _ = _index()
     scores = _query_scores(query)
     if scores is None or not items:
@@ -157,11 +165,16 @@ def _language_hits(
         key=lambda index: float(scores[index]),
         reverse=True,
     )
+    from backend.agent.eval_mode import few_shot_mode
+
+    asked = _exact_key(query) if few_shot_mode() == "exclude_exact" else ""
     hits: list[dict[str, Any]] = []
     for index in ranked:
         score = float(scores[index])
         if score <= 0:
             break
+        if asked and _exact_key(items[index]["question"]) == asked:
+            continue
         hits.append({**items[index], "score": round(score, 4)})
         if len(hits) >= limit:
             break
@@ -174,8 +187,12 @@ def _other_language_hit(query: str) -> dict[str, Any] | None:
     if not qid:
         return None
     items, _, _, _ = _index()
+    from backend.agent.eval_mode import few_shot_mode
+
     item = next((row for row in items if row["id"] == qid), None)
     if item is None or _has_cjk(item["question"]) == _has_cjk(query):
+        return None
+    if few_shot_mode() == "exclude_exact" and _exact_key(item["question"]) == _exact_key(query):
         return None
     return {**item, "score": 0.01}
 

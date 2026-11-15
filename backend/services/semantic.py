@@ -39,6 +39,10 @@ load_semantic_layer.cache_clear = _load_semantic_layer_at.cache_clear  # type: i
 
 
 def render_semantic_prompt(layer: dict[str, Any] | None = None) -> str:
+    from backend.agent.eval_mode import semantic_layer_enabled
+
+    if layer is None and not semantic_layer_enabled():
+        return ""
     data = layer if layer is not None else load_semantic_layer()
     data_def = data.get("data_definition") or {}
     term_def = data.get("term_definition") or {}

@@ -906,6 +906,13 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
     limitation = None
     ungrounded_message = None
 
+    capture_args = os.getenv("EVAL_CAPTURE_TOOL_ARGS") == "1"
+    call_args: dict[str, dict[str, Any]] = {}
+    if capture_args:
+        for msg in turn:
+            for call in getattr(msg, "tool_calls", None) or []:
+                if isinstance(call, dict) and call.get("id"):
+                    call_args[str(call["id"])] = dict(call.get("args") or {})
     for msg in turn:
         if isinstance(msg, ToolMessage):
             payload = _parse_json(msg.content)
@@ -921,7 +928,10 @@ def parse_agent_result(result: dict[str, Any], conversation_id: str) -> dict[str
                 item for item in data.get("limitations", []) if isinstance(item, str)
             )
             if payload.get("ok") and tool_name not in _DISPLAY_TOOLS:
-                evidence_results.append({"tool": tool_name, "data": data})
+                evidence = {"tool": tool_name, "data": data}
+                if capture_args:
+                    evidence["args"] = call_args.get(str(getattr(msg, "tool_call_id", "") or ""), {})
+                evidence_results.append(evidence)
             if payload.get("ok") and tool_name in {"draft_chase_email", "send_email"}:
                 drafts = data.get("drafts") or [data.get("draft")]
                 for draft in drafts:

@@ -1,0 +1,128 @@
+[
+  {
+    "test_id": "ETS-055",
+    "question": "List all Crewneck sweater orders.",
+    "source_record_id": "Q11",
+    "original_rating": "GOOD",
+    "answer": "I found 13 Crewneck sweater orders. Three are in progress: ORD-002, ORD-055, and ORD-081. The other 10 are complete. Full details are shown in the table."
+  },
+  {
+    "test_id": "ETS-056",
+    "question": "List all Hoodie orders.",
+    "source_record_id": "Q10",
+    "original_rating": "GOOD",
+    "answer": "I found 26 Hoodie orders. The full list is shown in the table, including customer, pieces, due date, status, current stage, and last activity date."
+  },
+  {
+    "test_id": "ETS-057",
+    "question": "List the in-progress Scarf orders in a table.",
+    "source_record_id": "V05",
+    "original_rating": "GOOD",
+    "answer": "As of 2026-04-01, there are 6 in-progress Scarf orders, shown in the table above."
+  },
+  {
+    "test_id": "ETS-058",
+    "question": "Which orders are currently in ASSEMBLY? Show them in a table.",
+    "source_record_id": "V04",
+    "original_rating": "GOOD",
+    "answer": "As of 2026-04-01, 10 orders are currently in ASSEMBLY. All are in progress; the full details are shown in the table."
+  },
+  {
+    "test_id": "ETS-059",
+    "question": "列出当前处于 PACKING 阶段的在制订单。",
+    "source_record_id": "Q13",
+    "original_rating": "GOOD",
+    "answer": "当前共有 2 个处于 PACKING 阶段的在制订单，均属于 Northwind Apparel。订单明细已在表格中列出。"
+  },
+  {
+    "test_id": "ETS-060",
+    "question": "List in-progress orders currently in WASHING.",
+    "source_record_id": "Q12",
+    "original_rating": "GOOD",
+    "answer": "As of 2026-04-01, 10 in-progress orders are currently in the WASHING stage. The full list is shown in the table."
+  },
+  {
+    "test_id": "ETS-061",
+    "question": "Show all stalled orders.",
+    "source_record_id": "V10",
+    "original_rating": "GOOD",
+    "answer": "There are 2 stalled orders as of 2026-04-01. ORD-002 is also overdue; ORD-005 is stalled but not overdue."
+  },
+  {
+    "test_id": "ETS-062",
+    "question": "哪些订单处于 STALLED 状态？",
+    "source_record_id": "Q18",
+    "original_rating": "GOOD",
+    "answer": "目前有 2 个订单处于 STALLED 状态：ORD-002 和 ORD-005。\n\nORD-002 最后活动于 2026-03-23，停在洗水阶段；同时已逾期，需优先跟进。\nORD-005 最后活动于 2026-03-24，停在针织阶段；交期为 2026-04-20，目前尚未逾期。"
+  },
+  {
+    "test_id": "ETS-063",
+    "question": "List all TrendCart orders.",
+    "source_record_id": "Q06",
+    "original_rating": "GOOD",
+    "answer": "I found 17 TrendCart orders. The table shows each order’s product, quantity, due date, status, current stage, and last activity date."
+  },
+  {
+    "test_id": "ETS-064",
+    "question": "Which TrendCart orders are still in progress?",
+    "source_record_id": "W15",
+    "original_rating": "GOOD",
+    "answer": "TrendCart has 6 orders still in progress. Four are in KNITTING, one is in WASHING, and one is in ASSEMBLY, as shown in the table."
+  },
+  {
+    "test_id": "ETS-065",
+    "question": "Which TrendCart orders are still in the Knitting stage?",
+    "source_record_id": "7",
+    "original_rating": "GOOD",
+    "answer": "TrendCart has 4 orders still in knitting: ORD-005, ORD-017, ORD-082, and ORD-096. Their quantities, due dates, and knitting entry dates are shown in the table."
+  },
+  {
+    "test_id": "ETS-066",
+    "question": "请列出 TrendCart 的所有订单。",
+    "source_record_id": "W01-ZH",
+    "original_rating": "GOOD",
+    "answer": "已列出 TrendCart 的全部 17 个订单，包括产品、件数、交期、状态、当前阶段及最近活动日期。"
+  },
+  {
+    "test_id": "ETS-067",
+    "question": "List my active watches.",
+    "source_record_id": "Q50",
+    "original_rating": "GOOD",
+    "answer": "You have 1 active watch and no fired watches. It monitors ORD-005 for inactivity by 2026-04-02."
+  },
+  {
+    "test_id": "ETS-068",
+    "question": "Which orders have spent longer than normal in their current production stage?",
+    "source_record_id": "JAST-G10",
+    "original_rating": "GOOD",
+    "answer": "Two orders have spent longer than normal in their current stage: ORD-002 and ORD-005.\n\n🔴 ORD-002 needs immediate attention. The 1,000-piece Cotton Club crewneck order has remained in Washing for 8 working days and is already overdue. Washing and Packing are still left.\n\n🟠 ORD-005 should be checked next. The 500-piece TrendCart scarf order has remained in Knitting for 7 working days. All four production stages remain, although its due date is April 20."
+  },
+  {
+    "test_id": "ETS-069",
+    "question": "how is ord-099 doing? will it miss its due date?",
+    "source_record_id": "JAST-B06",
+    "original_rating": "BAD",
+    "answer": "I couldn’t find ord-099 in the orders table. Please check the order ID and resend it exactly as recorded."
+  },
+  {
+    "test_id": "ETS-070",
+    "question": "Which orders should be closely monitored over the next 48 hours?",
+    "source_record_id": "JAST-B14",
+    "original_rating": "BAD",
+    "answer": "Closely monitor ORD-029, ORD-108, and ORD-103 over the next 48 hours.\n\n• ORD-029: Confirm that it clears Washing and enters Packing; it is due today and its remaining-work estimate exceeds the time [unclear].\n• ORD-108: Watch for movement out of Assembly. Its current pace leaves a substantial shortfall against its April 3 due date.\n• ORD-103: Monitor alongside ORD-108 because it has the same remaining stages and pace estimate, with delivery due April 4.\n\nNone is currently overdue, but all three are likely to miss their due dates at the present pace. Assembly progress deserves particular [unclear] for the two scarf orders."
+  },
+  {
+    "test_id": "ETS-071",
+    "question": "What is the status of ORD-999?",
+    "source_record_id": "Q05",
+    "original_rating": "GOOD",
+    "answer": "I could not find an order with ID ORD-999. Please check the order ID and provide the correct one; I cannot report its status without a matching order."
+  },
+  {
+    "test_id": "ETS-072",
+    "question": "Add a note to ORD-120: TEST Sprint1 Gem - verify status with production lead",
+    "source_record_id": "Q45",
+    "original_rating": "GOOD",
+    "answer": "Note proposed for ORD-120: “TEST Sprint1 Gem — verify status with production lead.”\n\nClick Confirm to save it.\n\nConfirm\nDismiss"
+  }
+]

@@ -1,0 +1,130 @@
+[
+  {
+    "test_id": "ETS-127",
+    "question": "Trace ORD-107 for me. What's its current situation?",
+    "language": "en",
+    "source_record_id": "JAST-G06",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-127.png"
+  },
+  {
+    "test_id": "ETS-128",
+    "question": "Analyze the complete production trace of ORD-114.",
+    "language": "en",
+    "source_record_id": "12",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-128.png"
+  },
+  {
+    "test_id": "ETS-129",
+    "question": "Trace ORD-120 and show the source evidence behind its risk flags.",
+    "language": "en",
+    "source_record_id": "Q26",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-129.png"
+  },
+  {
+    "test_id": "ETS-130",
+    "question": "Show only the order IDs and due dates for those at-risk orders.",
+    "language": "en",
+    "source_record_id": "W03-EN",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-130.png"
+  },
+  {
+    "test_id": "ETS-131",
+    "question": "显示这些风险订单的订单编号和交期。",
+    "language": "zh",
+    "source_record_id": "W03-ZH",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-131.png"
+  },
+  {
+    "test_id": "ETS-132",
+    "question": "Which of those orders are likely to miss their due dates?",
+    "language": "en",
+    "source_record_id": "Q07",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-132.png"
+  },
+  {
+    "test_id": "ETS-133",
+    "question": "其中哪些订单有风险？",
+    "language": "zh",
+    "source_record_id": "W02-ZH",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-133.png"
+  },
+  {
+    "test_id": "ETS-134",
+    "question": "Why is the most urgent one at risk?",
+    "language": "en",
+    "source_record_id": "B02",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-134.png"
+  },
+  {
+    "test_id": "ETS-135",
+    "question": "List orders for the customer NorthStar Retail.",
+    "language": "en",
+    "source_record_id": "Q16",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-135.png"
+  },
+  {
+    "test_id": "ETS-136",
+    "question": "Tell me if ORD-005 hasn't moved by Thursday / ... within 10 days",
+    "language": "en",
+    "source_record_id": "JAST-B22",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-136.png"
+  },
+  {
+    "test_id": "ETS-137",
+    "question": "Tell me if ORD-005 hasn't moved by Thursday",
+    "language": "en",
+    "source_record_id": "JAST-G25",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-137.png"
+  },
+  {
+    "test_id": "ETS-138",
+    "question": "Why is ORD-103 at risk late delivery?",
+    "language": "en",
+    "source_record_id": "JAST-G07",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-138.png"
+  },
+  {
+    "test_id": "ETS-139",
+    "question": "Why is ORD-107 at risk?",
+    "language": "en",
+    "source_record_id": "11",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-139.png"
+  },
+  {
+    "test_id": "ETS-140",
+    "question": "Why is this order considered risky?",
+    "language": "en",
+    "source_record_id": "Q02",
+    "original_rating": "GOOD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-140.png"
+  },
+  {
+    "test_id": "ETS-141",
+    "question": "How many in-progress orders are currently in each production stage? Include the order IDs supporting each count.",
+    "language": "en",
+    "source_record_id": "B06",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-141.png"
+  },
+  {
+    "test_id": "ETS-142",
+    "question": "Which orders are so far behind schedule that we should consider external workshop support?",
+    "language": "en",
+    "source_record_id": "JAST-B29",
+    "original_rating": "BAD",
+    "image": "C:\\Users\\LIUSI\\Desktop\\NUS\\DSS5105\\DSS5105_26fall_Group10_TheGeneralManager-sCo-Pilot\\evaluation\\test_set_preparation\\_source_shots\\ETS-142.png"
+  }
+]

@@ -1,0 +1,351 @@
+{
+  "meta": {
+    "purpose": "Two disjoint 20-question packs for comparing human grades with machine grades.",
+    "source": "evaluation/questions.json",
+    "types": {
+      "risk": "风险与优先级",
+      "lookup": "订单查询",
+      "clarify": "澄清与追问",
+      "production": "生产异常",
+      "feasibility": "可行性",
+      "action": "操作与审计",
+      "scope": "范围与边界",
+      "chart": "图表"
+    },
+    "quota_per_pack": {
+      "风险与优先级": 5,
+      "订单查询": 4,
+      "澄清与追问": 3,
+      "生产异常": 2,
+      "可行性": 2,
+      "操作与审计": 2,
+      "范围与边界": 1,
+      "图表": 1
+    },
+    "answers": "Standard answers stay in questions.json and are not copied here."
+  },
+  "pack_a": [
+    {
+      "id": "ETS-020",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_judgement",
+      "relevant_tool": "get_order_status",
+      "question": "Compare the risk levels of ORD-061 and ORD-108."
+    },
+    {
+      "id": "ETS-023",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_overdue",
+      "relevant_tool": "find_orders",
+      "question": "Which completed TrendCart orders were delivered late?"
+    },
+    {
+      "id": "ETS-045",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "priority",
+      "relevant_tool": "get_today_priority",
+      "question": "What is my first priority today?"
+    },
+    {
+      "id": "ETS-061",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_stalled",
+      "relevant_tool": "get_orders_at_risk",
+      "question": "Show all stalled orders."
+    },
+    {
+      "id": "ETS-095",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "priority",
+      "relevant_tool": "get_today_priority",
+      "question": "Which orders could be completed the fastest if prioritized?"
+    },
+    {
+      "id": "ETS-050",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_list",
+      "relevant_tool": "find_orders",
+      "question": "列出 Cotton Club 的所有订单。"
+    },
+    {
+      "id": "ETS-075",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_status",
+      "relevant_tool": "get_order_status",
+      "question": "Show me the status of ORD-002."
+    },
+    {
+      "id": "ETS-082",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "trace",
+      "relevant_tool": "trace_order",
+      "question": "Show the observed stage history for ORD-120, without treating factory-wide production as own output."
+    },
+    {
+      "id": "Q001",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "normal_lookup",
+      "relevant_tool": "get_orders_at_risk",
+      "question": "Which orders are likely to miss their due dates?"
+    },
+    {
+      "id": "ETS-015",
+      "type": "clarify",
+      "type_label": "澄清与追问",
+      "category": "clarification",
+      "relevant_tool": "get_order_status",
+      "question": "Show me the Harbor Knits scarf order."
+    },
+    {
+      "id": "ETS-019",
+      "type": "clarify",
+      "type_label": "澄清与追问",
+      "category": "clarification",
+      "relevant_tool": "get_order_status",
+      "question": "How is the TrendCart order doing?"
+    },
+    {
+      "id": "ETS-119",
+      "type": "clarify",
+      "type_label": "澄清与追问",
+      "category": "context_followup",
+      "relevant_tool": "find_orders",
+      "question": "Which of those stages has the largest in-progress-order queue? Reply with only the stage name and order count."
+    },
+    {
+      "id": "ETS-002",
+      "type": "production",
+      "type_label": "生产异常",
+      "category": "anomaly",
+      "relevant_tool": "discover_factory_issues",
+      "question": "当前工厂有什么异常？请按严重程度列出前三项。"
+    },
+    {
+      "id": "ETS-005",
+      "type": "production",
+      "type_label": "生产异常",
+      "category": "anomaly_judgement",
+      "relevant_tool": "discover_factory_issues",
+      "question": "Is the current backlog in Knitting concern?"
+    },
+    {
+      "id": "ETS-036",
+      "type": "feasibility",
+      "type_label": "可行性",
+      "category": "feasibility",
+      "relevant_tool": "check_feasibility",
+      "question": "Is it feasible to accept a new order for 2,000 scarves due on May 15, 2026?"
+    },
+    {
+      "id": "ETS-038",
+      "type": "feasibility",
+      "type_label": "可行性",
+      "category": "feasibility",
+      "relevant_tool": "check_feasibility",
+      "question": "Can the factory produce 300 accessories by April 4, 2026?"
+    },
+    {
+      "id": "ETS-007",
+      "type": "action",
+      "type_label": "操作与审计",
+      "category": "action_watch",
+      "relevant_tool": "cancel_watch",
+      "question": "Cancel the TEST Sprint1 Gem watch on ORD-005"
+    },
+    {
+      "id": "ETS-104",
+      "type": "action",
+      "type_label": "操作与审计",
+      "category": "action_reminder",
+      "relevant_tool": "create_reminder",
+      "question": "Create a reminder for ORD-120 tomorrow: TEST Sprint1 Gem - dismiss this proposal."
+    },
+    {
+      "id": "ETS-108",
+      "type": "scope",
+      "type_label": "范围与边界",
+      "category": "out_of_scope",
+      "relevant_tool": "",
+      "question": "What was TrendCart revenue in March 2026?"
+    },
+    {
+      "id": "ETS-011",
+      "type": "chart",
+      "type_label": "图表",
+      "category": "visualization",
+      "relevant_tool": "draw",
+      "question": "Show a bar chart comparing the number of in-progress orders by stage."
+    }
+  ],
+  "pack_b": [
+    {
+      "id": "ETS-054",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_overdue",
+      "relevant_tool": "get_orders_at_risk",
+      "question": "List all overdue orders."
+    },
+    {
+      "id": "ETS-062",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_stalled",
+      "relevant_tool": "get_orders_at_risk",
+      "question": "哪些订单处于 STALLED 状态？"
+    },
+    {
+      "id": "ETS-073",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_judgement",
+      "relevant_tool": "get_order_status",
+      "question": "Can ORD-103 be completed on time? Explain your conclusion."
+    },
+    {
+      "id": "ETS-094",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "priority",
+      "relevant_tool": "get_today_priority",
+      "question": "Which orders should be prioritized in Washing today?"
+    },
+    {
+      "id": "ETS-111",
+      "type": "risk",
+      "type_label": "风险与优先级",
+      "category": "risk_gap",
+      "relevant_tool": "get_orders_at_risk",
+      "question": "Which orders have the largest gap between their due dates and estimated completion dates?"
+    },
+    {
+      "id": "ETS-051",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_list",
+      "relevant_tool": "find_orders",
+      "question": "Show all Cotton Club orders currently in the Washing stage."
+    },
+    {
+      "id": "ETS-077",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "order_status",
+      "relevant_tool": "get_order_status",
+      "question": "请查询 ORD-057 的完成情况和是否按时交付。"
+    },
+    {
+      "id": "ETS-126",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "trace",
+      "relevant_tool": "trace_order",
+      "question": "Show me the production trace for ORD-083."
+    },
+    {
+      "id": "Q002",
+      "type": "lookup",
+      "type_label": "订单查询",
+      "category": "normal_lookup",
+      "relevant_tool": "get_orders_at_risk",
+      "question": "Which orders are likely to miss their due dates in the next 7 days if production continues at the current pace?"
+    },
+    {
+      "id": "ETS-016",
+      "type": "clarify",
+      "type_label": "澄清与追问",
+      "category": "clarification",
+      "relevant_tool": "assess_ambiguity",
+      "question": "How is factory performance?"
+    },
+    {
+      "id": "ETS-120",
+      "type": "clarify",
+      "type_label": "澄清与追问",
+      "category": "context_followup",
+      "relevant_tool": "find_orders",
+      "question": "在这些阶段中，哪个阶段的在制订单最多？只回答阶段名称和订单数。"
+    },
+    {
+      "id": "ETS-131",
+      "type": "clarify",
+      "type_label": "澄清与追问",
+      "category": "context_followup",
+      "relevant_tool": "render_table",
+      "question": "显示这些风险订单的订单编号和交期。"
+    },
+    {
+      "id": "ETS-003",
+      "type": "production",
+      "type_label": "生产异常",
+      "category": "anomaly",
+      "relevant_tool": "discover_factory_issues",
+      "question": "Which production stage is currently underperforming?"
+    },
+    {
+      "id": "ETS-029",
+      "type": "production",
+      "type_label": "生产异常",
+      "category": "anomaly_judgement",
+      "relevant_tool": "discover_factory_issues",
+      "question": "Are there any signs that production delays are spreading from one stage to another?"
+    },
+    {
+      "id": "ETS-037",
+      "type": "feasibility",
+      "type_label": "可行性",
+      "category": "feasibility",
+      "relevant_tool": "check_feasibility",
+      "question": "Can we take 200 beanies by April 3, 2026?"
+    },
+    {
+      "id": "ETS-040",
+      "type": "feasibility",
+      "type_label": "可行性",
+      "category": "feasibility",
+      "relevant_tool": "check_feasibility",
+      "question": "我们能否在 2026 年 4 月 2 日前完成新增 5000 件围巾订单？"
+    },
+    {
+      "id": "ETS-105",
+      "type": "action",
+      "type_label": "操作与审计",
+      "category": "action_reminder",
+      "relevant_tool": "create_reminder",
+      "question": "Create a reminder for ORD-005 tomorrow: TEST Sprint1 Gem - check order progress"
+    },
+    {
+      "id": "ETS-137",
+      "type": "action",
+      "type_label": "操作与审计",
+      "category": "action_watch",
+      "relevant_tool": "create_watch",
+      "question": "Tell me if ORD-005 hasn't moved by Thursday"
+    },
+    {
+      "id": "ETS-008",
+      "type": "scope",
+      "type_label": "范围与边界",
+      "category": "unsupported",
+      "relevant_tool": "",
+      "question": "Show a line chart of factory PACKING output for the last seven calendar days, through April 1, 2026."
+    },
+    {
+      "id": "ETS-012",
+      "type": "chart",
+      "type_label": "图表",
+      "category": "visualization",
+      "relevant_tool": "draw",
+      "question": "请用柱状图比较各生产阶段的在制订单数量。"
+    }
+  ]
+}
