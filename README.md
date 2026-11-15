@@ -10,7 +10,6 @@
 
 This project is the **General Manager's Co-Pilot** (NUS DSS5105 Track 1): an inspectable AI companion for that factory. It is **not** a generic chatbot. The model selects registered tools; **Python services own every number** (risk flags, medians, feasibility, briefing). If the data cannot support a question (for example revenue or selling price), the system **refuses** instead of guessing.
 
-**Factory clock in the dataset: `2026-04-01`** (business logic uses that date, not your laptop clock).
 
 ### Key features (live UI)
 
@@ -358,11 +357,3 @@ Env switches used by the harness (unset = live product behaviour):
 4. `docs/phase4a_deployment_plan.md` / `docs/email_delivery.md` — deploy & mail  
 5. `postgresql_database/README.md` — local Postgres setup
 
----
-
-## Rules for contributors
-
-1. Do not invent columns or business facts that are not in `data/` + `semantic_layer.yaml`.
-2. Do not put totals / day counts / capacity math in the prompt — put them in Python.
-3. If the files do not support a design, leave a `# TODO` instead of guessing.
-4. Side-effecting actions need explicit confirmation; never claim an external email was sent unless delivery is really enabled.
