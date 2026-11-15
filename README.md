@@ -61,23 +61,44 @@ Deployed shape: **frontend on Vercel**, **API on Render (Docker)**, **email via 
 
 ---
 
-## Prerequisites
+## Requirements
 
-- Python **3.10+**
-- Node.js **18+**
-- Local **PostgreSQL 16+** with `psql` on your `PATH`  
-  (on Windows, add e.g. `C:\Program Files\PostgreSQL\18\bin`)
-- An OpenAI-compatible API key **only if you want the chat agent**  
-  (`pytest` works without a key)
+Install these before the first local run:
+
+| Requirement | Version / notes |
+| --- | --- |
+| **Python** | **3.10+** (3.11 / 3.13 work; use a venv) |
+| **Node.js** | **18+** (for the Vite frontend) |
+| **PostgreSQL** | **16+** local server, with `psql` on your `PATH` |
+| **OpenAI-compatible API key** | **Optional** — needed only for the chat agent. `pytest`, health, Overview, and tool JSON work without a key. |
+
+**PostgreSQL on Windows:** add the server `bin` folder to `PATH`, for example  
+`C:\Program Files\PostgreSQL\18\bin`  
+(replace `18` with your installed major version). Confirm with:
+
+```powershell
+psql --version
+pg_isready -h localhost -p 5432
+```
 
 Factory operational tables (`app.orders`, `production_log`, `workshops`, …),
 auth, chat history, and LangGraph checkpoints all live in **PostgreSQL**.
 
 ---
 
-## Run locally
+## Setup instructions
 
-Do these steps in order the first time on a machine.
+Do these **once** on a new machine (PowerShell examples). Later days: jump to [How to run it locally](#how-to-run-it-locally).
+
+### Checklist (first time)
+
+1. Start PostgreSQL and confirm it accepts connections  
+2. Create roles + database + import seed CSVs (`postgresql_database/sql/01`–`04`)  
+3. Create Python venv, install `requirements.txt`, copy `.env.example` → `.env`  
+4. Fill `.env` (DB passwords, `AUTH_SECRET_KEY`, optional `OPENAI_API_KEY`)  
+5. Run Alembic migrations (`auth` / `copilot` schemas)  
+6. Start backend, then frontend  
+7. (Optional) run `pytest`
 
 ### 0. Start PostgreSQL
 
@@ -92,7 +113,7 @@ pg_isready -h localhost -p 5432
 
 ### 1. Create the database (first time only)
 
-From `postgresql_database/` (paths in `03_import.sql` are relative):
+From `postgresql_database/` (paths in `03_import.sql` are relative to that folder):
 
 ```powershell
 cd postgresql_database
@@ -120,7 +141,7 @@ Details: `postgresql_database/README.md`.
 
 ### 2. Python env and `.env`
 
-From the repo root:
+From the **repo root**:
 
 ```powershell
 python -m venv .venv
@@ -146,9 +167,18 @@ Edit `.env` so it matches the passwords you set in step 1. The example defaults 
 Leave `EMAIL_DELIVERY_ENABLED=false` unless you have configured Resend
 (`docs/email_delivery.md`).
 
+**Linux / macOS** (same steps, different activate / copy):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
+
 ### 3. App migrations (auth / chat / checkpoints)
 
-Still in the activated venv, from the repo root:
+Still in the activated venv, from the **repo root**:
 
 ```powershell
 alembic -c alembic.ini upgrade head
@@ -157,15 +187,28 @@ alembic -c alembic.ini upgrade head
 This creates/updates `auth` and `copilot` tables on top of the SQL baseline.
 FastAPI startup does **not** run migrations for you.
 
-### 4. Backend
+You are done with one-time setup when Alembic finishes without errors.
+
+---
+
+## How to run it locally
+
+Use **two terminals**. Activate the venv in the backend terminal each time.
+
+### 1. Backend (API)
 
 ```powershell
+# repo root
+.\.venv\Scripts\Activate.ps1
 uvicorn backend.main:app --reload --port 8000
 ```
 
-Health check: http://127.0.0.1:8000/api/health
+**Health check:** open http://127.0.0.1:8000/api/health  
 
-### 5. Frontend
+Expect JSON with `"ok": true`, `"factory_today": "2026-04-01"`, and a `tools` list.  
+`"llm_configured": false` is normal until you set `OPENAI_API_KEY`. Without a key, chat returns **503**; other endpoints still work.
+
+### 2. Frontend (UI)
 
 ```powershell
 cd frontend
@@ -174,9 +217,13 @@ npm run dev
 ```
 
 Open http://localhost:5173  
-Vite proxies `/api` to port `8000`.
+Vite proxies `/api` to port `8000` (so the UI talks to the local API automatically).
 
-### 6. Tests
+Register / sign in from the UI. Admin signup needs the same `ADMIN_REGISTRATION_CODE` as in `.env`.
+
+### 3. Tests (no LLM key)
+
+From the repo root, with the venv active and Postgres running:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
@@ -184,6 +231,32 @@ pytest
 ```
 
 These tests cover schemas, dates, risk flags, routing, and tool JSON. They do **not** call an LLM.
+
+### Day-2 shortcut (DB already created)
+
+```powershell
+# Terminal A — API
+Get-Service -Name "postgresql*"   # start if needed
+.\.venv\Scripts\Activate.ps1
+uvicorn backend.main:app --reload --port 8000
+
+# Terminal B — UI
+cd frontend
+npm run dev
+```
+
+Only re-run `alembic upgrade head` after pulling new migration files.  
+Only re-run `postgresql_database/sql/03_import.sql` if you intentionally want to reset business tables to the seed.
+
+### Quick troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| `psql` / `pg_isready` not found | Add PostgreSQL `bin` to `PATH`, open a new terminal |
+| Alembic / app cannot connect | `.env` passwords match step 1; Postgres is running; DB name is `factory_copilot_db` |
+| Login fails | `AUTH_SECRET_KEY` ≥ 32 characters; migrations applied |
+| Chat returns 503 | Set `OPENAI_API_KEY` in `.env` and restart uvicorn |
+| UI loads but API fails | Backend on port `8000`; frontend proxy expects that port |
 
 ---
 
