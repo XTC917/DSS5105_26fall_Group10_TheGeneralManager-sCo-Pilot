@@ -2,9 +2,48 @@
 
 ## Introduction
 
-<!-- Write the project introduction here. -->
+<p align="center">
+  <img src="docs/assets/sweaterco-hero.jpg" alt="SweaterCo — Your data companion" width="720" />
+</p>
 
+**SweaterCo** is a quick-response knitwear factory. Hundreds of small orders overlap across Knitting → Assembly → Washing → Packing, and the general manager needs operational truth under time pressure: what is overdue, what will miss due dates, whether a new batch fits, and what to chase today.
 
+This project is the **General Manager's Co-Pilot** (NUS DSS5105 Track 1): an inspectable AI companion for that factory. It is **not** a generic chatbot. The model selects registered tools; **Python services own every number** (risk flags, medians, feasibility, briefing). If the data cannot support a question (for example revenue or selling price), the system **refuses** instead of guessing.
+
+**Factory clock in the dataset: `2026-04-01`** (business logic uses that date, not your laptop clock).
+
+### Key features (live UI)
+
+| Feature | What you get |
+| --- | --- |
+| **Ask AI** | Natural-language chat grounded in live factory tools — orders, risk, feasibility, briefing |
+| **Overview** | Morning / weekly briefing, priority issues, in-progress orders, stage output vs 30-day median |
+| **Clarification** | When a question is ambiguous, the co-pilot offers concrete options before calling tools |
+| **Charts & tables** | Answers can attach tool-backed charts/tables; Overview also shows production analytics |
+
+**Ask AI — Soft Intelligence workspace**
+
+![Ask AI home](docs/assets/ui-ask-ai.png)
+
+**Overview — morning briefing and top issues**
+
+![Overview morning briefing](docs/assets/ui-overview.png)
+
+**Overview — order charts and production by stage**
+
+![Overview charts](docs/assets/ui-overview-charts.png)
+
+**Weekly briefing — completed orders and on-time share**
+
+![Weekly briefing](docs/assets/ui-weekly-briefing.png)
+
+**Clarification before acting** (example: resequence / priority question)
+
+![Clarification cards](docs/assets/feature-resequence.gif)
+
+**Feasibility / grounded Q&A flow** (tool-backed answer path)
+
+![Feasibility answer flow](docs/assets/feature-feasibility.gif)
 
 ---
 
