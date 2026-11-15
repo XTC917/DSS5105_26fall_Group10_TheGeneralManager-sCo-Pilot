@@ -36,13 +36,17 @@ This project is the **General Manager's Co-Pilot** (NUS DSS5105 Track 1): an ins
 
 ![Weekly briefing](docs/assets/ui-weekly-briefing.png)
 
-**Clarification before acting** (example: resequence / priority question)
+**Clarification before acting** (Soft Intelligence — ambiguous question → option cards)
 
-![Clarification cards](docs/assets/feature-resequence.gif)
+![Clarification cards](docs/assets/ui-clarify.png)
 
-**Feasibility / grounded Q&A flow** (tool-backed answer path)
+**Feasibility answer** (Soft Intelligence — tool-backed capacity verdict)
 
-![Feasibility answer flow](docs/assets/feature-feasibility.gif)
+![Feasibility answer](docs/assets/ui-feasibility.png)
+
+**Why panel** (inspectable steps and sources behind an answer)
+
+![Why this answer](docs/assets/ui-why.jpg)
 
 ---
 
