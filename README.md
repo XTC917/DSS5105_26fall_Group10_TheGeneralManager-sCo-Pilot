@@ -325,7 +325,7 @@ Runtime facts live in PostgreSQL schema `app`, seeded from the CSVs under
 | `orders` | **120** | One customer order (`ORD-001`…`ORD-120`) | **86** `COMPLETE`, **34** `IN_PROGRESS` (12 knitting / 10 assembly / 10 washing / 2 packing). 8 customers; products split into `TOPS` (85) and `ACCESSORIES` (35). |
 | `production_log` | **360** | One stage on one calendar day | Factory-wide output (`date × stage`), **not** per order. **90** days × 4 stages, **2026-01-01 → 2026-03-31** (through the day before factory today). Sundays are 0. |
 | `workshops` | **8** source → **11** DB rows | One workshop–category capability | Eight physical shops (`W1`…`W8`). A `TOPS+ACCESSORIES` shop is expanded on import into two category rows — do **not** add capacity across those rows. One shop is `SUSPENDED`; one is on trial with a batch cap. |
-| `snapshot` | **223** | One order entering one stage | Distinct (`order_id`, `status`, `stage`, `date`) events used to reconstruct stage history / as-of state. Seeded from `altogether_summary.csv`; append-only when new order states appear after uploads. |
+| `snapshot` | **223** | One order entering one stage | Distinct (`order_id`, `status`, `stage`, `date`) events used to reconstruct stage history / as-of state. Seeded from `altogether_summary.csv`, for 7 days, from 3/23 to 4/1; append-only when new order states appear after uploads. |
 
 ### What we added on top of the three course CSVs
 
@@ -340,18 +340,8 @@ advance we also keep:
    cuts of orders / production_log / workshops rolled back from the Apr 1
    truth (including the **ORDERED** pre-production stage). These support
    “what did the floor look like on day D?” checks and date-advance demos
-   (for example watches that fire when the factory clock moves to
-   **2026-04-04**). Build notes:
+   . Build notes:
    `data/examples3.0/backward_stage_imputation.md`.
-3. **Slightly denser open work on the Apr 1 cut** — enough in-progress and
-   overdue orders (for example TrendCart `ORD-120` still in ASSEMBLY) that
-   risk, feasibility, email, and standing-watch flows have realistic targets
-   without needing fictional rows at demo time.
-
-The challenge for this track is the agent and UI, not dirty data: counts are
-small, keys are clean, and every number in the tools is taken from these
-tables.
-
 ---
 
 ## How the product works (short)
