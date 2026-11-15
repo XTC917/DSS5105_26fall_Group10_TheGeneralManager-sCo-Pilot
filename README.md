@@ -56,7 +56,8 @@ This repo is an **AI co-pilot for a knitwear factory general manager**.
 It is **not** a generic chatbot: the model calls **inspectable Python business tools**, and those tools own the numbers.
 
 **Factory date in the dataset: `2026-04-01`.**  
-Business logic uses that date, not your laptop clock.
+Business logic uses that date, not your laptop clock.  
+Table sizes and what we added beyond the three course CSVs: [Dataset composition](#dataset-composition).
 
 ### One-minute mental model
 
@@ -306,14 +307,54 @@ Only re-run `postgresql_database/sql/03_import.sql` if you intentionally want to
 
 ---
 
+## Dataset composition
+
+Factory “today” in the tracked seed is **`2026-04-01`**. Business logic,
+Overview, and evaluation use that factory calendar (not the laptop clock).
+The factory is closed on Sundays. Before knitting starts, an order can sit in
+**ORDERED**; production then moves **KNITTING → ASSEMBLY → WASHING → PACKING → COMPLETE**.
+
+Runtime facts live in PostgreSQL schema `app`, seeded from the CSVs under
+`data/` / `postgresql_database/data/`. Field meanings for the agent are in
+`data/semantic_layer.yaml`; the short table overview is `data/data_dictionary.md`.
+
+### Baseline tables (Apr 1 cut)
+
+| Table | Rows (seed) | One row is | Notes |
+| --- | ---: | --- | --- |
+| `orders` | **120** | One customer order (`ORD-001`…`ORD-120`) | **86** `COMPLETE`, **34** `IN_PROGRESS` (12 knitting / 10 assembly / 10 washing / 2 packing). 8 customers; products split into `TOPS` (85) and `ACCESSORIES` (35). |
+| `production_log` | **360** | One stage on one calendar day | Factory-wide output (`date × stage`), **not** per order. **90** days × 4 stages, **2026-01-01 → 2026-03-31** (through the day before factory today). Sundays are 0. |
+| `workshops` | **8** source → **11** DB rows | One workshop–category capability | Eight physical shops (`W1`…`W8`). A `TOPS+ACCESSORIES` shop is expanded on import into two category rows — do **not** add capacity across those rows. One shop is `SUSPENDED`; one is on trial with a batch cap. |
+| `snapshot` | **223** | One order entering one stage | Distinct (`order_id`, `status`, `stage`, `date`) events used to reconstruct stage history / as-of state. Seeded from `altogether_summary.csv`; append-only when new order states appear after uploads. |
+
+### What we added on top of the three course CSVs
+
+The original course pack is the three current-day files (`orders`,
+`production_log`, `workshops`). For Soft Intelligence demos and factory-date
+advance we also keep:
+
+1. **Stage-entry history (`snapshot` / `altogether_summary.csv`)** — so
+   `trace_order`, pace remaining days, and “where did this order stall?” are
+   grounded in observed stage entries, not invented timelines.
+2. **As-of day packs (`data/examples3.0/2026-03-23` … `2026-04-01`)** — daily
+   cuts of orders / production_log / workshops rolled back from the Apr 1
+   truth (including the **ORDERED** pre-production stage). These support
+   “what did the floor look like on day D?” checks and date-advance demos
+   (for example watches that fire when the factory clock moves to
+   **2026-04-04**). Build notes:
+   `data/examples3.0/backward_stage_imputation.md`.
+3. **Slightly denser open work on the Apr 1 cut** — enough in-progress and
+   overdue orders (for example TrendCart `ORD-120` still in ASSEMBLY) that
+   risk, feasibility, email, and standing-watch flows have realistic targets
+   without needing fictional rows at demo time.
+
+The challenge for this track is the agent and UI, not dirty data: counts are
+small, keys are clean, and every number in the tools is taken from these
+tables.
+
+---
+
 ## How the product works (short)
-
-### Data
-
-- Runtime factory facts: PostgreSQL schema `app` (seeded from the CSVs under
-  `data/` / `postgresql_database/data/` via the SQL baseline)
-- Field meanings for the agent: `data/semantic_layer.yaml`
-- `production_log` is factory-wide (`date × stage`), **not** per order
 
 ### Tools (course kinds)
 
@@ -362,6 +403,7 @@ Env switches used by the harness (unset = live product behaviour):
 1. `docs/architecture.md` — request path and system shape  
 2. `docs/tool_spec.md` — tool behaviour and limits  
 3. `Factory_Primer.md` — factory domain background  
-4. `docs/phase4a_deployment_plan.md` / `docs/email_delivery.md` — deploy & mail  
-5. `postgresql_database/README.md` — local Postgres setup
+4. `data/data_dictionary.md` / `data/semantic_layer.yaml` — field meanings  
+5. `docs/phase4a_deployment_plan.md` / `docs/email_delivery.md` — deploy & mail  
+6. `postgresql_database/README.md` — local Postgres setup
 
