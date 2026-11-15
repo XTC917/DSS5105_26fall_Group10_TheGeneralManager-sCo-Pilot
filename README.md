@@ -222,6 +222,10 @@ Still in the activated venv, from the **repo root**:
 alembic -c alembic.ini upgrade head
 ```
 
+Alembic reads **`PG_ADMIN_USER` / `PG_ADMIN_PASSWORD`** from `.env` (see `alembic/env.py`).  
+You do **not** need to change `PGUSER` or “switch” the runtime role to admin first — keep  
+`PGUSER=factory_agent` for the app, and keep the admin pair filled for migrations.
+
 This creates/updates `auth` and `copilot` tables on top of the SQL baseline.
 FastAPI startup does **not** run migrations for you.
 
@@ -335,7 +339,7 @@ Default email path is local / simulated unless Resend delivery is explicitly ena
 
 - `evaluation/questions.json` — few-shot bank + development question set
 - `evaluation/run_conditions.py` — three conditions: baseline / exclude_exact / full
-- `evaluation/人工评分SOP.md` — how humans grade summary answers
+- `evaluation/human_scoring_SOP.md` — how humans grade summary answers
 - Annotation packs: `evaluation/annotation_sets.json`
 
 This is a **development** harness, not a held-out official score.
