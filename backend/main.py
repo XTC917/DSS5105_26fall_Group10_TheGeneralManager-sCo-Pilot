@@ -122,7 +122,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Data Management (shares data/factory.db with the Co-Pilot tools).
+# Data Management uses the same PostgreSQL operational tables as the Co-Pilot tools.
 app.include_router(upload_router)
 app.include_router(datasource_router)
 app.include_router(query_router)

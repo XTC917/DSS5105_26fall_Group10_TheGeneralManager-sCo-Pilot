@@ -26,7 +26,7 @@
 - Web Service：512 MB RAM，less than 1 CPU。
 - 15 分钟没有入站流量会 spin down；下一次请求约 1 分钟冷启动。
 - 每月 750 free instance hours；spun-down 期间不消耗。
-- 文件系统 ephemeral：上传文件、日志、SQLite 在重启/重新部署/休眠后丢失。
+- 文件系统 ephemeral：上传文件和日志在重启、重新部署或休眠后可能丢失；运行时业务数据存储在独立 PostgreSQL 中。
 - 免费 Postgres 30 天后过期，不建议用于本项目长期测试。
 - 免费实例不建议用于生产；朋友测试可以，但需要接受冷启动。
 

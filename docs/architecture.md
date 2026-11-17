@@ -40,10 +40,10 @@ Manager (React UI)
         └── get_recent_actions    (audit read)
                 │
                 ▼
-         services/  (SQLite + calculations)
+ backend/services/database.py + calculations
                 │
                 ▼
-         data/*.csv
+ PostgreSQL (app, copilot, auth, admin_meta)
 ```
 
 ## Layers (do not mix them)
@@ -56,7 +56,7 @@ Manager (React UI)
 | Tools | `backend/tools/` | Call services, return JSON + trace | Hide rules in the prompt |
 | Services | `backend/services/` | SQL, date math, risk, feasibility | Call the LLM |
 | Semantic | `data/semantic_layer.yaml` | `data_definition` (columns + descriptions) + `term_definition` (jargon) | Arithmetic, invented columns |
-| Data | `data/` | Source CSVs | — |
+| Data | PostgreSQL + `data/` | Runtime records and app state in PostgreSQL; CSVs are seed/import sources | Treat CSVs or SQLite as the runtime store |
 
 ## Dataset clock
 
@@ -66,15 +66,20 @@ discovery, and chat calculations use that date. Advancing changes the date
 used to evaluate existing records. The factory is still closed on Sundays
 for working-day calculations.
 
-## Why SQLite, not DuckDB
+## PostgreSQL runtime and migration history
 
-Three small clean tables. SQLite is in the Python standard library, and teammates
-can open `data/factory.db` in any viewer. Rebuilt from CSV on every API startup.
+An early local prototype used SQLite and rebuilt its tables from CSV files.
+The final application no longer uses SQLite at runtime. Operational records,
+authentication, conversation history, checkpoints, and action state are stored
+in PostgreSQL. `backend/services/database.py` connects through psycopg, while
+Alembic manages application-schema migrations. CSV files remain seed and
+controlled-import sources rather than the live runtime store.
 
 ## Agent
 
-`langgraph.prebuilt.create_react_agent` with the registered tools and a `MemorySaver`
-so one `conversation_id` keeps multi-turn context (e.g. "the first one").
+`langgraph.prebuilt.create_react_agent` uses the registered tools, while
+PostgreSQL-backed conversation history and checkpoints allow one
+`conversation_id` to keep multi-turn context (e.g. "the first one").
 The API reports **only the tools used after the latest user message**. A
 feasibility answer must not list retrieval tools left over from earlier
 questions in the same chat.
@@ -87,14 +92,13 @@ Any OpenAI-compatible endpoint works (`OPENAI_BASE_URL` + `LLM_MODEL`).
 
 `evaluation/questions.json` is the few-shot answer-template bank (not an eval runner).
 
-Side-effecting actions follow: propose → UI Confirm click → local execute → audit log.
+Side-effecting actions follow: propose → UI Confirm click → controlled execute → audit log.
 The agent only proposes (`confirmed=false`). `POST /api/actions/confirm` runs the
 whitelisted tool with `confirmed=true` and does **not** call the LLM. Dismiss
-(`POST /api/actions/decline`) writes an audit row and saves nothing. Chat “yes”
-still works as a fallback. There is no SMTP. Confirmed "send email" writes a
-**simulated** audit row and still reports `sent: false`. Notes, reminders, and
-standing watches persist in `copilot_state.db`, which is separate from
-`factory.db` so CSV reload does not wipe them.
+(`POST /api/actions/decline`) records the decision without applying the proposed
+side effect. Email remains simulated by default; the separate delivery path can
+send through Resend only when delivery is explicitly enabled and configured.
+Notes, reminders, standing watches, and audit records persist in PostgreSQL.
 
 **Reminders vs standing watches:** `create_reminder` stores a calendar note
 (`remind_on` + free-text message). Python does **not** evaluate that message.
@@ -118,9 +122,9 @@ anomaly detectors. `GET /api/discovery?limit=5` exposes the same service as
 ## What is intentionally missing
 
 - `assess_stage_performance` (beyond the briefing/discovery last-day vs median check)
-- Real email / calendar / push integrations (watches fire as local alerts)
+- External calendar and push integrations
 - A background scheduler (watches evaluate when `/api/watches` is called)
-- Wiring Copilot tools to PostgreSQL `app.snapshot` (agent still reads CSVs / SQLite)
+- Email delivery is optional and disabled by default unless Resend is configured
 
 ## Adding a new tool (later)
 

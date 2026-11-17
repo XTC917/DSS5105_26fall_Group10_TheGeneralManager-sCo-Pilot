@@ -17,11 +17,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 # Always load the repo-root .env, even if uvicorn's cwd is elsewhere.
 load_dotenv(PROJECT_ROOT / ".env", override=True)
 DATA_DIR = PROJECT_ROOT / "data"
-DB_PATH = DATA_DIR / "factory.db"
 SEMANTIC_LAYER_PATH = DATA_DIR / "semantic_layer.yaml"
 LOG_DIR = PROJECT_ROOT / "logs"
-# Local notes/reminders/audit. Survives CSV reload of factory.db.
-STATE_DB_PATH = DATA_DIR / "copilot_state.db"
 
 # Dataset clock — do not replace this with date.today().
 FACTORY_TODAY = date(2026, 4, 1)

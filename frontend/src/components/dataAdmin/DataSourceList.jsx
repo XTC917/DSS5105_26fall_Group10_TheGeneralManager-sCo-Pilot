@@ -101,7 +101,7 @@ export default function DataSourceList() {
   const confirmDeactivate = (record) => {
     Modal.confirm({
       title: "Deactivate this data source?",
-      content: "The SQLite table is kept. Only the catalog entry is marked inactive.",
+      content: "The PostgreSQL table is kept. Only the catalog entry is marked inactive.",
       okText: "Yes",
       cancelText: "No",
       okButtonProps: { danger: true },
@@ -184,7 +184,7 @@ export default function DataSourceList() {
           </Button>
           <Popconfirm
             title="Deactivate this data source?"
-            description="The SQLite table is kept. Only the catalog entry is marked inactive."
+            description="The PostgreSQL table is kept. Only the catalog entry is marked inactive."
             onConfirm={() => handleDelete(record.id)}
             okText="Yes"
             cancelText="No"

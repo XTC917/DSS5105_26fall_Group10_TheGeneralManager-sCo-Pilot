@@ -1,8 +1,8 @@
-"""Build a local SQLite preview of the PostgreSQL mid-platform schema.
+"""Build an optional local SQLite preview of the PostgreSQL schema.
 
-DBeaver can open this file if Postgres superuser password is not available.
-Table/column shapes follow postgresql_database on
-feat/postgresql-data-admin-integration (workshop rows split; production_date).
+This diagnostic preview is not used by the final application. The deployed and
+local application runtime uses PostgreSQL. Table and column shapes follow the
+PostgreSQL data-admin schema.
 """
 
 from __future__ import annotations

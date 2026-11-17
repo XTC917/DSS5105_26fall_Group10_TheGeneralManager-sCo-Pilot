@@ -283,7 +283,7 @@ def add_order_note(order_id: str, note: str, confirmed: bool = False) -> str:
                     },
                     "trace": {
                         "tool": tool_name,
-                        "source_file": "copilot_state.db",
+                        "source_file": "PostgreSQL copilot schema",
                         "filter": {"order_id": order["order_id"]},
                         "rows": [],
                         "calculations": [],
@@ -311,11 +311,11 @@ def add_order_note(order_id: str, note: str, confirmed: bool = False) -> str:
                     "note_id": note_id,
                     "order_id": order["order_id"],
                     "note": text,
-                    "storage": "copilot_state.db (local only)",
+                    "storage": "PostgreSQL copilot schema",
                 },
                 "trace": {
                     "tool": tool_name,
-                    "source_file": "copilot_state.db",
+                    "source_file": "PostgreSQL copilot schema",
                     "filter": {"order_id": order["order_id"]},
                     "rows": [{"note_id": note_id}],
                     "calculations": [],
@@ -393,7 +393,7 @@ def create_reminder(
                     },
                     "trace": {
                         "tool": tool_name,
-                        "source_file": "copilot_state.db",
+                        "source_file": "PostgreSQL copilot schema",
                         "filter": {"order_id": order["order_id"]},
                         "rows": [],
                         "calculations": [],
@@ -420,7 +420,7 @@ def create_reminder(
                     "saved": True,
                     "reminder_id": reminder_id,
                     **payload,
-                    "storage": "copilot_state.db (local only)",
+                    "storage": "PostgreSQL copilot schema",
                     "notified": False,
                     "limitations": [
                         "Saved locally. No email, SMS, or calendar notification was sent."
@@ -428,7 +428,7 @@ def create_reminder(
                 },
                 "trace": {
                     "tool": tool_name,
-                    "source_file": "copilot_state.db",
+                    "source_file": "PostgreSQL copilot schema",
                     "filter": {"order_id": order["order_id"]},
                     "rows": [{"reminder_id": reminder_id}],
                     "calculations": [],
@@ -456,12 +456,12 @@ def get_recent_actions(limit: int = 15) -> str:
                     "count": len(items),
                     "items": items,
                     "limitations": [
-                        "Local audit in copilot_state.db. Not a full compliance system."
+                        "Persistent audit in PostgreSQL. Not a full compliance system."
                     ],
                 },
                 "trace": {
                     "tool": tool_name,
-                    "source_file": "copilot_state.db",
+                    "source_file": "PostgreSQL copilot schema",
                     "filter": {"limit": cap},
                     "rows": [{"id": item.get("id"), "tool": item.get("tool")} for item in items],
                     "calculations": [],

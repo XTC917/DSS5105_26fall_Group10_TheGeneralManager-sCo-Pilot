@@ -231,8 +231,8 @@ re-invokes the same tool with `confirmed=true`. The LLM is not in that path.
 |---|---|---|
 | `draft_chase_email` | Local draft from order fields. `sent: false` | n/a (drafting does not send) |
 | `send_email` | Proposal only. `sent: false` | Audit row with `execution_status=SIMULATED`. Still `sent: false` |
-| `add_order_note` | Proposal only. `saved: false` | Row in `copilot_state.db` |
-| `create_reminder` | Proposal only. `saved: false` | Row in `copilot_state.db`. `notified: false` |
+| `add_order_note` | Proposal only. `saved: false` | Row in the PostgreSQL `copilot` schema |
+| `create_reminder` | Proposal only. `saved: false` | Row in the PostgreSQL `copilot` schema. `notified: false` |
 
 `remind_on` is a factory-calendar ISO date. "Tomorrow" from 2026-04-01 is **2026-04-02**.
 
@@ -322,7 +322,7 @@ condition → `INVALID_INPUT`; unparseable date → `INVALID_INPUT`.
 
 ## `list_watches` (read)
 
-Returns **all** standing watches from `copilot_state.db`, including
+Returns **all** standing watches from the PostgreSQL `copilot` schema, including
 `CANCELLED`. Optional `order_id` filter.
 
 Cancel does **not** delete the row. If the manager asks "did we ever watch
@@ -361,9 +361,9 @@ Same confirmation pattern as create:
 
 ## `get_recent_actions` (audit read)
 
-Returns recent rows from `copilot_state.db`: user query, tool, inputs, result
-summary, confirmation/execution status. This file is **not** wiped when
-`factory.db` is rebuilt from CSV.
+Returns recent rows from the PostgreSQL `copilot` schema: user query, tool,
+inputs, result summary, confirmation/execution status. These persistent rows
+are separate from CSV seed/import files and are not rebuilt from them.
 
 ---
 

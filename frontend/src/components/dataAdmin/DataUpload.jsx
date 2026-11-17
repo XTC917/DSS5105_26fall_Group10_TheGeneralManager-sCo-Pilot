@@ -329,7 +329,7 @@ export default function DataUpload() {
     <div>
       <h2 className="text-base font-semibold text-ink">Data Upload</h2>
       <p className="mb-5 text-sm text-ink/55">
-        Upload a CSV or Excel file into one of the three SQLite tables.
+        Upload a CSV or Excel file into one of the three PostgreSQL operational tables.
         Re-importing a file replaces the existing rows in that table.
       </p>
       <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} />
